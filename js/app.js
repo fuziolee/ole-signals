@@ -153,7 +153,36 @@ function applyI18n() {
   document.documentElement.lang = getLang();
   $('#auth-submit').textContent = S.authMode === 'login' ? t('login') : t('signup');
   $('#auth-toggle').textContent = S.authMode === 'login' ? t('noAccount') : t('haveAccount');
+  // Auth: petunjuk sandi + konfirmasi hanya saat daftar, bukan saat masuk.
+  const signup = S.authMode === 'signup';
+  $('#password-hint').hidden = !signup;
+  $('#auth-confirm-field').hidden = !signup;
+  const pw = $('#auth-password');
+  pw.setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
+  if (signup) pw.setAttribute('minlength', '8'); else pw.removeAttribute('minlength');
+  if (!signup) { $('#auth-password-confirm').value = ''; setMatchHint(''); }
 }
+
+// Aturan kata sandi saat daftar: minimal 8 karakter, ada angka + huruf kapital.
+function passwordValid(pw) {
+  return pw.length >= 8 && /[0-9]/.test(pw) && /[A-Z]/.test(pw);
+}
+function setMatchHint(state) {
+  const el = $('#password-match-hint');
+  el.classList.remove('ok', 'bad');
+  if (state === 'match') { el.textContent = t('passwordMatch'); el.classList.add('ok'); }
+  else if (state === 'mismatch') { el.textContent = t('passwordMismatch'); el.classList.add('bad'); }
+  else { el.textContent = ''; }
+}
+function refreshMatchHint() {
+  if (S.authMode !== 'signup') return;
+  const pw = $('#auth-password').value;
+  const cf = $('#auth-password-confirm').value;
+  if (!cf) { setMatchHint(''); return; }
+  setMatchHint(pw === cf ? 'match' : 'mismatch');
+}
+$('#auth-password').addEventListener('input', refreshMatchHint);
+$('#auth-password-confirm').addEventListener('input', refreshMatchHint);
 
 // ------------------------------------------------------------------ nav ---
 const VIEWS = ['home', 'search', 'office', 'profile', 'guide'];
@@ -222,6 +251,16 @@ $('#auth-form').addEventListener('submit', async (e) => {
   btn.disabled = true;
   try {
     if (S.authMode === 'signup') {
+      if (!passwordValid(password)) {
+        errBox.textContent = t('authErrWeak');
+        errBox.hidden = false;
+        return;
+      }
+      if (password !== $('#auth-password-confirm').value) {
+        errBox.textContent = t('passwordMismatch');
+        errBox.hidden = false;
+        return;
+      }
       const data = await api.signUp(email, password);
       if (!data.session) {
         noteBox.textContent = t('authCheckEmail');
