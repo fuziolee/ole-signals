@@ -143,7 +143,7 @@ export async function cancelSignal(id) {
 export async function listTraders() {
   const { data, error } = await supabase
     .from('traders')
-    .select('profile_id, trader_display_name, trader_avatar_url, created_at, trader_progress(level, balance_usd, r_since_level, trades_since_level), profiles(username)')
+    .select('profile_id, trader_display_name, trader_avatar_url, created_at, trader_progress(level, balance_usd, r_since_level, trades_since_level), profiles!traders_profile_id_fkey(username)')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data || [];
