@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="id" data-theme="auto">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="description" content="OLE Signals — marketplace sinyal forex. Trader memposting sinyal, follower menyalin manual di broker masing-masing." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230891B2'/%3E%3Cpath d='M7 21l6-7 4 4 8-10' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <title>OLE Signals</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+  <div class="app" id="app" hidden>
+    <header class="app-header">
+      <div class="logo">OLE <em>Signals</em></div>
+      <div class="tagline" data-i18n="appTagline"></div>
+    </header>
+
+    <main>
+      <!-- Beranda -->
+      <section class="view" id="view-home" aria-label="Beranda">
+        <div class="row">
+          <div>
+            <h1 data-i18n="feedTitle"></h1>
+            <p class="sub" data-i18n="appTagline"></p>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn ghost" id="btn-refresh-home" type="button">↻ <span data-i18n="refresh"></span></button>
+        </div>
+        <div id="home-list"></div>
+      </section>
+
+      <!-- Cari -->
+      <section class="view" id="view-search" aria-label="Cari">
+        <h1 data-i18n="searchTitle"></h1>
+        <p class="sub" data-i18n="searchHint"></p>
+        <div id="search-list"></div>
+      </section>
+
+      <!-- Ruang Kerja -->
+      <section class="view" id="view-office" aria-label="Ruang Kerja">
+        <h1 data-i18n="officeTitle"></h1>
+        <div id="office-body"></div>
+      </section>
+
+      <!-- Profil -->
+      <section class="view" id="view-profile" aria-label="Profil">
+        <h1 data-i18n="profileTitle"></h1>
+        <div id="profile-body"></div>
+      </section>
+
+      <!-- Panduan -->
+      <section class="view" id="view-guide" aria-label="Panduan">
+        <div class="row">
+          <button class="btn ghost" id="btn-guide-back" type="button">← <span data-i18n="back"></span></button>
+        </div>
+        <h1 data-i18n="guideTitle"></h1>
+        <div class="card">
+          <h2 data-i18n="guideRules"></h2>
+          <ol class="guide-list" id="guide-list"></ol>
+        </div>
+        <p class="foot" data-i18n="riskWarn"></p>
+      </section>
+    </main>
+
+    <div class="bottom-nav">
+      <nav aria-label="Navigasi utama">
+        <button type="button" data-nav="home" aria-selected="true"><span class="ic">⌂</span><span data-i18n="navHome"></span></button>
+        <button type="button" data-nav="search" aria-selected="false"><span class="ic">⌕</span><span data-i18n="navSearch"></span></button>
+        <button type="button" data-nav="office" aria-selected="false"><span class="ic">▣</span><span data-i18n="navOffice"></span></button>
+        <button type="button" data-nav="profile" aria-selected="false"><span class="ic">◉</span><span data-i18n="navProfile"></span></button>
+      </nav>
+    </div>
+  </div>
+
+  <!-- Auth (tampil bila belum masuk) -->
+  <div class="app auth-wrap" id="auth-view" hidden>
+    <div class="logo" style="text-align:center; margin-bottom: 4px;">OLE <em>Signals</em></div>
+    <p class="sub" style="text-align:center;" data-i18n="authWelcome"></p>
+    <div class="auth-card">
+      <div class="notice err" id="auth-error" hidden></div>
+      <div class="notice" id="auth-notice" hidden></div>
+      <form id="auth-form">
+        <div class="field">
+          <label for="auth-email" data-i18n="email"></label>
+          <input id="auth-email" type="email" required autocomplete="email" placeholder="nama@email.com" />
+        </div>
+        <div class="field">
+          <label for="auth-password" data-i18n="password"></label>
+          <input id="auth-password" type="password" required minlength="6" autocomplete="current-password" />
+          <div class="hint" data-i18n="passwordHint"></div>
+        </div>
+        <button class="btn primary" type="submit" id="auth-submit"></button>
+      </form>
+      <div class="row" style="justify-content:center; margin-top: 12px;">
+        <button class="btn ghost" type="button" id="auth-toggle"></button>
+      </div>
+    </div>
+    <p class="foot" data-i18n="riskWarn"></p>
+  </div>
+
+  <!-- Overlay detail / konfirmasi -->
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true">
+    <div class="sheet" id="overlay-sheet"></div>
+  </div>
+
+  <div id="toasts" aria-live="polite"></div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
