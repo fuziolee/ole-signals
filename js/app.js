@@ -248,7 +248,9 @@ $('#auth-form').addEventListener('submit', async (e) => {
   errBox.hidden = true;
   noteBox.hidden = true;
   const btn = $('#auth-submit');
+  const btnLabel = btn.textContent;
   btn.disabled = true;
+  btn.textContent = t('loading') + '…';
   try {
     if (S.authMode === 'signup') {
       if (!passwordValid(password)) {
@@ -275,6 +277,7 @@ $('#auth-form').addEventListener('submit', async (e) => {
     errBox.hidden = false;
   } finally {
     btn.disabled = false;
+    btn.textContent = btnLabel;
   }
 });
 
@@ -785,7 +788,11 @@ async function renderOffice() {
 
   bindSignalForm(editing);
   $$('#office-body [data-tab]').forEach((b) => {
-    b.addEventListener('click', () => { S.officeTab = b.dataset.tab; renderOfficeList(); });
+    b.addEventListener('click', () => {
+      S.officeTab = b.dataset.tab;
+      $$('#office-body [data-tab]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.tab === S.officeTab)));
+      renderOfficeList();
+    });
   });
   await renderOfficeList();
 }
