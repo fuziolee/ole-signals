@@ -90,8 +90,13 @@
         </div>
         <div class="field">
           <label for="auth-password" data-i18n="password"></label>
-          <input id="auth-password" type="password" required minlength="6" autocomplete="current-password" />
-          <div class="hint" data-i18n="passwordHint"></div>
+          <input id="auth-password" type="password" required autocomplete="current-password" />
+          <div class="hint" id="password-hint" data-i18n="passwordHint"></div>
+        </div>
+        <div class="field" id="auth-confirm-field" hidden>
+          <label for="auth-password-confirm" data-i18n="passwordConfirm"></label>
+          <input id="auth-password-confirm" type="password" autocomplete="new-password" />
+          <div class="hint" id="password-match-hint"></div>
         </div>
         <button class="btn primary" type="submit" id="auth-submit"></button>
       </form>
