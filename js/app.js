@@ -21,7 +21,7 @@ const S = {
   searchQuery: '',
   searchSort: 'level',
   searchTab: 'traders',
-  guideOpen: [],
+  guideOpen: loadGuideOpen(),
   editingId: null,
   editingVersion: null,
   homeSignals: [],
@@ -1021,6 +1021,17 @@ async function renderProfile() {
 // kamus tepercaya (BUKAN esc()) — pola yang sama seperti prototipe.
 const GUIDE_GLOSS = [['Entry', 'entry'], ['Stop Loss (SL)', 'sl'], ['Take Profit (TP)', 'tp'], ['Status sinyal', 'status'], ['Level', 'level'], ['Risiko', 'risk'], ['Saldo simulasi', 'balance'], ['Ikuti vs Langganan', 'sub'], ['Terverifikasi', 'verified'], ['Peringkat', 'board'], ['R-multiple (R)', 'r'], ['Recovery Factor', 'rf'], ['Drawdown', 'dd'], ['Compounding', 'comp'], ['Profit Factor', 'pf'], ['Win rate', 'wr'], ['R:R (risk : reward)', 'rr'], ['Pips', 'pips'], ['Streak', 'streak'], ['Holding period', 'hold'], ['Lot', 'lot'], ['Floating', 'floating']];
 
+// Seksi Panduan yang terbuka disimpan supaya tetap terbuka setelah reload.
+function loadGuideOpen() {
+  try {
+    const v = JSON.parse(localStorage.getItem('ole-guide-open') || '[]');
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+  } catch (e) { return []; }
+}
+function saveGuideOpen() {
+  try { localStorage.setItem('ole-guide-open', JSON.stringify(S.guideOpen)); } catch (e) { /* abaikan */ }
+}
+
 function guideSectionHtml(id, title, bodyHtml) {
   const open = S.guideOpen.includes(id) ? ' open' : '';
   return `<details class="card guide-sec" id="guide-${id}"${open}><summary class="guide-sec-sum"><h3>${esc(title)}</h3><span class="guide-sec-chev" aria-hidden="true">▾</span></summary><div class="more-body">${bodyHtml}</div></details>`;
@@ -1084,6 +1095,7 @@ function renderGuide() {
       const id = d.id.replace('guide-', '');
       S.guideOpen = S.guideOpen.filter((x) => x !== id);
       if (d.open) S.guideOpen.push(id);
+      saveGuideOpen();
       updateLvlTableScrollHint();
     });
   });
