@@ -73,12 +73,16 @@ begin
    where id = v_gamma;
 
   -- Identitas trader + penanda demo.
-  insert into public.traders (profile_id, trader_display_name, trader_avatar_url, subscription_price_usd, is_demo)
+  -- Username trader = username follower demo (backfill migrasi 12 menyalin
+  -- nilai yang sama; file ini ditulis eksplisit supaya tetap bisa
+  -- dijalankan ulang setelah kolom traders.username NOT NULL).
+  insert into public.traders (profile_id, username, trader_display_name, trader_avatar_url, subscription_price_usd, is_demo)
   values
-    (v_alpha, 'Demo Alpha', null, null, true),
-    (v_beta,  'Demo Beta',  null, null, true),
-    (v_gamma, 'Demo Gamma', null, null, true)
+    (v_alpha, 'demo_alpha', 'Demo Alpha', null, null, true),
+    (v_beta,  'demo_beta',  'Demo Beta',  null, null, true),
+    (v_gamma, 'demo_gamma', 'Demo Gamma', null, null, true)
   on conflict (profile_id) do update set
+    username = excluded.username,
     trader_display_name = excluded.trader_display_name,
     is_demo = true;
 

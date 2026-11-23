@@ -465,6 +465,47 @@ exception when others then
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- R6B: username trader terpisah dari username follower (ronde 6b).
+-- Harus jalan SETELAH migrasi 12 + 03_functions.sql yang baru diterapkan.
+-- Ditempatkan di akhir supaya perubahan username B di sini tidak
+-- mengganggu tes sinyal di atas (cleanup 05 menghapus akun uji A/B).
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_r jsonb;
+  v_tu text; v_fu text;
+begin
+  -- 1-2. Username trader A/B tersimpan di traders.username ...
+  select username into v_tu from public.traders where profile_id='11111111-1111-1111-1111-111111111111';
+  perform pg_temp.check('R6B-1', v_tu='trader_a', 'traders.username A='||coalesce(v_tu,'NULL'));
+  select username into v_tu from public.traders where profile_id='22222222-2222-2222-2222-222222222222';
+  perform pg_temp.check('R6B-2', v_tu='trader_b', 'traders.username B='||coalesce(v_tu,'NULL'));
+
+  -- 3. ... dan setup TIDAK menyentuh profiles.username (follower).
+  select username into v_fu from public.profiles where id='11111111-1111-1111-1111-111111111111';
+  perform pg_temp.check('R6B-3', v_fu is null, 'profiles.username A='||coalesce(v_fu,'NULL'));
+
+  -- 4-5. B mengambil username trader A -> 'taken', username B tidak berubah.
+  perform set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated","aud":"authenticated"}', false);
+  v_r := public.setup_trader_identity('trader_a', 'Trader B');
+  perform pg_temp.check('R6B-4', (v_r->>'code')='taken', 'B ambil trader_a -> '||coalesce(v_r->>'code','?'));
+  select username into v_tu from public.traders where profile_id='22222222-2222-2222-2222-222222222222';
+  perform pg_temp.check('R6B-5', v_tu='trader_b', 'traders.username B tetap '||coalesce(v_tu,'NULL'));
+
+  -- 6-8. Tapi string yang sama dengan username FOLLOWER boleh dipakai
+  -- sebagai username trader (keunikan per-jenis, aturan prototipe).
+  update public.profiles set username='pengikut_a' where id='11111111-1111-1111-1111-111111111111';
+  v_r := public.setup_trader_identity('pengikut_a', 'Trader B');
+  perform pg_temp.check('R6B-6', (v_r->>'ok')='true', 'B ambil pengikut_a (username follower A) -> '||coalesce(v_r->>'code','?'));
+  select username into v_tu from public.traders where profile_id='22222222-2222-2222-2222-222222222222';
+  perform pg_temp.check('R6B-7', v_tu='pengikut_a', 'traders.username B='||coalesce(v_tu,'NULL'));
+  select username into v_fu from public.profiles where id='11111111-1111-1111-1111-111111111111';
+  perform pg_temp.check('R6B-8', v_fu='pengikut_a', 'profiles.username A tetap '||coalesce(v_fu,'NULL'));
+exception when others then
+  perform pg_temp.check('R6B', false, 'exception: ' || sqlerrm);
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- HASIL — baca panel Results: semua baris harus PASS kecuali T-08-SETUP
 -- yang hanya menyiapkan (T-08 sendiri jalan dari dua tab terpisah)
 -- ---------------------------------------------------------------------------

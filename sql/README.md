@@ -23,6 +23,7 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
 | `09_demo_traders_migration.sql` | Kolom `traders.is_demo` (penanda trader demo berlabel). |
 | `10_demo_traders_insert.sql` | 3 trader demo (Alpha/Beta/Gamma) + 21 sinyal demo. Cari akun demo BERDASARKAN EMAIL — buat dulu 3 akun auth via dashboard (lihat header file). |
 | `11_demo_traders_delete.sql` | Hapus SEMUA data demo (trader, progress, sinyal, follows/subs/copies/notifikasi, profil, auth) tanpa menyentuh data lain. |
+| `12_traders_username_split.sql` | Ronde 6b: kolom `traders.username` (username trader terpisah dari username follower) + backfill dari `profiles.username` + NOT NULL + format CHECK + unique index + trigger nama dilindungi. **TERAPKAN DULU, baru terapkan ulang `03_functions.sql`, baru deploy frontend baru** (lihat urutan di bawah). |
 
 ## Cara pakai (Supabase SQL Editor)
 
@@ -31,7 +32,12 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
    `03_functions.sql` — **urutan ini wajib** (fungsi di 03 memakai tabel
    di 01; kebijakan di 02 memakai fungsi penjaga yang didefinisikan di 02).
 3. Semua file idempotent (aman dijalankan ulang).
-4. Aktifkan **Email** provider di **Authentication → Providers**
+4. **Ronde 6b (migrasi 12):** setelah 03, terapkan
+   `12_traders_username_split.sql`, lalu terapkan **ulang**
+   `03_functions.sql` (versi baru `setup_trader_identity` menulis
+   `traders.username`), **baru** deploy frontend baru. Frontend baru yang
+   jalan sebelum migrasi 12 akan gagal (kolom `traders.username` belum ada).
+5. Aktifkan **Email** provider di **Authentication → Providers**
    (email+password saja; Google OAuth TIDAK diaktifkan).
 
 Panggil dari frontend (Supabase JS):
@@ -46,7 +52,7 @@ supabase.rpc('cancel_signal', { p_signal_id })
 ```
 
 Jawaban selalu JSON: `{ok, code, message, signal?}`. Kode galat:
-`pairlimit` / `notpending` / `conflict` → HTTP 409;
+`pairlimit` / `notpending` / `conflict` / `taken` → HTTP 409;
 `rr` / `risk` / `invalid` / `needusername` / `pair` → HTTP 422.
 (`cooldown` dicadangkan untuk fase pembayaran.)
 

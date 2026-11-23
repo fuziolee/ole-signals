@@ -18,7 +18,7 @@
 --     Bentuk kembalian: {"ok": true|false, "code": "...",
 --                        "message": "...", "signal": {...} | null}
 --     Pemetaan HTTP (Edge Function / frontend): pairlimit/notpending/
---     conflict -> 409; rr/risk/invalid/needusername -> 422.
+--     conflict/taken -> 409; rr/risk/invalid/needusername -> 422.
 --   * "Batal ubah" tetap di Ruang Kerja (keputusan user) — urusan frontend,
 --     bukan SQL; dicatat di sini supaya tidak dicari di database.
 --
@@ -194,6 +194,11 @@ create trigger trg_ensure_trader_progress
 -- setup_trader_identity — buat/lengkapi identitas trader pemanggil.
 -- Dipanggil sekali setelah daftar (sebelum posting pertama). Mengembalikan
 -- 'needusername' di create_signal bila belum dipanggil.
+-- Ronde 6b: menulis traders.username (username TRADER) dan TIDAK PERNAH
+-- menyentuh profiles.username (username FOLLOWER). Keunikan ditegakkan
+-- per-jenis: username trader yang sudah dipakai trader LAIN ditolak
+-- (kode 'taken' -> 409); string yang sama dengan username follower
+-- (milik siapa pun) BOLEH dipakai sebagai username trader (prototipe).
 -- ---------------------------------------------------------------------------
 create or replace function public.setup_trader_identity(
   p_username text,
@@ -228,27 +233,36 @@ begin
     );
   end if;
 
+  -- Keunikan PER-JENIS (ronde 6b): hanya traders.username yang diperiksa.
+  -- Username follower (profiles.username) tidak diperiksa di sini — string
+  -- yang sama dengan username follower siapa pun BOLEH dipakai sebagai
+  -- username trader. Pengecekan ini hanya menentukan apakah stringnya
+  -- sudah dipakai sebagai username trader; tidak membocorkan data lain.
   if exists (
-    select 1 from public.profiles
-    where username = v_username and id <> v_actor
+    select 1 from public.traders
+    where username = v_username and profile_id <> v_actor
   ) then
-    return public.api_error('invalid', 'Username sudah dipakai. Pilih username lain.');
+    return public.api_error('taken', 'Username trader sudah dipakai. Pilih username lain.');
   end if;
 
-  insert into public.profiles (id, username, display_name, avatar_url)
-  values (v_actor, v_username, nullif(btrim(p_display_name), ''), p_avatar_url)
+  -- Profil follower TIDAK disentuh: username follower (profiles.username)
+  -- bukan urusan fungsi ini. Upsert di bawah hanya melengkapi baris profil
+  -- (display name / avatar) bila belum ada; tidak pernah menulis username.
+  insert into public.profiles (id, display_name, avatar_url)
+  values (v_actor, nullif(btrim(p_display_name), ''), p_avatar_url)
   on conflict (id) do update set
-    username = excluded.username,
     display_name = coalesce(excluded.display_name, public.profiles.display_name),
     avatar_url = coalesce(excluded.avatar_url, public.profiles.avatar_url);
 
-  insert into public.traders (profile_id, trader_display_name, trader_avatar_url)
+  insert into public.traders (profile_id, username, trader_display_name, trader_avatar_url)
   values (
     v_actor,
+    v_username,
     coalesce(nullif(btrim(p_display_name), ''), v_username),
     p_avatar_url
   )
   on conflict (profile_id) do update set
+    username = excluded.username,
     trader_display_name = excluded.trader_display_name,
     trader_avatar_url = coalesce(excluded.trader_avatar_url, public.traders.trader_avatar_url);
 
@@ -257,9 +271,11 @@ begin
   );
 exception
   when unique_violation then
-    -- Balapan dua pengguna mengambil username yang sama: kembalikan
-    -- jawaban bersih, bukan galat Postgres.
-    return public.api_error('invalid', 'Username sudah dipakai. Pilih username lain.');
+    -- Balapan dua pengguna mengambil username trader yang sama: kembalikan
+    -- jawaban bersih, bukan galat Postgres. Satu-satunya unique yang bisa
+    -- terlanggar di sini adalah traders_username_uidx (profiles.username
+    -- tidak lagi ditulis fungsi ini).
+    return public.api_error('taken', 'Username trader sudah dipakai. Pilih username lain.');
 end;
 $func$;
 
