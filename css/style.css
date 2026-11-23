@@ -1,6 +1,12 @@
 /* OLE Signals — gaya modern adaptasi prototipe (ringkas, visual, compact).
    Tema gelap/terang via :root + [data-theme]. Skala compact untuk web & HP. */
 * { box-sizing: border-box; }
+/* D07: atribut [hidden] harus selalu menyembunyikan elemen — aturan display
+   author (mis. #boot-splash { display:grid }, .btn { display:inline-flex })
+   mengalahkan aturan UA [hidden]{display:none}, sehingga splash tidak
+   pernah hilang setelah boot. !important di sini memulihkan perilaku itu
+   untuk SEMUA elemen ber-atribut hidden (splash, app, auth, panel, tombol). */
+[hidden] { display: none !important; }
 :root {
   --bg: #F1F5F9;
   --panel: #ffffff;
@@ -17,8 +23,9 @@
   --gold: #B45309;
   --gold-bg: #FEF3C7;
   --amber: #B45309;
-  --shadow: 0 1px 2px rgba(16,26,30,.04), 0 4px 16px rgba(16,26,30,.04);
-  --radius: 16px;
+  --shadow: 0 1px 2px rgba(16,26,30,.05), 0 14px 34px -14px rgba(16,26,30,.2);
+  --radius: 12px;
+  --bg-photo: url("../assets/bg-light.webp");
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -28,7 +35,8 @@
     --buy: #22C55E; --buy-bg: #0B2E1F;
     --sell: #EF4444; --sell-bg: #3A1418;
     --gold: #F59E0B; --gold-bg: #2E2110; --amber: #F59E0B;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 14px 34px -14px rgba(0,0,0,.5);
+    --bg-photo: url("../assets/bg-dark.webp");
   }
 }
 :root[data-theme="dark"] {
@@ -38,13 +46,19 @@
   --buy: #22C55E; --buy-bg: #0B2E1F;
   --sell: #EF4444; --sell-bg: #3A1418;
   --gold: #F59E0B; --gold-bg: #2E2110; --amber: #F59E0B;
-  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 14px 34px -14px rgba(0,0,0,.5);
+  --bg-photo: url("../assets/bg-dark.webp");
 }
 html { -webkit-text-size-adjust: 100%; }
 body {
-  margin: 0; background: var(--bg); color: var(--ink);
+  margin: 0; background-color: var(--bg); color: var(--ink);
+  background-image: radial-gradient(1100px 480px at 50% -140px, color-mix(in srgb, var(--teal) 16%, transparent), transparent 70%), var(--bg-photo);
+  background-size: auto, cover; background-position: center top; background-attachment: fixed; background-repeat: no-repeat;
   font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 15px; line-height: 1.5;
+  font-size: 16px; line-height: 1.5;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg-photo: url("../assets/bg-dark.webp"); }
 }
 button, select, input, textarea { font: inherit; }
 button, [role="button"], select, input:not([type="checkbox"], [type="radio"]) { min-height: 2.5rem; }
@@ -100,7 +114,7 @@ h1 { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
   font-size: 13.5px; font-weight: 600; cursor: pointer; min-height: 40px;
   display: inline-flex; align-items: center; gap: 7px; text-decoration: none;
 }
-.btn.primary { background: var(--teal); border-color: var(--teal); color: var(--teal-ink); min-height: 48px; font-size: 14.5px; font-weight: 700; width: 100%; justify-content: center; }
+.btn.primary { background: var(--teal); border-color: var(--teal); color: var(--teal-ink); min-height: 48px; font-size: 14.5px; font-weight: 700; width: 100%; justify-content: center; box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--teal) 70%, transparent); }
 .btn.danger { border-color: var(--sell); color: var(--sell); }
 .btn:disabled, .btn.primary:disabled { background: var(--panel-2); color: var(--muted); border-color: var(--line); opacity: 1; cursor: default; }
 .btn.ghost { background: transparent; }
@@ -153,6 +167,8 @@ h1 { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
 .dir-toggle button[aria-pressed="true"].sell { background: var(--sell); border-color: var(--sell); color: #fff; }
 
 /* ---- kartu sinyal ---- */
+.sig, .tcard, .board-card, .stat-cell { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+.sig:hover, .tcard:hover, .board-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--teal) 45%, var(--line)); }
 .sig { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 12px; cursor: pointer; }
 .sig.buy { border-left: 4px solid var(--buy); }
 .sig.sell { border-left: 4px solid var(--sell); }
@@ -618,3 +634,69 @@ details.more summary { display: flex; justify-content: space-between; align-item
 details.more summary::-webkit-details-marker { display: none; }
 details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; }
 @media (max-width: 560px) { .wal-grid { grid-template-columns: 1fr; } }
+
+/* ---- ronde 7: dekoratif + komponen baru (port prototipe) ---- */
+/* D58: tag emas XAUUSD */
+.sig-pair .goldtag, .goldtag { color: var(--gold); }
+/* D10: lencana langganan + label kunci + flag duplikat */
+.subbadge { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--gold-bg); color: var(--gold); }
+.subbadge.free { background: var(--panel-2); color: var(--muted); }
+.lock { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.dup-flag { font-size: 12.5px; color: var(--gold); background: var(--gold-bg); border-radius: 8px; padding: 6px 10px; margin-top: 8px; }
+.lvlbadge { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--panel-2); color: var(--muted); white-space: nowrap; }
+/* D10/D64: avatar + nama sebagai tombol profil */
+.sig-top button.avatar { cursor: pointer; border: 0; padding: 0; }
+.sig-top button.avatar-btn { appearance: none; background: none; border: 0; padding: 0; cursor: pointer; border-radius: 50%; flex: none; display: inline-grid; place-items: center; }
+.sig-top .right { margin-left: auto; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.locked-body { display: flex; gap: 10px; align-items: flex-start; background: var(--panel-2); border-radius: 12px; padding: 12px; margin-top: 12px; font-size: 13.5px; color: var(--muted); }
+.locked-body .lt { font-weight: 700; font-size: 15px; color: var(--ink); }
+.locked-body .ld { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+.sig-foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.sig-foot .facts { font-size: 13px; color: var(--muted); margin-right: auto; }
+.sig-top .who button.name { appearance: none; background: none; border: 0; padding: 0; font: inherit; font-size: 13.5px; font-weight: 700; color: var(--ink); cursor: pointer; text-align: left; }
+.sig-top .who button.name:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 2px; }
+/* D61: switch notifikasi (port prototipe) */
+.switch { position: relative; width: 48px; height: 28px; flex: none; display: inline-block; }
+.switch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+.switch .track { position: absolute; inset: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; transition: background-color .2s; pointer-events: none; }
+.switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: var(--muted); transition: left .2s, background-color .2s; }
+.switch input:checked + .track { background: var(--teal); border-color: var(--teal); }
+.switch input:checked + .track::after { left: 22px; background: #fff; }
+.switch input:focus-visible + .track { outline: 2px solid var(--teal); outline-offset: 2px; }
+/* D24: tag jenis + dot notifikasi */
+.notif-item .tag { display: inline-block; font-size: 11px; font-weight: 700; background: var(--panel-2); color: var(--muted); border-radius: 999px; padding: 2px 8px; margin-right: 6px; }
+.notif-item { position: relative; }
+.notif-item .ndot { position: absolute; left: -2px; top: 14px; width: 8px; height: 8px; border-radius: 50%; background: var(--teal); }
+.notif-item.unread .nt { font-weight: 700; }
+/* D19: kalender bulanan filter tanggal */
+.df-cal { margin-bottom: 10px; }
+.df-cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.df-cal-head h4 { margin: 0; font-size: 14px; }
+.df-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.df-dow { font-size: 11px; font-weight: 700; color: var(--muted); text-align: center; padding: 4px 0; }
+.df-day { appearance: none; border: 0; background: none; color: var(--ink); border-radius: 8px; padding: 6px 0; font-size: 13px; cursor: pointer; min-height: 32px; }
+.df-day:hover { background: var(--panel-2); }
+.df-day.today { font-weight: 800; color: var(--teal); }
+.df-day.inrange { background: color-mix(in srgb, var(--teal) 18%, transparent); border-radius: 0; }
+.df-day.start, .df-day.end { background: var(--teal); color: var(--teal-ink); font-weight: 700; }
+.df-day.future, .df-day.empty { color: var(--muted); opacity: .45; cursor: default; background: none; }
+/* D54: peringatan nonaktif */
+.inact-warn { color: var(--sell); font-weight: 600; }
+/* D07: splash boot */
+#boot-splash { position: fixed; inset: 0; z-index: 100; background: var(--bg); display: grid; place-items: center; padding: 24px; }
+.boot-box { text-align: center; max-width: 360px; }
+.boot-box .logo { font-size: 24px; font-weight: 800; }
+.boot-box .logo em { font-style: normal; color: var(--teal); }
+.boot-msg { color: var(--muted); margin: 10px 0; }
+.boot-err { color: var(--sell); font-size: 14px; margin: 10px 0; }
+/* D03: halaman verifikasi kartu */
+.verify-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; }
+.verify-ok { color: var(--buy); font-weight: 800; font-size: 17px; }
+.verify-bad { color: var(--sell); font-weight: 800; font-size: 17px; }
+/* D31: pager peringkat */
+.board-pager { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.board-pager .pinfo { font-size: 13px; color: var(--muted); width: 100%; text-align: center; }
+.board-pager .btn.cur { background: var(--teal); color: var(--teal-ink); border-color: var(--teal); }
+/* D06: editor foto (draft hapus) */
+.avatar-draft-note { font-size: 12.5px; color: var(--gold); margin: 8px 0 0; }
+.trashbtn { color: var(--sell); }
