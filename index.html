@@ -82,11 +82,11 @@
         <div class="empty"><strong data-i18n="pricesSoon"></strong><span data-i18n="pricesSoonHint"></span></div>
       </section>
 
-      <!-- Dompet (menyusul di fase pembayaran terakhir) -->
+      <!-- Dompet (struktur lengkap; fitur pembayaran nonaktif) -->
       <section class="view" id="view-wallet" aria-label="Dompet">
         <h1 data-i18n="walletTitle"></h1>
         <p class="sub" data-i18n="walletSub"></p>
-        <div class="empty"><strong data-i18n="walletSoon"></strong><span data-i18n="walletSoonHint"></span></div>
+        <div id="wallet-body"></div>
       </section>
 
       <!-- Ruang Kerja -->
@@ -111,7 +111,7 @@
       <!-- Pusat Bantuan & Keamanan (sub-halaman Profil) -->
       <section class="view" id="view-help" aria-label="Bantuan">
         <div class="row">
-          <button class="btn ghost" id="btn-help-back" type="button">← <span data-i18n="back"></span></button>
+          <button class="btn ghost" id="btn-help-back" type="button"><span data-i18n="backProfileShort"></span></button>
         </div>
         <h1 data-i18n="menuHelp"></h1>
         <p class="sub" data-i18n="helpSub"></p>
