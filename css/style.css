@@ -450,3 +450,16 @@ table.board td.num, table.board th.num { text-align: right; }
 .faq-item { margin-bottom: 12px; }
 .faq-item b { display: block; font-size: 14.5px; margin-bottom: 2px; }
 .faq-item span { color: var(--muted); font-size: 13.5px; }
+
+/* Bilah progres sinyal AKTIF: track harus terlihat meski fill 0% (tanpa harga live). */
+.sig-prog .progress .track { background: var(--panel-2); border: 1px solid var(--line); }
+
+/* Petunjuk scroll tabel statistik (board-wrap): bayangan tepi kanan hanya bila tabel lebih lebar dari wadah. */
+.board-wrap.scrollable {
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+}
+
+/* Daftar aturan Peringkat (seperti prototipe): tiga butir di bawah pengantar. */
+.board-rules { margin: 10px 0 0; padding-left: 20px; font-size: 13.5px; color: var(--muted); }
+.board-rules li { margin: 4px 0; }
