@@ -37,6 +37,8 @@ const S = {
   secPage: null, // sub-halaman Kata sandi: null | 'pw' | 'email'
   wdAdd: false, // form tambah Akun Penarikan sedang dibuka
   followFilter: 'ALL',
+  followerRange: 'ALL', // filter tanggal Riwayat follower (Sinyal)
+  followerCustom: { from: '', to: '' },
   dateFilterOpen: '',
   dateFilterDraft: null,
   searchQuery: '',
@@ -161,21 +163,21 @@ function withinHistRange(ts, key, custom) {
 function rangeLabel(range, key) {
   const map = { TODAY: 'dfPresetToday', YESTERDAY: 'dfPresetYesterday', LAST7: 'dfPresetLast7', LAST30: 'dfPresetLast30', THISMONTH: 'dfPresetThisMonth', LASTMONTH: 'dfPresetLastMonth', CUSTOM: 'dfPresetCustom' };
   if (range === 'CUSTOM') {
-    const c = key === 'office' ? S.officeCustom : key === 'wallet' ? S.walletCustom : S.traderProfileCustom;
+    const c = key === 'office' ? S.officeCustom : key === 'wallet' ? S.walletCustom : key === 'follower' ? S.followerCustom : S.traderProfileCustom;
     return `${c.from || '…'} – ${c.to || '…'}`;
   }
   return t(map[range] || 'dfPresetAll');
 }
 function dateFilterBarHtml(key) {
-  const range = key === 'office' ? S.officeRange : key === 'wallet' ? S.walletRange : S.traderProfileRange;
+  const range = key === 'office' ? S.officeRange : key === 'wallet' ? S.walletRange : key === 'follower' ? S.followerRange : S.traderProfileRange;
   const open = S.dateFilterOpen === key;
   const label = range === 'ALL' ? t('dateFilterBtn') : rangeLabel(range, key);
   return `<span class="df-wrap"><button class="date-filter-btn" type="button" data-df="${key}">${esc(label)} ▾</button>`
     + (open ? dateFilterPopupHtml(key) : '') + `</span>`;
 }
 function dateFilterPopupHtml(key) {
-  const range = key === 'office' ? S.officeRange : key === 'wallet' ? S.walletRange : S.traderProfileRange;
-  const custom = key === 'office' ? S.officeCustom : key === 'wallet' ? S.walletCustom : S.traderProfileCustom;
+  const range = key === 'office' ? S.officeRange : key === 'wallet' ? S.walletRange : key === 'follower' ? S.followerRange : S.traderProfileRange;
+  const custom = key === 'office' ? S.officeCustom : key === 'wallet' ? S.walletCustom : key === 'follower' ? S.followerCustom : S.traderProfileCustom;
   const draft = S.dateFilterDraft || { range, from: custom.from || '', to: custom.to || '' };
   const presets = ['ALL', 'TODAY', 'YESTERDAY', 'LAST7', 'LAST30', 'THISMONTH', 'LASTMONTH', 'CUSTOM'];
   const presetKey = { ALL: 'dfPresetAll', TODAY: 'dfPresetToday', YESTERDAY: 'dfPresetYesterday', LAST7: 'dfPresetLast7', LAST30: 'dfPresetLast30', THISMONTH: 'dfPresetThisMonth', LASTMONTH: 'dfPresetLastMonth', CUSTOM: 'dfPresetCustom' };
@@ -193,8 +195,8 @@ function bindDateFilter(root, key, onChange) {
       if (S.dateFilterOpen === key) { S.dateFilterOpen = ''; S.dateFilterDraft = null; }
       else {
         S.dateFilterOpen = key;
-        const range = key === 'office' ? S.officeRange : key === 'wallet' ? S.walletRange : S.traderProfileRange;
-        const custom = key === 'office' ? S.officeCustom : key === 'wallet' ? S.walletCustom : S.traderProfileCustom;
+        const range = key === 'office' ? S.officeRange : key === 'wallet' ? S.walletRange : key === 'follower' ? S.followerRange : S.traderProfileRange;
+        const custom = key === 'office' ? S.officeCustom : key === 'wallet' ? S.walletCustom : key === 'follower' ? S.followerCustom : S.traderProfileCustom;
         S.dateFilterDraft = { range, from: custom.from || '', to: custom.to || '' };
       }
       onChange();
@@ -218,6 +220,7 @@ function bindDateFilter(root, key, onChange) {
       if (d) {
         if (key === 'office') { S.officeRange = d.range; if (d.range === 'CUSTOM') S.officeCustom = { from: d.from, to: d.to }; }
         else if (key === 'wallet') { S.walletRange = d.range; if (d.range === 'CUSTOM') S.walletCustom = { from: d.from, to: d.to }; }
+        else if (key === 'follower') { S.followerRange = d.range; if (d.range === 'CUSTOM') S.followerCustom = { from: d.from, to: d.to }; }
         else { S.traderProfileRange = d.range; if (d.range === 'CUSTOM') S.traderProfileCustom = { from: d.from, to: d.to }; }
       }
       S.dateFilterOpen = ''; S.dateFilterDraft = null;
@@ -241,6 +244,16 @@ function traderOf(sig) {
   return emb || {};
 }
 function progressOf(trader) { return one(trader?.trader_progress) || null; }
+// Aturan ronde 5: di permukaan PUBLIK hanya tampil @username, bukan nama
+// profil/display name. Username diambil dari embed profiles(username)
+// (lihat api.js) atau dari S.traders; fallback ke display name hanya bila
+// data benar-benar tanpa username (tidak boleh terjadi — setup identitas
+// mewajibkan username).
+function traderHandle(tr) {
+  const un = one(tr?.profiles)?.username;
+  if (un) return '@' + un;
+  return tr?.trader_display_name || t('noName');
+}
 function levelOfSignal(sig) {
   const p = progressOf(traderOf(sig));
   return p ? Number(p.level) || 1 : 1;
@@ -261,7 +274,9 @@ function avatarColor(id) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
 }
 function initialOf(name) {
-  return (String(name || '?').trim().charAt(0) || '?').toUpperCase();
+  // Abaikan '@' di depan handle supaya avatar "@demo_gamma" berhuruf "D".
+  const s = String(name || '?').trim().replace(/^@/, '');
+  return (s.charAt(0) || '?').toUpperCase();
 }
 function avatarHtml(name, id, sizeCls = 'avatar-sm') {
   return `<span class="avatar ${sizeCls}" style="background:${avatarColor(id)}" aria-hidden="true">${esc(initialOf(name))}</span>`;
@@ -352,6 +367,10 @@ function paintNotifBadge() {
   badge.textContent = String(unread);
 }
 function renderNotifPanel() {
+  // ATURAN RONDE 5 (untuk Fase 5, saat notifikasi mulai dibuat): teks
+  // notifikasi WAJIB memakai @handle trader, bukan nama profil — termasuk
+  // template kedaluwarsa sinyal (di prototipe template itu sempat memakai
+  // nama). Panel ini hanya menampilkan pesan dari database.
   const panel = $('#notif-panel');
   if (!panel) return;
   const unread = S.notifs.filter((n) => !n.is_read).length;
@@ -672,7 +691,7 @@ function riskTargetUsd(sig) {
 
 function signalCardHtml(sig) {
   const tr = traderOf(sig);
-  const name = tr.trader_display_name || t('noName');
+  const name = traderHandle(tr); // publik: hanya @username (ronde 5)
   const level = levelOfSignal(sig);
   const verified = level >= PAY_GATE_LEVEL
     ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
@@ -837,7 +856,7 @@ function shareVerifyUrl(sig) {
 }
 function shareCardText(sig) {
   const tr = traderOf(sig);
-  const name = tr.trader_display_name || t('noName');
+  const name = traderHandle(tr); // publik: hanya @username (ronde 5)
   return `OLE Signals — ${sig.pair} ${sig.direction}\n`
     + `Trader: ${name} (Lv.${levelOfSignal(sig)} ${levelName(levelOfSignal(sig), getLang())})\n`
     + `Entry ${sig.entry} | SL ${sig.stop_loss} | TP ${sig.take_profit} | ${sig.lot_size} lot\n`
@@ -850,7 +869,7 @@ function drawShareCard(sig) {
   cv.height = 1080;
   const ctx = cv.getContext('2d');
   const tr = traderOf(sig);
-  const name = tr.trader_display_name || t('noName');
+  const name = traderHandle(tr); // publik: hanya @username (ronde 5)
   const level = levelOfSignal(sig);
   const d = decimalsForPair(sig.pair);
   const dirColor = sig.direction === 'BUY' ? '#16A34A' : '#DC2626';
@@ -952,7 +971,7 @@ function openSignalDetail(id) {
   const sig = findSignal(id);
   if (!sig) return;
   const tr = traderOf(sig);
-  const name = tr.trader_display_name || t('noName');
+  const name = traderHandle(tr); // publik: hanya @username (ronde 5)
   const level = levelOfSignal(sig);
   const verified = level >= PAY_GATE_LEVEL
     ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
@@ -1194,7 +1213,7 @@ function journalRowHtml(sig, opts = {}) {
   const res = `${sig.profit_usd !== null && sig.profit_usd !== undefined ? fmtUsd(sig.profit_usd) : '—'}`
     + `${sig.profit_pips !== null && sig.profit_pips !== undefined ? ` · ${Math.round(Number(sig.profit_pips))} pips` : ''}`
     + `${sig.r_value !== null && sig.r_value !== undefined ? ` · ${fmtR(sig.r_value)}` : ''}`;
-  const traderName = opts.showTrader ? (() => { const tr = traderOf(sig); return esc(tr.trader_display_name || t('noName')) + ' · '; })() : '';
+  const traderName = opts.showTrader ? (() => { const tr = traderOf(sig); return esc(traderHandle(tr)) + ' · '; })() : '';
   const timeline = `${esc(t('detPosted'))} ${esc(fmtDateShort(sig.created_at))}`
     + (sig.activated_at ? ` · ${esc(t('dtEntry'))} ${esc(fmtDateShort(sig.activated_at))}` : '')
     + (sig.closed_at ? ` · ${esc(sig.status === 'WIN' ? t('dtTP') : t('dtSL'))} ${esc(fmtDateShort(sig.closed_at))}` : '');
@@ -1310,12 +1329,13 @@ function traderCardHtml(tr, rank) {
   const subBadge = price !== null && price !== undefined && Number(price) > 0
     ? esc(fmtUsd(price)) + ' ' + esc(t('perMonth'))
     : esc(t('profFree'));
+  const handle = traderHandle(tr); // publik: hanya @username (ronde 5)
   return `<article class="tcard" data-trader="${esc(tr.profile_id)}" tabindex="0" role="button">
     <div class="head">
       <span class="rank-num${rank <= 3 ? ' top' : ''}">${rank}</span>
-      ${avatarImg(tr.trader_display_name, tr.profile_id, tr.trader_avatar_url, 'avatar')}
+      ${avatarImg(handle, tr.profile_id, tr.trader_avatar_url, 'avatar')}
       <div style="min-width:0; flex:1;">
-        <div class="n">${esc(tr.trader_display_name || t('noName'))}${verified}${demoBadge(tr.profile_id)}</div>
+        <div class="n">${esc(handle)}${verified}${demoBadge(tr.profile_id)}</div>
         <div style="font-size:12.5px; color:var(--muted);">Lv.${level} ${esc(levelName(level, getLang()))}</div>
       </div>
       <span class="pill">Lv.${level}</span>
@@ -1516,15 +1536,14 @@ function boardCardHtml(row, rank) {
   const p = progressOf(tr);
   const level = p ? Number(p.level) || 1 : 1;
   const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
-  const username = one(tr.profiles)?.username;
-  const name = tr.trader_display_name || t('noName');
+  const name = traderHandle(tr); // publik: hanya @username (ronde 5)
   return `<article class="board-card" data-trader="${esc(tr.profile_id)}" tabindex="0" role="button">
     <div class="board-top">
       <span class="board-rank${rank <= 3 ? ' top' : ''}">#${rank}</span>
       ${avatarHtml(name, tr.profile_id, 'avatar-md')}
       <div style="min-width:0; flex:1;">
         <div style="font-weight:800; font-size:15.5px;">${esc(name)}${verified}${demoBadge(tr.profile_id)}</div>
-        <div style="font-size:12.5px; color:var(--muted);">${username ? '@' + esc(username) + ' · ' : ''}Lv.${level} ${esc(levelName(level, getLang()))}</div>
+        <div style="font-size:12.5px; color:var(--muted);">Lv.${level} ${esc(levelName(level, getLang()))}</div>
       </div>
     </div>
     <div class="board-stats">
@@ -1615,8 +1634,7 @@ async function renderTraderProfile() {
   const p = progressOf(tr);
   const level = p ? Number(p.level) || 1 : 1;
   const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
-  const username = one(tr.profiles)?.username;
-  const name = tr.trader_display_name || t('noName');
+  const name = traderHandle(tr); // publik: hanya @username (ronde 5)
   const price = tr.subscription_price_usd;
   const priceLabel = price !== null && price !== undefined && Number(price) > 0
     ? `${esc(fmtUsd(price))} ${esc(t('perMonth'))}` : esc(t('profFree'));
@@ -1628,7 +1646,7 @@ async function renderTraderProfile() {
       ${avatarImg(name, traderId, tr.trader_avatar_url, 'avatar-lg')}
       <div style="min-width:0; flex:1;">
         <h2>${esc(name)}${verified}${demoBadge(traderId)}</h2>
-        <div class="sub">${username ? '@' + esc(username) + ' · ' : ''}Lv.${level} ${esc(levelName(level, getLang()))}</div>
+        <div class="sub">Lv.${level} ${esc(levelName(level, getLang()))}</div>
       </div>
       <div class="followbox"><div class="followers" id="tp-followers">—</div></div>
     </div>
@@ -1685,7 +1703,7 @@ function renderTraderProfileBody(traderId) {
   const done = sigs.filter((s) => ['WIN', 'LOSS', 'CANCELLED', 'EXPIRED'].includes(s.status));
   const f = S.traderProfileFilter;
   const chip = (val, label, n) => `<button class="chip" type="button" data-pfilter="${val}" aria-pressed="${f === val}">${esc(label)}${n !== undefined ? ` (${n})` : ''}</button>`;
-  const traderName = (S.traders.find((x) => x.profile_id === traderId) || {}).trader_display_name || t('noName');
+  const traderName = traderHandle(S.traders.find((x) => x.profile_id === traderId) || {}); // publik: hanya @username (ronde 5)
   let html = `<h2 style="font-size:16px; margin: 6px 0 10px;">${esc(t('profSignalsAll'))}</h2>`
     + `<p class="sub">${esc(t('profSignalsAllSub', { name: traderName }))}</p>`
     + `<div class="pfilters">${chip('ALL', t('pfAll', { n: open.length }))}${chip('PENDING', t('pfPending'))}${chip('AKTIF', t('pfActive'))}<button class="chip hist-tab" type="button" data-pfilter="HISTORY" aria-pressed="${f === 'HISTORY'}">${esc(t('tabHistory'))} (${done.length})</button></div>`;
@@ -2391,9 +2409,15 @@ function renderOfficeFollowerTab() {
   if (f === 'HISTORY') {
     html += `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('tabHistory'))} (${doneSigs.length})</h2>`;
     html += filtersHtml;
-    html += doneSigs.length
-      ? `<div class="hist journal-scroll tall" tabindex="0">` + doneSigs.map((s) => journalRowHtml(s, { showTrader: true })).join('') + `</div>`
-      : `<div class="empty"><strong>${esc(t('officeCopyHistoryEmpty'))}</strong></div>`;
+    // Baris kedua: chip "Semua" + tombol "Filter tanggal ▾" (komponen
+    // yang sama dengan Dompet / Riwayat Office Trader / profil trader).
+    // Memfilter daftar sinyal tertutup dari trader yang diikuti.
+    const range = S.followerRange;
+    const shown = doneSigs.filter((s) => withinHistRange(s.closed_at || s.created_at, range, S.followerCustom));
+    html += `<div class="pfilters"><button class="chip" type="button" data-frng="ALL" aria-pressed="${range === 'ALL'}">${esc(t('rangeAll'))}</button>${dateFilterBarHtml('follower')}</div>`;
+    html += shown.length
+      ? `<div class="hist journal-scroll tall" tabindex="0">` + shown.map((s) => journalRowHtml(s, { showTrader: true })).join('') + `</div>`
+      : `<div class="empty"><strong>${esc(range === 'ALL' ? t('officeCopyHistoryEmpty') : t('histEmptyRange'))}</strong></div>`;
   } else {
     html += `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeFollowSignals'))}</h2>`;
     html += filtersHtml;
@@ -2413,6 +2437,13 @@ function renderOfficeFollowerTab() {
       renderOfficeFollowerTab();
     });
   });
+  $$('[data-frng]', box).forEach((b) => {
+    b.addEventListener('click', () => {
+      S.followerRange = b.dataset.frng;
+      renderOfficeFollowerTab();
+    });
+  });
+  bindDateFilter(box, 'follower', () => renderOfficeFollowerTab());
   bindSignalCards(box);
   bindJournalRows(box);
 }
@@ -2428,7 +2459,7 @@ function renderOfficeFollowedBody() {
     }
     box.innerHTML = h3 + S.mySubs.map((sub) => {
       const tr = one(sub.traders) || {};
-      const name = tr.trader_display_name || t('noName');
+      const name = traderHandle(tr); // publik: hanya @username (ronde 5)
       return `<div class="hist-row"><span class="p mono">${esc(name)}</span>`
         + `<span class="pill ${sub.status === 'active' ? 'green' : ''}">${esc(sub.status)}</span>`
         + `<span style="color:var(--muted)">${esc(fmtUsd(sub.price_usd))} · ${esc(fmtDate(sub.ends_at))}</span></div>`;
@@ -2444,7 +2475,7 @@ function renderOfficeFollowedBody() {
     const tr = one(f.traders) || {};
     const p = progressOf(tr);
     const level = p ? Number(p.level) || 1 : 1;
-    const name = tr.trader_display_name || t('noName');
+    const name = traderHandle(tr); // publik: hanya @username (ronde 5)
     return `<div class="hist-row">${avatarHtml(name, f.trader_id, 'avatar-sm')}<span class="p">${esc(name)}${demoBadge(f.trader_id)}</span>`
       + `<span style="color:var(--muted)">Lv.${level} ${esc(levelName(level, getLang()))}</span>`
       + `<button class="btn" type="button" data-ftrader="${esc(f.trader_id)}" style="min-height:34px;padding:6px 12px;font-size:12.5px;margin-left:auto;">${esc(t('sigDetail'))}</button></div>`;
@@ -2744,7 +2775,7 @@ function renderSettingsWithdraw(body) {
   const holder = p.display_name || p.username || S.user?.email || '';
   let html = settingsBackButton()
     + `<div class="page-head"><h2>${esc(t('setWithdraw'))}</h2></div>`
-    + `<div class="subcard"><h3>${esc(t('setWithdraw'))}</h3><p>${esc(t('setWithdrawDesc'))}</p>`
+    + `<div class="subcard"><p>${esc(t('setWithdrawDesc'))}</p>`
     + `<div class="empty" style="margin-top:10px">${esc(t('setWithdrawEmpty'))}</div>`;
   if (!S.wdAdd) {
     html += `<button type="button" class="menurow" id="wd-add"><span class="grow"><span class="t">${esc(t('setWithdrawAdd'))}</span></span><span class="marrow" aria-hidden="true">→</span></button>`;
@@ -2816,9 +2847,9 @@ function renderHelp() {
   }
   const faqs = [1, 2, 3, 4, 5].map((n) => `<details class="more"><summary>${esc(t('helpFaq' + n + 'Q'))}<span aria-hidden="true">▾</span></summary><div class="more-body"><p>${esc(t('helpFaq' + n + 'A'))}</p></div></details>`).join('');
   const traders = (S.traders || []).map((tr) => {
-    const un = one(tr.profiles)?.username;
-    const label = tr.trader_display_name || (un ? '@' + un : t('noName'));
-    return `<option value="${esc(tr.profile_id)}">${esc(label)}${un && tr.trader_display_name ? ' (@' + esc(un) + ')' : ''}</option>`;
+    // Publik: opsi laporan hanya @username, tanpa nama profil (ronde 5).
+    const label = traderHandle(tr);
+    return `<option value="${esc(tr.profile_id)}">${esc(label)}</option>`;
   }).join('');
   const reasons = [1, 2, 3, 4].map((n) => `<option>${esc(t('helpReportReason' + n))}</option>`).join('');
   body.innerHTML = `<div class="risk-note"><span><b>${esc(t('helpScamTitle'))}</b> ${esc(t('helpScamBody'))}</span></div>`

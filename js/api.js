@@ -80,7 +80,9 @@ export async function setupTraderIdentity(username, displayName) {
 
 // ---------------------------------------------------------------- sinyal ---
 function signalSelect() {
-  return '*, traders(trader_display_name, trader_progress(level, balance_usd))';
+  // Embed username (profiles) supaya kartu sinyal publik bisa tampil
+  // @username tanpa menunggu S.traders dimuat (ronde 5).
+  return '*, traders(trader_display_name, trader_progress(level, balance_usd), profiles!traders_profile_id_fkey(username))';
 }
 
 export async function listPublicSignals(limit = 50) {
@@ -206,7 +208,7 @@ export async function listAllSignals(limit = 500) {
 export async function listMyFollows(userId) {
   const { data, error } = await supabase
     .from('follows')
-    .select('trader_id, created_at, traders!follows_trader_id_fkey(trader_display_name, trader_avatar_url, trader_progress(level, balance_usd))')
+    .select('trader_id, created_at, traders!follows_trader_id_fkey(trader_display_name, trader_avatar_url, trader_progress(level, balance_usd), profiles!traders_profile_id_fkey(username))')
     .eq('follower_id', userId)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -216,7 +218,7 @@ export async function listMyFollows(userId) {
 export async function listMyCopies(userId) {
   const { data, error } = await supabase
     .from('copies')
-    .select('id, signal_id, lot_size, status, created_at, signals!copies_signal_id_fkey(id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, status, created_at, closed_at, close_price, profit_usd, profit_pips, r_value, traders(trader_display_name))')
+    .select('id, signal_id, lot_size, status, created_at, signals!copies_signal_id_fkey(id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, status, created_at, closed_at, close_price, profit_usd, profit_pips, r_value, traders(trader_display_name, profiles!traders_profile_id_fkey(username)))')
     .eq('follower_id', userId)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -226,7 +228,7 @@ export async function listMyCopies(userId) {
 export async function listMySubscriptions(userId) {
   const { data, error } = await supabase
     .from('subscriptions')
-    .select('id, trader_id, price_usd, status, started_at, ends_at, traders!subscriptions_trader_id_fkey(trader_display_name)')
+    .select('id, trader_id, price_usd, status, started_at, ends_at, traders!subscriptions_trader_id_fkey(trader_display_name, profiles!traders_profile_id_fkey(username))')
     .eq('follower_id', userId)
     .order('created_at', { ascending: false });
   if (error) throw error;
