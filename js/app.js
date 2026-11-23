@@ -3038,7 +3038,7 @@ async function renderOfficeList() {
     const anyOpen = S.mySignals.some((s) => s.status === 'PENDING' || s.status === 'AKTIF');
     const emptyKey = S.mySignals.length === 0 ? 'officeNoSignals'
       : !anyOpen ? 'officeNoOpenSignals' : 'profNoFilter';
-    list.innerHTML = `<div class="empty"><strong>${esc(t(emptyKey))}</strong></div>`;
+    list.innerHTML = `<div class="empty"><strong>${t(emptyKey)}</strong></div>`;
     return;
   }
   list.innerHTML = filtered.map(signalCardHtml).join('');
@@ -3121,7 +3121,7 @@ function renderOfficeFollowerTab() {
     // belum ada harga live; jujur bila tak ada salinan aktif).
     let floatNote = '';
     if (!copiedSignals.length) {
-      floatNote = `<p class="journal-note">${esc(t('jrnlEmpty'))}</p>`;
+      floatNote = `<p class="journal-note">${t('jrnlEmpty')}</p>`;
     } else {
       const vals = aktif.map((s) => floatingUsd(s));
       const sum = vals.some((v) => v !== null) ? vals.reduce((a, b) => a + (b || 0), 0) : null;
@@ -3172,7 +3172,7 @@ function renderOfficeFollowerTab() {
   let html = `<h2 style="font-size:16px; margin: 6px 0 10px;">${esc(t('officeActiveCopies'))} (${activeCopies.length})</h2>`;
   html += activeCopies.length
     ? `<div class="hist journal-scroll" tabindex="0">` + activeCopies.map((x) => journalRowHtml(x.sig, { showTrader: true, isCopy: true, copyId: x.copyId })).join('') + `</div>`
-    : `<div class="empty"><strong>${esc(S.myCopies.length === 0 ? t('jrnlEmpty') : t('jrnlNoActive'))}</strong></div>`;
+    : `<div class="empty"><strong>${S.myCopies.length === 0 ? t('jrnlEmpty') : t('jrnlNoActive')}</strong></div>`;
   if (f === 'HISTORY') {
     // D33: tanpa judul H2 "Riwayat (n)"; chip periode + filter tanggal
     // digabung dalam satu baris pfilters.
@@ -3187,7 +3187,7 @@ function renderOfficeFollowerTab() {
     html += filtersHtml;
     const shown = f === 'ALL' ? openSigs : openSigs.filter((s) => s.status === f);
     if (!S.myFollows.length) {
-      html += `<div class="empty"><strong>${esc(t('officeFollowedEmpty'))}</strong>${esc(t('officeFollowedHint'))}</div>`;
+      html += `<div class="empty"><strong>${t('officeFollowedEmpty')}</strong>${esc(t('officeFollowedHint'))}</div>`;
     } else if (!shown.length) {
       html += `<div class="empty"><strong>${esc(t('officeFollowSignalsEmpty'))}</strong></div>`;
     } else {
@@ -3245,7 +3245,7 @@ function renderOfficeFollowedBody() {
   }
   const h3tr = `<h3 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeFollowedTraders'))}</h3>`;
   if (!S.myFollows.length) {
-    box.innerHTML = h3tr + `<div class="empty"><strong>${esc(t('officeFollowedEmpty'))}</strong>${esc(t('officeFollowedHint'))}</div>`;
+    box.innerHTML = h3tr + `<div class="empty"><strong>${t('officeFollowedEmpty')}</strong>${esc(t('officeFollowedHint'))}</div>`;
     return;
   }
   box.innerHTML = h3tr + S.myFollows.map((f) => {
