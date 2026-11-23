@@ -49,8 +49,9 @@ export function calcRisk({ pair, entry, sl, lot, balanceUsd, prices }) {
 
 // Validasi client meniru aturan server. Kembalikan kode error pertama
 // yang kena, atau null bila lolos. Server tetap memeriksa ulang semuanya.
+// §12 bug #5: pair tidak dikenal memakai kode 'pair' (bukan 'invalid').
 export function validateSignal({ pair, direction, entry, sl, tp, lot, balanceUsd, prices }) {
-  if (!PAIRS.includes(pair)) return 'invalid';
+  if (!PAIRS.includes(pair)) return 'pair';
   if (direction !== 'BUY' && direction !== 'SELL') return 'invalid';
   if (![entry, sl, tp].every((v) => typeof v === 'number' && Number.isFinite(v) && v > 0)) {
     return 'invalid';

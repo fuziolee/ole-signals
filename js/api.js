@@ -155,10 +155,136 @@ export async function cancelSignal(id) {
 export async function listTraders() {
   const { data, error } = await supabase
     .from('traders')
-    .select('profile_id, trader_display_name, trader_avatar_url, created_at, trader_progress(level, balance_usd, r_since_level, trades_since_level), profiles!traders_profile_id_fkey(username)')
+    .select('profile_id, trader_display_name, trader_avatar_url, subscription_price_usd, created_at, trader_progress(level, balance_usd, r_since_level, trades_since_level), profiles!traders_profile_id_fkey(username)')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data || [];
+}
+
+// ID trader demo (kolom traders.is_demo, migrasi 09_demo_traders_migration).
+// Best-effort: bila kolom belum diterapkan, kembalikan [] (bukan gagal).
+export async function listDemoTraderIds() {
+  try {
+    const { data, error } = await supabase
+      .from('traders')
+      .select('profile_id')
+      .eq('is_demo', true);
+    if (error) throw error;
+    return (data || []).map((r) => r.profile_id);
+  } catch (e) {
+    return [];
+  }
+}
+
+// Jumlah pengikut satu trader (follows dibaca publik).
+export async function countFollowers(traderId) {
+  const { count, error } = await supabase
+    .from('follows')
+    .select('*', { count: 'exact', head: true })
+    .eq('trader_id', traderId);
+  if (error) throw error;
+  return count || 0;
+}
+
+// ------------------------------------------------------- sinyal (statistik) ---
+// Semua sinyal (kolom ringan) untuk statistik client-side: filter/urutan
+// Cari, profil trader, statistik Ruang Kerja, dan peringkat komposit.
+export async function listAllSignals(limit = 500) {
+  const { data, error } = await supabase
+    .from('signals')
+    .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, status, version, created_at, expires_at, activated_at, closed_at, close_price, profit_usd, profit_pips, r_value, holding_minutes')
+    .neq('status', 'CANCELLED')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+// ------------------------------------------------------------- pengikut ---
+// Follows / salinan / langganan milik pemanggil (RLS owner-only). Semua
+// dibaca nyata dari database; kosong sampai Fase 5 / pembayaran dibangun.
+export async function listMyFollows(userId) {
+  const { data, error } = await supabase
+    .from('follows')
+    .select('trader_id, created_at, traders!follows_trader_id_fkey(trader_display_name, trader_avatar_url, trader_progress(level, balance_usd))')
+    .eq('follower_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function listMyCopies(userId) {
+  const { data, error } = await supabase
+    .from('copies')
+    .select('id, signal_id, lot_size, status, created_at, signals!copies_signal_id_fkey(id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, status, created_at, closed_at, close_price, profit_usd, profit_pips, r_value, traders(trader_display_name))')
+    .eq('follower_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function listMySubscriptions(userId) {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('id, trader_id, price_usd, status, started_at, ends_at, traders!subscriptions_trader_id_fkey(trader_display_name)')
+    .eq('follower_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+// ---------------------------------------------------------- notifikasi ---
+export async function listMyNotifications(userId, limit = 20) {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('id, type, title, message, signal_id, is_read, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function markAllNotificationsRead(userId) {
+  const { data, error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('user_id', userId)
+    .eq('is_read', false)
+    .select('id');
+  if (error) throw error;
+  return data || [];
+}
+
+// ----------------------------------------------------------------- foto ---
+// Upload avatar ke bucket Storage 'avatars' (migrasi 08_storage_avatars).
+// target 'profile' -> profiles.avatar_url; 'trader' -> traders.trader_avatar_url.
+// Gagal dengan pesan jelas bila bucket belum diterapkan di dashboard.
+export async function uploadAvatar(file, userId, { target = 'profile' } = {}) {
+  if (!file || !userId) throw new Error('avatar-missing');
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const path = `${userId}/avatar-${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase.storage
+    .from('avatars')
+    .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
+  if (upErr) throw new Error('avatar-upload:' + (upErr.message || 'gagal'));
+  const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+  const url = pub?.publicUrl;
+  if (!url) throw new Error('avatar-url');
+  if (target === 'trader') {
+    const { error: trErr } = await supabase
+      .from('traders')
+      .update({ trader_avatar_url: url })
+      .eq('profile_id', userId);
+    if (trErr) throw trErr;
+  } else {
+    const { error: profErr } = await supabase
+      .from('profiles')
+      .update({ avatar_url: url })
+      .eq('id', userId);
+    if (profErr) throw profErr;
+  }
+  return url;
 }
 
 // ----------------------------------------------------------------- harga ---
