@@ -49,7 +49,7 @@ export async function updatePassword(password) {
 export async function getMyProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, display_name, avatar_url, region, kyc_status, created_at')
+    .select('id, username, display_name, avatar_url, region, kyc_status, kyc_full_name, kyc_reference, created_at')
     .eq('id', userId)
     .maybeSingle();
   if (error) throw error;
@@ -289,6 +289,75 @@ export async function uploadAvatar(file, userId, { target = 'profile' } = {}) {
     if (profErr) throw profErr;
   }
   return url;
+}
+
+
+// ------------------------------------------------------- username (D05) ---
+// Cek ketersediaan username (dipakai debounce 250 ms di form). RPC
+// check_username mengembalikan {ok, code} — code: ok|empty|format|
+// banned|reserved|taken|cooldown. Validasi format/reserved/taken
+// ditegakkan server-side; klien hanya menampilkan hasilnya.
+export async function checkUsername(kind, username) {
+  const { data, error } = await supabase.rpc('check_username', {
+    p_kind: kind,
+    p_username: username,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// Ubah/tetapkan username FOLLOWER (profiles.username). Cooldown 1x/bulan
+// ditegakkan server-side (kecuali akun demo — lihat sql/13).
+export async function setFollowerUsername(username) {
+  const { data, error } = await supabase.rpc('set_follower_username', {
+    p_username: username,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// Ubah nama profil (profiles.display_name). Cooldown 1x/bulan ditegakkan
+// server-side via RPC yang sama polanya (kecuali akun demo).
+export async function setProfileName(displayName) {
+  const { data, error } = await supabase.rpc('set_profile_name', {
+    p_display_name: displayName,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// ----------------------------------------------------------------- foto ---
+// Hapus avatar (D06): hapus file dari Storage 'avatars' lalu null-kan URL.
+// Path file dipulihkan dari URL publik (…/avatars/<path>).
+export async function deleteAvatar(userId, { target = 'profile' } = {}) {
+  const { data: row, error: readErr } = await supabase
+    .from(target === 'trader' ? 'traders' : 'profiles')
+    .select(target === 'trader' ? 'trader_avatar_url' : 'avatar_url')
+    .eq(target === 'trader' ? 'profile_id' : 'id', userId)
+    .maybeSingle();
+  if (readErr) throw readErr;
+  const url = row ? (row.trader_avatar_url || row.avatar_url) : null;
+  if (url) {
+    const m = String(url).match(/\/avatars\/(.+)$/);
+    if (m) {
+      const { error: rmErr } = await supabase.storage.from('avatars').remove([decodeURIComponent(m[1])]);
+      if (rmErr) throw new Error('avatar-delete:' + (rmErr.message || 'gagal'));
+    }
+  }
+  if (target === 'trader') {
+    const { error } = await supabase.from('traders').update({ trader_avatar_url: null }).eq('profile_id', userId);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('id', userId);
+    if (error) throw error;
+  }
+}
+
+// -------------------------------------------------------------- salinan ---
+// Hapus salinan follower (D14). RLS copies_delete_own mengizinkan pemilik.
+export async function uncopy(copyId) {
+  const { error } = await supabase.from('copies').delete().eq('id', copyId);
+  if (error) throw error;
 }
 
 // ----------------------------------------------------------------- harga ---

@@ -10,6 +10,12 @@ import { PAIRS, calcRr, calcRisk, quoteToUsd, contractSize, validateSignal, deci
 import { computeStats, rankedTraders, sparklineSVG, pipSize, pipsPnl } from './stats.js';
 import * as api from './api.js';
 
+// Pendaftaran DITUTUP (keputusan user 24 Nov 2026): jangan terima
+// pendaftaran baru sampai web benar-benar jadi. Penegakan server-side
+// ada di pengaturan Auth Supabase ("Allow new users to sign up" OFF);
+// flag ini hanya menyembunyikan alur daftar di UI + memblokir submit.
+const REGISTRATION_OPEN = false;
+
 // ---------------------------------------------------------------- state ---
 const S = {
   session: null,
@@ -44,7 +50,7 @@ const S = {
   searchQuery: '',
   searchSort: 'wr',
   searchTab: 'traders',
-  searchFilters: { q: '', pair: 'ALL', topPair: 'ALL', sort: 'wr', wrMin: '0', rrMin: '0', pfMin: '0', levelMin: '0', price: 'all', rfMin: '0' },
+  searchFilters: { q: '', pair: 'ALL', topPair: 'ALL', sort: 'wr', wrMin: '0', rrMin: '0', pfMin: '0', levelMin: '1', price: 'all', rfMin: '0' },
   searchDraft: null,
   searchPfHidden: 0,
   feedFilter: { pair: 'ALL', status: 'ALL', followed: false },
@@ -66,6 +72,13 @@ const S = {
   boardPage: 1,
   settingsSub: null,
   authMode: 'login',
+  followerCounts: {},
+  copiedIds: new Set(),
+  usernameUI: { trader: { draft: '', res: null, pending: null, timer: null }, follower: { draft: '', res: null, pending: null, timer: null } },
+  photoDraft: { profile: false, trader: false },
+  kycFlow: { step: 1, name: '', ktpAttached: false },
+  secFlow: { email: '', code: '' },
+  reports: loadReports(),
 };
 
 // ---------------------------------------------------------------- util ---
@@ -117,6 +130,11 @@ function fmtRShort(r) {
   const v = Number(r) || 0;
   const s = Math.abs(v).toFixed(2).replace(/\.?0+$/, '');
   return (v > 0 ? '+' : v < 0 ? '-' : '') + s + 'R';
+}
+// Pemisah desimal sesuai bahasa (D38): ID memakai koma, EN titik.
+function ds(x) {
+  const str = String(x);
+  return getLang() === 'en' ? str : str.replace('.', ',');
 }
 // USD bulat bertanda seperti prototipe: +$31, -$31.
 function fmtUsd0(n) {
@@ -175,6 +193,33 @@ function dateFilterBarHtml(key) {
   return `<span class="df-wrap"><button class="date-filter-btn" type="button" data-df="${key}">${esc(label)} ▾</button>`
     + (open ? dateFilterPopupHtml(key) : '') + `</span>`;
 }
+function monthGridHtml(y, m, from, to) {
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const first = new Date(y, m, 1);
+  const offset = (first.getDay() + 6) % 7; // Senin pertama
+  const daysIn = new Date(y, m + 1, 0).getDate();
+  const wd = getLang() === 'id'
+    ? ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
+    : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const monthName = first.toLocaleDateString(getLang() === 'id' ? 'id-ID' : 'en-US', { month: 'long', year: 'numeric' });
+  let cells = wd.map((w) => `<span class="df-wd">${w}</span>`).join('');
+  for (let i = 0; i < offset; i++) cells += '<span class="df-day empty"></span>';
+  for (let d = 1; d <= daysIn; d++) {
+    const iso = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const future = iso > todayStr;
+    const cls = ['df-day'];
+    if (iso === from) cls.push('start');
+    if (iso === to) cls.push('end');
+    if (from && to && iso > from && iso < to) cls.push('inrange');
+    if (iso === todayStr) cls.push('today');
+    if (future) cls.push('future');
+    cells += future
+      ? `<span class="${cls.join(' ')}" aria-disabled="true">${d}</span>`
+      : `<button class="${cls.join(' ')}" type="button" data-df-day="${iso}">${d}</button>`;
+  }
+  return `<div class="df-cal"><div class="df-cal-head"><button class="btn" type="button" data-df-nav="-1" aria-label="‹">‹</button><span>${esc(monthName)}</span><button class="btn" type="button" data-df-nav="1" aria-label="›">›</button></div><div class="df-grid">${cells}</div></div>`;
+}
 function dateFilterPopupHtml(key) {
   const range = key === 'office' ? S.officeRange : key === 'wallet' ? S.walletRange : key === 'follower' ? S.followerRange : S.traderProfileRange;
   const custom = key === 'office' ? S.officeCustom : key === 'wallet' ? S.walletCustom : key === 'follower' ? S.followerCustom : S.traderProfileCustom;
@@ -182,9 +227,9 @@ function dateFilterPopupHtml(key) {
   const presets = ['ALL', 'TODAY', 'YESTERDAY', 'LAST7', 'LAST30', 'THISMONTH', 'LASTMONTH', 'CUSTOM'];
   const presetKey = { ALL: 'dfPresetAll', TODAY: 'dfPresetToday', YESTERDAY: 'dfPresetYesterday', LAST7: 'dfPresetLast7', LAST30: 'dfPresetLast30', THISMONTH: 'dfPresetThisMonth', LASTMONTH: 'dfPresetLastMonth', CUSTOM: 'dfPresetCustom' };
   const chips = presets.map((p) => `<button class="df-preset${draft.range === p ? ' on' : ''}" type="button" data-df-preset="${p}" data-df-key="${key}">${esc(t(presetKey[p]))}</button>`).join('');
-  const dates = draft.range === 'CUSTOM'
-    ? `<div class="df-dates"><div><label>${esc(t('dfFrom'))}</label><input type="date" data-df-from="${key}" value="${esc(draft.from)}"></div><div><label>${esc(t('dfTo'))}</label><input type="date" data-df-to="${key}" value="${esc(draft.to)}"></div></div>` : '';
-  return `<div class="df-popup"><div class="df-presets">${chips}</div>${dates}`
+  const cal = draft.range === 'CUSTOM'
+    ? monthGridHtml(draft.viewY, draft.viewM, draft.from, draft.to) : '';
+  return `<div class="df-popup"><div class="df-presets">${chips}</div>${cal}`
     + `<div class="df-foot"><button class="btn primary" type="button" data-df-apply="${key}">${esc(t('dateFilterApply'))}</button>`
     + `<button class="btn" type="button" data-df-cancel="${key}">${esc(t('dateFilterCancel'))}</button></div></div>`;
 }
@@ -197,7 +242,8 @@ function bindDateFilter(root, key, onChange) {
         S.dateFilterOpen = key;
         const range = key === 'office' ? S.officeRange : key === 'wallet' ? S.walletRange : key === 'follower' ? S.followerRange : S.traderProfileRange;
         const custom = key === 'office' ? S.officeCustom : key === 'wallet' ? S.walletCustom : key === 'follower' ? S.followerCustom : S.traderProfileCustom;
-        S.dateFilterDraft = { range, from: custom.from || '', to: custom.to || '' };
+        const base = custom.from ? new Date(custom.from + 'T00:00:00') : new Date();
+        S.dateFilterDraft = { range, from: custom.from || '', to: custom.to || '', viewY: base.getFullYear(), viewM: base.getMonth() };
       }
       onChange();
     });
@@ -208,11 +254,26 @@ function bindDateFilter(root, key, onChange) {
       onChange();
     });
   });
-  $$('[data-df-from]', root).forEach((inp) => {
-    inp.addEventListener('change', () => { if (S.dateFilterDraft) S.dateFilterDraft.from = inp.value; });
+  $$('[data-df-day]', root).forEach((b) => {
+    b.addEventListener('click', () => {
+      const d = S.dateFilterDraft;
+      if (!d) return;
+      const iso = b.dataset.dfDay;
+      if (!d.from || (d.from && d.to)) { d.from = iso; d.to = ''; }
+      else if (iso >= d.from) { d.to = iso; }
+      else { d.from = iso; }
+      onChange();
+    });
   });
-  $$('[data-df-to]', root).forEach((inp) => {
-    inp.addEventListener('change', () => { if (S.dateFilterDraft) S.dateFilterDraft.to = inp.value; });
+  $$('[data-df-nav]', root).forEach((b) => {
+    b.addEventListener('click', () => {
+      const d = S.dateFilterDraft;
+      if (!d) return;
+      const n = new Date(d.viewY, d.viewM + Number(b.dataset.dfNav), 1);
+      d.viewY = n.getFullYear();
+      d.viewM = n.getMonth();
+      onChange();
+    });
   });
   $$('[data-df-apply]', root).forEach((b) => {
     b.addEventListener('click', () => {
@@ -259,10 +320,67 @@ function levelOfSignal(sig) {
   const p = progressOf(traderOf(sig));
   return p ? Number(p.level) || 1 : 1;
 }
+// Harga langganan trader (USD; null/0 = gratis). Diambil dari daftar
+// trader yang dimuat (bukan embed sinyal — embed tidak membawa harga).
+function subPriceOfTrader(traderId) {
+  const tr = S.traders.find((x) => x.profile_id === traderId);
+  if (!tr) return null;
+  const v = tr.subscription_price_usd;
+  return (v === null || v === undefined) ? 0 : Number(v);
+}
+function isSubscribedTo(traderId) {
+  return S.mySubs.some((x) => x.trader_id === traderId && x.status === 'active');
+}
+// D02: hanya PENDING/AKTIF yang berbayar yang terkunci — WIN/LOSS selalu
+// publik, trader gratis tidak pernah terkunci, pelanggan tidak terkunci.
 function isLockedForMe(sig) {
   if (!sig) return false;
   if (S.user && sig.trader_id === S.user.id) return false; // sinyal sendiri
-  return levelOfSignal(sig) >= PAY_GATE_LEVEL;
+  if (sig.status === 'WIN' || sig.status === 'LOSS') return false;
+  if (levelOfSignal(sig) < PAY_GATE_LEVEL) return false;
+  const price = subPriceOfTrader(sig.trader_id);
+  if (price === null) return false; // harga belum diketahui — jangan kunci
+  if (!(price > 0)) return false;
+  return !isSubscribedTo(sig.trader_id);
+}
+function lockedDescFor(traderId) {
+  const price = subPriceOfTrader(traderId);
+  return t('lockedSignalDesc', { price: price ? fmtIdr(price) + t('perMonth') : t('profFree') });
+}
+// D08: tombol Ikuti / Langganan (struktur prototipe). Ikuti = Fase 5 dan
+// Langganan = fase pembayaran — keduanya menampilkan aksi jujur "menyusul",
+// bukan fungsi palsu.
+function followBtnHtml(traderId) {
+  if (S.user && traderId === S.user.id) return '';
+  return `<button class="btn" type="button" data-follow="${esc(traderId)}">${esc(t('follow'))}</button>`;
+}
+function subscribeBtnHtml(traderId) {
+  if (S.user && traderId === S.user.id) return '';
+  const price = subPriceOfTrader(traderId);
+  const label = price > 0
+    ? `${esc(t('subscribe'))} · ${esc(fmtIdr(price))}${esc(t('perMonth'))}`
+    : `${esc(t('subscribe'))} · ${esc(t('profFree'))}`;
+  return `<button class="btn" type="button" data-subscribe="${esc(traderId)}">${label}</button>`;
+}
+function subBadgeHtml(traderId) {
+  const price = subPriceOfTrader(traderId);
+  return price > 0
+    ? `<span class="subbadge">${esc(t('subscribe'))} ${esc(fmtIdr(price))}${esc(t('perMonth'))}</span>`
+    : `<span class="subbadge free">${esc(t('profFree'))}</span>`;
+}
+function bindFollowSubscribe(root) {
+  $$('[data-follow]', root).forEach((b) => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toast(t('followSoon'));
+    });
+  });
+  $$('[data-subscribe]', root).forEach((b) => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toast(t('subscribeSoon'));
+    });
+  });
 }
 
 // ------------------------------------------------------- avatar & demo ---
@@ -367,24 +485,36 @@ function paintNotifBadge() {
   badge.hidden = unread === 0;
   badge.textContent = String(unread);
 }
+function notifTypeLabel(type) {
+  const map = {
+    newsig: 'notifTypeNewsig', new_signal: 'notifTypeNewsig',
+    tpsl: 'notifTypeTpsl', tp_sl: 'notifTypeTpsl',
+    subs: 'notifTypeSubs', sub: 'notifTypeSubs',
+    reset: 'notifTypeReset',
+    editsig: 'notifTypeEditsig', edited: 'notifTypeEditsig',
+    dupflag: 'notifTypeDupflag', dup: 'notifTypeDupflag',
+    expiry: 'notifTypeExpiry', expired: 'notifTypeExpiry',
+  };
+  return t(map[type] || 'notifGeneric');
+}
 function renderNotifPanel() {
-  // ATURAN RONDE 5 (untuk Fase 5, saat notifikasi mulai dibuat): teks
-  // notifikasi WAJIB memakai @handle trader, bukan nama profil — termasuk
-  // template kedaluwarsa sinyal (di prototipe template itu sempat memakai
-  // nama). Panel ini hanya menampilkan pesan dari database.
+  // D24: teks tunggal + tag jenis + waktu relatif + dot belum dibaca.
+  // Template teks notifikasi Fase 5 (server-side) belum ada — panel hanya
+  // menampilkan title/message dari database.
   const panel = $('#notif-panel');
   if (!panel) return;
   const unread = S.notifs.filter((n) => !n.is_read).length;
   let html = `<div class="notif-head"><h3>${esc(t('notifTitle'))}</h3>`
-    + (unread > 0 ? `<button class="btn ghost" id="notif-mark-all" type="button" style="min-height:34px;padding:6px 12px;font-size:12.5px;">${esc(t('notifMarkAll'))}</button>` : '')
+    + `<button class="btn ghost" id="notif-mark-all" type="button" style="min-height:34px;padding:6px 12px;font-size:12.5px;">${esc(t('notifMarkAll'))}</button>`
     + `</div>`;
   if (!S.notifs.length) {
-    html += `<div class="empty" style="padding:24px 12px;"><strong>${esc(t('notifEmpty'))}</strong>${esc(t('notifEmptyHint'))}</div>`;
+    html += `<div class="empty" style="padding:24px 12px;">${t('notifEmpty')}</div>`;
   } else {
     html += S.notifs.map((n) => `<div class="notif-item${n.is_read ? '' : ' unread'}" data-notif="${esc(n.id)}" data-sig="${esc(n.signal_id || '')}" tabindex="0" role="button">`
-      + `<div class="nt">${esc(n.title)}</div>`
+      + (n.is_read ? '' : '<span class="ndot" aria-hidden="true"></span>')
+      + `<div class="nt"><span class="tag">${esc(notifTypeLabel(n.type))}</span>${esc(n.title)}</div>`
       + `<div class="nm">${esc(n.message)}</div>`
-      + `<div class="ntime">${esc(fmtDate(n.created_at))}</div></div>`).join('');
+      + `<div class="ntime">${esc(fmtRel(n.created_at))}</div></div>`).join('');
   }
   html += `<p class="notif-foot">${esc(t('notifSettingsHint'))}</p>`;
   panel.innerHTML = html;
@@ -417,6 +547,18 @@ function setNotifPanel(open) {
   if (!panel) return;
   panel.hidden = !open;
   if (open) renderNotifPanel();
+}
+
+// Laporan trader lokal (D22): backend moderasi belum ada (Fase 5), jadi
+// laporan disimpan di perangkat ini saja dan ditampilkan di "Laporan kamu".
+function loadReports() {
+  try {
+    const v = JSON.parse(localStorage.getItem('ole-reports') || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch (e) { return []; }
+}
+function saveReports() {
+  try { localStorage.setItem('ole-reports', JSON.stringify(S.reports)); } catch (e) { /* abaikan */ }
 }
 
 // ---------------------------------------------------------------- toast ---
@@ -496,8 +638,17 @@ function applyI18n() {
   $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   $$('[data-i18n-html]').forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); });
   document.documentElement.lang = getLang();
+  // Pendaftaran ditutup: paksa mode masuk, sembunyikan tombol daftar,
+  // dan beri tahu pengunjung bahwa pendaftaran dibuka lagi nanti.
+  if (!REGISTRATION_OPEN) S.authMode = 'login';
   $('#auth-submit').textContent = S.authMode === 'login' ? t('login') : t('signup');
+  $('#auth-toggle').hidden = !REGISTRATION_OPEN;
   $('#auth-toggle').textContent = S.authMode === 'login' ? t('noAccount') : t('haveAccount');
+  if (!REGISTRATION_OPEN) {
+    const note = $('#auth-notice');
+    note.textContent = t('authSignupClosed');
+    note.hidden = false;
+  }
   // Auth: petunjuk sandi + konfirmasi hanya saat daftar, bukan saat masuk.
   const signup = S.authMode === 'signup';
   $('#password-hint').hidden = !signup;
@@ -573,12 +724,18 @@ document.addEventListener('click', (e) => {
 });
 
 // ----------------------------------------------------------------- auth ---
+function hideSplash() {
+  const sp = $('#boot-splash');
+  if (sp) sp.hidden = true;
+}
 function showAuth() {
+  hideSplash();
   $('#app').hidden = true;
   $('#auth-view').hidden = false;
   applyI18n();
 }
 function showApp() {
+  hideSplash();
   $('#auth-view').hidden = true;
   $('#app').hidden = false;
   applyI18n();
@@ -608,6 +765,13 @@ $('#auth-toggle').addEventListener('click', () => {
 
 $('#auth-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  // Pendaftaran ditutup: tolak submit daftar walau mode diubah manual.
+  if (S.authMode === 'signup' && !REGISTRATION_OPEN) {
+    const noteBox = $('#auth-notice');
+    noteBox.textContent = t('authSignupClosed');
+    noteBox.hidden = false;
+    return;
+  }
   const email = $('#auth-email').value.trim();
   const password = $('#auth-password').value;
   const errBox = $('#auth-error');
@@ -656,6 +820,13 @@ async function handleSession(session) {
     return;
   }
   await refreshIdentity();
+  try { S.traders = await api.listTraders(); } catch (e) { S.traders = []; }
+  try { S.mySubs = await api.listMySubscriptions(S.user.id); } catch (e) { S.mySubs = []; }
+  try {
+    const counts = await Promise.all(S.traders.map((tr) => api.countFollowers(tr.profile_id).catch(() => 0)));
+    S.followerCounts = {};
+    S.traders.forEach((tr, i) => { S.followerCounts[tr.profile_id] = counts[i]; });
+  } catch (e) { S.followerCounts = {}; }
   try { S.prices = await api.getPrices(); } catch (e) { S.prices = new Map(); }
   try { S.demoIds = new Set(await api.listDemoTraderIds()); } catch (e) { S.demoIds = new Set(); }
   await loadNotifications();
@@ -690,6 +861,18 @@ function riskTargetUsd(sig) {
   return { riskUsd: risk.riskUsd, targetUsd: risk.riskUsd * rr, rr };
 }
 
+function pairHtml(pair) {
+  // D58: XAUUSD memakai tag emas seperti prototipe.
+  return pair === 'XAUUSD' ? `<span class="goldtag">${esc(pair)}</span>` : esc(pair);
+}
+function lockLabelHtml(sig, mine) {
+  // D10: PENDING = "Menunggu entry" / milik sendiri "Belum terkunci ·
+  // bisa diubah"; AKTIF/selesai = "Terkunci".
+  if (sig.status === 'PENDING') {
+    return `<span class="lock">${esc(mine ? t('lockUnlockedOwn') : t('lockWaiting'))}</span>`;
+  }
+  return `<span class="lock">🔒 ${esc(t('locked'))}</span>`;
+}
 function signalCardHtml(sig) {
   const tr = traderOf(sig);
   const name = traderHandle(tr); // publik: hanya @username (ronde 5)
@@ -701,10 +884,27 @@ function signalCardHtml(sig) {
   const d = decimalsForPair(sig.pair);
   const dirCls = sig.direction === 'BUY' ? 'buy' : 'sell';
   const wr = statsForTrader(sig.trader_id).wr;
-  let levelsHtml;
+  // D10: flag duplikat — dihitung sebelum cabang terkunci supaya tampil
+  // juga di kartu terkunci (tidak membocorkan pair/arah).
+  let dupHtml = '';
+  if (sig.duplicate_flagged && sig.duplicate_of) {
+    const orig = findSignal(sig.duplicate_of);
+    const origName = orig ? traderHandle(traderOf(orig)) : '';
+    dupHtml = `<div class="dup-flag">${esc(t('dupFlag', { name: origName }))}</div>`;
+  }
+  // D02: kartu terkunci prototipe (lockedCardHTML) — pair, arah, entry,
+  // SL, TP, hasil disembunyikan total; hanya nama/meta + judul terkunci +
+  // tombol Langganan/Ikuti.
   if (locked) {
-    levelsHtml = `<div class="locked-box"><strong>🔒 ${esc(t('lockedTitle'))}</strong><br>${esc(t('lockedDesc'))}</div>`;
-  } else {
+    return `<article class="sig ${dirCls}" data-sig="${esc(sig.id)}">
+    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><div class="right"><span class="lvlbadge">Lv.${level} ${esc(levelName(level, getLang()))}</span>${verified} ${subBadgeHtml(sig.trader_id)}<span class="pill">🔒 ${esc(t('locked'))}</span></div></div>
+    <div class="locked-body"><span aria-hidden="true">🔒</span><div><div class="lt">${esc(t('lockedTitle'))}</div><div class="ld">${esc(lockedDescFor(sig.trader_id))}</div></div></div>
+    ${dupHtml}
+    <div class="sig-foot"><span class="facts">${esc(t('lockedTitle'))}</span>${subscribeBtnHtml(sig.trader_id)}${followBtnHtml(sig.trader_id)}</div>
+  </article>`;
+  }
+  let levelsHtml;
+  {
     // Kotak ke-4: HARGA SEKARANG (sinyal terbuka; "—" bila belum ada harga
     // live) atau HARGA KELUAR (sinyal tertutup, dari close_price).
     const done = sig.status === 'WIN' || sig.status === 'LOSS';
@@ -719,56 +919,64 @@ function signalCardHtml(sig) {
       <div class="lv"><small>${esc(fourth.k)}</small><b class="mono">${esc(fourth.v)}</b></div>
     </div>`;
   }
-  // Fakta kaki kartu: lot · risiko USD (pips) · target USD (pips) · R:R.
+  // Fakta kaki kartu — satu span seperti prototipe (D36): "Lot 0.10 ·
+  // Risiko $X (N pips) · Target $X (N pips) · R:R 1:X.XX".
   const rt = riskTargetUsd(sig);
   const riskPips = Math.abs(Number(sig.entry) - Number(sig.stop_loss)) / pipSize(sig.pair);
   const targetPips = Math.abs(Number(sig.take_profit) - Number(sig.entry)) / pipSize(sig.pair);
-  const factsHtml = locked ? '' : `<div class="sig-facts"><span>${esc(fmtNum(sig.lot_size, 2))} lot</span>`
-    + `<span>${esc(t('riskUsd'))}: <b>${rt.riskUsd !== null ? esc(fmtUsd(rt.riskUsd)) : '—'}</b> (${Math.round(riskPips)} pips)</span>`
-    + `<span>${esc(t('sigTarget'))}: <b>${rt.targetUsd !== null ? esc(fmtUsd(rt.targetUsd)) : '—'}</b> (${Math.round(targetPips)} pips)</span>`
-    + `<span>${esc(t('riskReward'))}: <b>1:${rt.rr !== null ? rt.rr.toFixed(2) : '—'}</b></span></div>`;
-  // Bilah progres untuk AKTIF (SL—floating—TP); tanpa harga live, bilah
-  // tampil tanpa isi dan floating "—" (jujur, bukan posisi palsu).
+  const factsHtml = `<div class="sig-facts"><span>${esc(t('lot'))} ${esc(ds(Number(sig.lot_size).toFixed(2)))} · ${esc(t('riskUsd'))} <b>${rt.riskUsd !== null ? esc(fmtUsd(rt.riskUsd)) : '—'}</b> (${Math.round(riskPips)} pips) · ${esc(t('sigTarget'))} <b>${rt.targetUsd !== null ? esc(fmtUsd(rt.targetUsd)) : '—'}</b> (${Math.round(targetPips)} pips) · R:R <b>1:${rt.rr !== null ? ds(rt.rr.toFixed(2)) : '—'}</b></span></div>`;
+  // Bilah progres untuk AKTIF (D30): floating "$X · ±pips" + ends
+  // "SL X · ke TP Np · ke SL Np · TP X".
   let progHtml = '';
-  if (sig.status === 'AKTIF' && !locked) {
+  if (sig.status === 'AKTIF') {
     const now = priceOf(sig.pair);
     const fl = floatingUsd(sig);
     const denom = Number(sig.take_profit) - Number(sig.stop_loss);
     const pct = now !== null && denom !== 0
       ? Math.min(100, Math.max(0, ((now - Number(sig.stop_loss)) / denom) * 100))
       : 0;
+    const flPips = now !== null ? ((sig.direction === 'SELL' ? -1 : 1) * (now - Number(sig.entry))) / pipSize(sig.pair) : null;
+    const toTp = now !== null ? Math.abs(Number(sig.take_profit) - now) / pipSize(sig.pair) : null;
+    const toSl = now !== null ? Math.abs(now - Number(sig.stop_loss)) / pipSize(sig.pair) : null;
     progHtml = `<div class="sig-prog"><div class="progress"><div class="track"><div class="fill" style="width:${pct.toFixed(0)}%"></div></div>`
-      + `<small>${esc(t('sigFloating'))}: <b>${fl !== null ? esc(fmtUsd(fl)) : '—'}</b>${now !== null ? ` · ${esc(t('sigNow'))} ${esc(fmtNum(now, d))}` : ` · ${esc(t('sigNoPrice'))}`}</small></div>`
-      + `<div class="ends"><span>SL ${esc(fmtNum(sig.stop_loss, d))}</span><span>TP ${esc(fmtNum(sig.take_profit, d))}</span></div></div>`;
+      + `<small>${esc(t('sigFloating'))}: <b>${fl !== null ? esc(fmtUsd(fl)) : '—'}</b>${flPips !== null ? ` · ${esc(fmtPipsSigned(flPips))}` : ''}${now !== null ? ` · ${esc(t('sigNow'))} ${esc(fmtNum(now, d))}` : ` · ${esc(t('sigNoPrice'))}`}</small></div>`
+      + `<div class="ends"><span>SL ${esc(fmtNum(sig.stop_loss, d))}</span><span>${toTp !== null ? `${esc(t('toTP'))} ${Math.round(toTp)}p · ` : ''}${toSl !== null ? `${esc(t('toSL'))} ${Math.round(toSl)}p · ` : ''}TP ${esc(fmtNum(sig.take_profit, d))}</span></div></div>`;
   }
-  // Catatan PENDING (mono, seperti prototipe): entry belum tersentuh,
-  // harga sekarang, jarak ke entry, dan sisa waktu kedaluwarsa.
+  // Catatan PENDING (D50): sufiks milik-sendiri "· sinyal ini masih bisa
+  // diubah" + sisa waktu kedaluwarsa.
   let pendHtml = '';
-  if (sig.status === 'PENDING' && !locked) {
+  if (sig.status === 'PENDING') {
     const now = priceOf(sig.pair);
     const nowTxt = now !== null ? fmtNum(now, d) : '—';
     const dist = now !== null ? fmtNum(Math.abs(now - Number(sig.entry)), d) : '—';
-    pendHtml = `<div class="pend-note">${esc(t('pendDist', { price: nowTxt, dist }))} · ${esc(fmtExpiry(sig.expires_at))}</div>`;
+    pendHtml = `<div class="pend-note">${esc(t('pendDist', { price: nowTxt, dist }))}${mine ? esc(t('pendDistOwn')) : ''} · ${esc(fmtExpiry(sig.expires_at))}</div>`;
   }
-  // Angka hasil di kanan baris pair (sinyal tertutup saja, seperti prototipe).
+  // Angka hasil di kanan baris pair (sinyal tertutup saja, bertanda — D13).
   const resultHtml = (sig.status === 'WIN' || sig.status === 'LOSS') && sig.profit_usd !== null && sig.profit_usd !== undefined
     ? `<span class="sig-result ${sig.status === 'WIN' ? 'win' : 'loss'}">${esc(fmtUsd0(sig.profit_usd))} <span>(${sig.profit_pips !== null && sig.profit_pips !== undefined ? `${fmtPipsSigned(sig.profit_pips)} · ` : ''}${sig.r_value !== null && sig.r_value !== undefined ? esc(fmtRShort(sig.r_value)) : ''})</span></span>`
     : '';
+  // D29: Salin hanya bila PENDING; label berubah "Sudah disalin" bila sudah.
+  const copied = S.copiedIds.has(sig.id);
   const actions = [];
-  actions.push(`<button class="btn" type="button" data-act="detail" data-sig="${esc(sig.id)}">${esc(t('sigDetail'))}</button>`);
-  if (!locked && !mine) {
-    actions.push(`<button class="btn" type="button" data-act="copy" data-sig="${esc(sig.id)}">⧉ ${esc(t('copySignal'))}</button>`);
+  if (sig.status === 'PENDING') {
+    actions.push(`<button class="btn" type="button" data-act="copy" data-sig="${esc(sig.id)}">${copied ? '✓ ' : '⧉ '}${esc(copied ? t('copied') : t('copySignal'))}</button>`);
   }
   if (mine && sig.status === 'PENDING') {
-    // Bagikan ada di overlay detail; kartu hanya Detail/Salin/Ubah/Batalkan.
-    actions.push(`<button class="btn" type="button" data-act="copy" data-sig="${esc(sig.id)}">⧉ ${esc(t('copySignal'))}</button>`);
     actions.push(`<button class="btn" type="button" data-act="edit" data-sig="${esc(sig.id)}">${esc(t('editSignal'))}</button>`);
     actions.push(`<button class="btn danger" type="button" data-act="cancel" data-sig="${esc(sig.id)}">${esc(t('cancelSignal'))}</button>`);
   }
+  if (mine) {
+    actions.push(`<button class="btn" type="button" data-act="share" data-sig="${esc(sig.id)}" aria-label="${esc(t('sigShareDownload'))}">⬇ ${esc(t('sigShareDownload'))}</button>`);
+  }
+  actions.push(`<button class="btn" type="button" data-act="detail" data-sig="${esc(sig.id)}">${esc(t('sigDetail'))}</button>`);
+  if (!mine) actions.push(followBtnHtml(sig.trader_id));
+  const editedBadge = (sig.version && Number(sig.version) > 1)
+    ? ` <span class="pill edited">${esc(t('editedBadge'))}</span>` : '';
   return `<article class="sig ${dirCls}" data-sig="${esc(sig.id)}" tabindex="0" role="button">
-    <div class="sig-top">${avatarHtml(name, sig.trader_id, 'avatar-sm')}<div class="who"><div class="nm">${mine ? esc(t('you')) + ' · ' : ''}${esc(name)}${demoBadge(sig.trader_id)}</div><div class="mt">Lv.${level} ${esc(levelName(level, getLang()))} · ${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}${verified}</div></div></div>
+    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${mine ? esc(t('you')) + ' · ' : ''}${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">Lv.${level} ${esc(levelName(level, getLang()))} · ${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><div class="right"><span class="lvlbadge">Lv.${level}</span>${verified} ${subBadgeHtml(sig.trader_id)}${lockLabelHtml(sig, mine)}${editedBadge}</div></div>
+    ${dupHtml}
     <div class="sig-head">
-      <span class="sig-pair sig-pair-lg">${esc(sig.pair)}</span>
+      <span class="sig-pair sig-pair-lg">${pairHtml(sig.pair)}</span>
       <span class="dir ${dirCls}">${esc(sig.direction)}</span>
       ${statusPill(sig.status)}
       <span class="spacer"></span>
@@ -783,6 +991,13 @@ function signalCardHtml(sig) {
 }
 
 function bindSignalCards(root) {
+  $$('[data-profile]', root).forEach((b) => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openTraderProfile(b.dataset.profile);
+    });
+  });
+  bindFollowSubscribe(root);
   $$('[data-sig]', root).forEach((el) => {
     const open = () => openSignalDetail(el.dataset.sig);
     el.addEventListener('click', (e) => {
@@ -797,8 +1012,13 @@ function bindSignalCards(root) {
       const id = btn.dataset.sig;
       const act = btn.dataset.act;
       if (act === 'detail') { openSignalDetail(id); return; }
-      if (act === 'share') { openSignalDetail(id); return; }
-      if (act === 'copy') { await copySignalText(id); return; }
+      if (act === 'share') { const sg = findSignal(id); if (sg) downloadShareCard(sg); return; }
+      if (act === 'copy') {
+        await copySignalText(id);
+        S.copiedIds.add(id);
+        btn.textContent = '✓ ' + t('copied');
+        return;
+      }
       if (act === 'edit') {
         const sig = findSignal(id);
         if (sig) startEditSignal(sig);
@@ -895,7 +1115,320 @@ function wrapText(ctx, text, maxWidth) {
   pushLine();
   return lines.length ? lines : [''];
 }
-function drawShareCard(sig) {
+// ---- kartu bagikan: port drawSignalCard prototipe (D01) ----------------
+// Latar foto (assets/share-bg.webp, diambil dari prototipe) + brand emas
+// "OLE SIGNALS" + pil BUY/SELL + pil status + blok jarak-ke-entry +
+// sparkline + garis TP/ENTRY/SL + ENTRY/SL/TP 3 kolom + QR + footer.
+// Pil "DATA CONTOH" dan catatan kaki "DATA CONTOH" prototipe TIDAK
+// dipasang (data live nyata) — catatan kaki memakai teks peringatan
+// risiko (ronde 5b). Sparkline dibuat dari jalan acak ber-seed dari ID
+// sinyal (seperti prototipe: 48 titik entry -> harga akhir) karena belum
+// ada riwayat harga tersimpan — BUKAN harga historis nyata.
+let shareBgImg = null;
+let shareBgTried = false;
+function loadShareBg() {
+  if (shareBgTried) return Promise.resolve(shareBgImg);
+  shareBgTried = true;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => { shareBgImg = img; resolve(img); };
+    img.onerror = () => resolve(null);
+    img.src = '/assets/share-bg.webp';
+  });
+}
+function cardSeed(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function cardRand(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t2 = Math.imul(a ^ (a >>> 15), 1 | a);
+    t2 = (t2 + Math.imul(t2 ^ (t2 >>> 7), 61 | t2)) ^ t2;
+    return ((t2 ^ (t2 >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function cardRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+const CARD_MONTHS_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const CARD_MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function cardDateStr(d) {
+  const months = getLang() === 'en' ? CARD_MONTHS_EN : CARD_MONTHS_ID;
+  const p2 = (n) => (n < 10 ? '0' : '') + n;
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}, ${p2(d.getHours())}.${p2(d.getMinutes())}`;
+}
+function cardBg(ctx) {
+  if (shareBgImg && shareBgImg.complete && shareBgImg.naturalWidth) {
+    ctx.drawImage(shareBgImg, 0, 0, 1080, 1080);
+  } else {
+    const g = ctx.createLinearGradient(0, 0, 0, 1080);
+    g.addColorStop(0, '#0B1118'); g.addColorStop(0.55, '#070B14'); g.addColorStop(1, '#05070A');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 1080, 1080);
+    const glow = ctx.createRadialGradient(950, 90, 10, 950, 90, 520);
+    glow.addColorStop(0, 'rgba(34,211,238,0.16)'); glow.addColorStop(1, 'rgba(34,211,238,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, 1080, 1080);
+    const glow2 = ctx.createRadialGradient(80, 1020, 10, 80, 1020, 480);
+    glow2.addColorStop(0, 'rgba(212,175,55,0.10)'); glow2.addColorStop(1, 'rgba(212,175,55,0)');
+    ctx.fillStyle = glow2; ctx.fillRect(0, 0, 1080, 1080);
+  }
+  const ov = ctx.createLinearGradient(0, 0, 1080, 0);
+  ov.addColorStop(0, 'rgba(5,7,10,0.82)');
+  ov.addColorStop(0.55, 'rgba(5,7,10,0.55)');
+  ov.addColorStop(1, 'rgba(5,7,10,0.15)');
+  ctx.fillStyle = ov; ctx.fillRect(0, 0, 1080, 1080);
+  ctx.fillStyle = '#D4AF37';
+  ctx.fillRect(72, 128, 120, 4);
+}
+function cardStatusPill(ctx, text, bg, x, yCenter) {
+  ctx.font = '800 30px Inter, sans-serif';
+  const w = ctx.measureText(text).width + 48;
+  const h = 52;
+  cardRoundRect(ctx, x, yCenter - h / 2, w, h, h / 2);
+  ctx.fillStyle = bg;
+  ctx.fill();
+  ctx.fillStyle = '#05070A';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + w / 2, yCenter + 1);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  return w;
+}
+function cardSpark(ctx, sig, x, y, w, h, levels) {
+  const n = 48;
+  const rnd = cardRand(cardSeed(sig.id + '|' + sig.status));
+  const cur = priceOf(sig.pair);
+  const start = Number(sig.entry);
+  const end = (sig.close_price !== null && sig.close_price !== undefined)
+    ? Number(sig.close_price) : (cur !== null ? cur : start);
+  const lo = Math.min(start, end, Number(sig.stop_loss), Number(sig.take_profit));
+  const hi = Math.max(start, end, Number(sig.stop_loss), Number(sig.take_profit));
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const f = i / (n - 1);
+    const base = start + (end - start) * f;
+    const amp = (hi - lo) * 0.22;
+    const noise = (rnd() - 0.5) * 2 * amp * Math.sin(f * Math.PI);
+    pts.push(base + noise);
+  }
+  let pmin = Math.min(...pts);
+  let pmax = Math.max(...pts);
+  if (pmax - pmin < 1e-12) { pmin -= 1; pmax += 1; }
+  if (levels) {
+    pmin = Math.min(pmin, Number(sig.stop_loss), Number(sig.take_profit), start, cur !== null ? cur : start);
+    pmax = Math.max(pmax, Number(sig.stop_loss), Number(sig.take_profit), start, cur !== null ? cur : start);
+    const pad = (pmax - pmin) * 0.04;
+    pmin -= pad; pmax += pad;
+  }
+  const Yv = (v) => y + h - ((v - pmin) / (pmax - pmin)) * h;
+  const X = [];
+  const Y = [];
+  for (let i = 0; i < n; i++) { X.push(x + (i / (n - 1)) * w); Y.push(Yv(pts[i])); }
+  const fuv = levels && cur !== null ? floatingUsd(sig) : 0;
+  const col = sig.status === 'LOSS' ? '#EF4444'
+    : (sig.status === 'WIN' ? '#22C55E'
+      : (sig.status === 'PENDING' ? '#F59E0B' : ((fuv !== null && fuv >= 0) ? '#22C55E' : '#EF4444')));
+  ctx.beginPath();
+  ctx.moveTo(X[0], y + h);
+  for (let i = 0; i < n; i++) ctx.lineTo(X[i], Y[i]);
+  ctx.lineTo(X[n - 1], y + h);
+  ctx.closePath();
+  const fg = ctx.createLinearGradient(0, y, 0, y + h);
+  fg.addColorStop(0, col + '33');
+  fg.addColorStop(1, col + '00');
+  ctx.fillStyle = fg;
+  ctx.fill();
+  if (levels) {
+    const lvls = [
+      { v: Number(sig.take_profit), col: '#22C55E', lbl: 'TP' },
+      { v: start, col: sig.status === 'PENDING' ? '#F59E0B' : '#8A94A6', lbl: 'ENTRY' },
+      { v: Number(sig.stop_loss), col: '#EF4444', lbl: 'SL' },
+    ];
+    if (ctx.setLineDash) ctx.setLineDash([9, 9]);
+    ctx.lineWidth = 2.5;
+    ctx.font = '700 22px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    for (const lv of lvls) {
+      const ly = Yv(lv.v);
+      ctx.beginPath();
+      ctx.moveTo(x, ly);
+      ctx.lineTo(x + w, ly);
+      ctx.strokeStyle = lv.col;
+      ctx.stroke();
+      ctx.fillStyle = lv.col;
+      ctx.fillText(lv.lbl, x + w + 10, ly + 8);
+    }
+    if (ctx.setLineDash) ctx.setLineDash([]);
+  }
+  ctx.beginPath();
+  ctx.moveTo(X[0], Y[0]);
+  for (let i = 1; i < n; i++) ctx.lineTo(X[i], Y[i]);
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 5;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(X[n - 1], Y[n - 1], 9, 0, Math.PI * 2);
+  ctx.fillStyle = col;
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#05070A';
+  ctx.stroke();
+  if (levels && cur !== null) {
+    ctx.fillStyle = '#F5F7FA';
+    ctx.font = '700 24px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(fmtNum(cur, decimalsForPair(sig.pair)), X[n - 1] - 12, Y[n - 1] + 8);
+    ctx.textAlign = 'left';
+  }
+}
+function cardHero(ctx, sig, y) {
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  const open = sig.status === 'PENDING' || sig.status === 'AKTIF';
+  const subY = open ? y + 82 : y + 72;
+  const d = decimalsForPair(sig.pair);
+  if (sig.status === 'WIN' || sig.status === 'LOSS') {
+    const uv = Number(sig.profit_usd) || 0;
+    ctx.fillStyle = sig.status === 'WIN' ? '#22C55E' : '#EF4444';
+    ctx.font = '800 150px Inter, sans-serif';
+    ctx.fillText(fmtUsd0(uv), 72, y);
+    const sub = fmtPipsSigned(sig.profit_pips) + '  ·  ' + fmtRShort(sig.r_value);
+    ctx.fillStyle = '#8A94A6';
+    ctx.font = '500 42px Inter, sans-serif';
+    ctx.fillText(sub, 72, subY);
+    cardStatusPill(ctx, statusPillLabel(sig.status), sig.status === 'WIN' ? '#22C55E' : '#EF4444', 72 + ctx.measureText(sub).width + 20, subY - 15);
+    return subY;
+  }
+  if (sig.status === 'AKTIF') {
+    const cur = priceOf(sig.pair);
+    const fuv = floatingUsd(sig);
+    const fpips = cur !== null ? ((sig.direction === 'SELL' ? -1 : 1) * (cur - Number(sig.entry))) / pipSize(sig.pair) : null;
+    const rt = riskTargetUsd(sig);
+    const frv = (fuv !== null && rt.riskUsd) ? fuv / rt.riskUsd : 0;
+    ctx.fillStyle = '#8A94A6';
+    ctx.font = '600 24px Inter, sans-serif';
+    try { ctx.letterSpacing = '3px'; } catch (e) { /* abaikan */ }
+    ctx.fillText(fuv !== null && fuv >= 0 ? t('cardFloatProfit') : t('cardFloatLoss'), 72, y - 137);
+    try { ctx.letterSpacing = '0px'; } catch (e) { /* abaikan */ }
+    ctx.fillStyle = fuv !== null && fuv >= 0 ? '#22C55E' : '#EF4444';
+    ctx.font = '800 150px Inter, sans-serif';
+    ctx.fillText(fuv !== null ? fmtUsd0(fuv) : '—', 72, y);
+    const subA = fuv !== null
+      ? fmtPipsSigned(fpips) + '  ·  ' + fmtRShort(frv)
+      : t('sigNoPrice');
+    ctx.fillStyle = '#8A94A6';
+    ctx.font = '500 42px Inter, sans-serif';
+    ctx.fillText(subA, 72, subY);
+    cardStatusPill(ctx, statusPillLabel(sig.status), '#38BDF8', 72 + ctx.measureText(subA).width + 20, subY - 15);
+    return subY;
+  }
+  // PENDING: jarak harga sekarang ke entry + harga sekarang.
+  const curP = priceOf(sig.pair);
+  const dist = curP !== null ? Math.abs(curP - Number(sig.entry)) / pipSize(sig.pair) : null;
+  ctx.fillStyle = '#8A94A6';
+  ctx.font = '600 24px Inter, sans-serif';
+  try { ctx.letterSpacing = '3px'; } catch (e) { /* abaikan */ }
+  ctx.fillText(t('cardDistToEntry'), 72, y - 137);
+  try { ctx.letterSpacing = '0px'; } catch (e) { /* abaikan */ }
+  ctx.fillStyle = '#F59E0B';
+  ctx.font = '800 150px Inter, sans-serif';
+  ctx.fillText(dist !== null ? `${Math.round(dist)} pips` : '—', 72, y);
+  const subP = curP !== null
+    ? t('cardNowPrice') + fmtNum(curP, d)
+    : t('sigNoPrice');
+  ctx.fillStyle = '#8A94A6';
+  ctx.font = '500 42px Inter, sans-serif';
+  ctx.fillText(subP, 72, subY);
+  cardStatusPill(ctx, statusPillLabel(sig.status), '#F59E0B', 72 + ctx.measureText(subP).width + 20, subY - 15);
+  return subY;
+}
+function cardFooter(ctx, sig) {
+  const cardId = shareCardId(sig);
+  const code = verifyCode(sig);
+  const qx = 72;
+  const qy = 926;
+  const qs = 110;
+  cardRoundRect(ctx, qx, qy, qs, qs, 14);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fill();
+  let qr = null;
+  try {
+    const qlib = window.qrcode;
+    if (qlib) { qr = qlib(0, 'M'); qr.addData(shareVerifyUrl(sig)); qr.make(); }
+  } catch (e) { qr = null; }
+  if (qr) {
+    const n = qr.getModuleCount();
+    const m = (qs - 12) / (n + 4);
+    const ox = qx + (qs - m * n) / 2;
+    const oy = qy + (qs - m * n) / 2;
+    ctx.fillStyle = '#05070A';
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (qr.isDark(r, c)) ctx.fillRect(ox + c * m, oy + r * m, m + 0.5, m + 0.5);
+      }
+    }
+  } else {
+    ctx.fillStyle = '#05070A';
+    ctx.font = '700 24px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('QR', qx + qs / 2, qy + qs / 2);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+  }
+  const tx = qx + qs + 24;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#F5F7FA';
+  ctx.font = '700 30px Inter, sans-serif';
+  ctx.fillText('OLE Signals', tx, 944);
+  const w1 = ctx.measureText('OLE Signals').width;
+  ctx.fillStyle = '#8A94A6';
+  ctx.font = '500 30px Inter, sans-serif';
+  ctx.fillText(`  ·  ID ${cardId}`, tx + w1, 944);
+  ctx.fillText(t('cardVerifyCode'), tx, 982);
+  const w2 = ctx.measureText(t('cardVerifyCode')).width;
+  ctx.fillStyle = '#F5F7FA';
+  ctx.font = '700 30px Inter, sans-serif';
+  ctx.fillText(code, tx + w2 + 12, 982);
+  ctx.fillStyle = '#8A94A6';
+  ctx.font = '500 28px Inter, sans-serif';
+  const open = sig.status === 'PENDING' || sig.status === 'AKTIF';
+  ctx.fillText(open ? `${t('cardPriceAsOf')}${cardDateStr(new Date())}  ·  ${t('cardNotFinal')}` : cardDateStr(new Date()), tx, 1020);
+  // Catatan kaki: teks peringatan risiko (bukan "DATA CONTOH" — data live
+  // nyata). Dibungkus maks. 2 baris, font adaptif 20→16px, baseline 1072.
+  const riskText = stripTags(t('riskWarn'));
+  const riskMaxW = 1080 - 72 * 2;
+  let riskFont = 16;
+  let riskLines = [];
+  for (const px of [20, 18, 16]) {
+    ctx.font = `500 ${px}px Inter, sans-serif`;
+    riskLines = wrapText(ctx, riskText, riskMaxW);
+    riskFont = px;
+    if (riskLines.length <= 2) break;
+  }
+  const riskLH = riskFont + 8;
+  ctx.fillStyle = '#7A8494';
+  ctx.font = `500 ${riskFont}px Inter, sans-serif`;
+  riskLines.slice(0, 2).forEach((ln, i) => {
+    ctx.fillText(ln, 72, 1072 - (Math.min(riskLines.length, 2) - 1 - i) * riskLH);
+  });
+}
+async function drawShareCard(sig) {
+  await loadShareBg();
   const cv = document.createElement('canvas');
   cv.width = 1080;
   cv.height = 1080;
@@ -904,89 +1437,77 @@ function drawShareCard(sig) {
   const name = traderHandle(tr); // publik: hanya @username (ronde 5)
   const level = levelOfSignal(sig);
   const d = decimalsForPair(sig.pair);
-  const dirColor = sig.direction === 'BUY' ? '#16A34A' : '#DC2626';
-  // Latar + merek.
-  ctx.fillStyle = '#0B1220';
-  ctx.fillRect(0, 0, 1080, 1080);
-  ctx.fillStyle = '#0891B2';
-  ctx.fillRect(0, 0, 1080, 10);
-  ctx.fillStyle = '#F5F7FA';
-  ctx.font = '800 44px Inter, sans-serif';
-  ctx.fillText('OLE Signals', 72, 110);
-  ctx.fillStyle = '#8A94A6';
-  ctx.font = '500 26px Inter, sans-serif';
-  ctx.fillText(t('appTagline'), 72, 152);
-  // Trader.
-  ctx.fillStyle = avatarColor(sig.trader_id);
+  const open = sig.status === 'PENDING' || sig.status === 'AKTIF';
+  cardBg(ctx);
+  // Brand emas (nama live tetap "OLE SIGNALS", gaya prototipe).
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#D4AF37';
+  ctx.font = '700 30px Inter, sans-serif';
+  try { ctx.letterSpacing = '6px'; } catch (e) { /* abaikan */ }
+  ctx.fillText('OLE SIGNALS', 72, 96);
+  try { ctx.letterSpacing = '0px'; } catch (e) { /* abaikan */ }
+  // Baris trader: avatar + ring cyan, username, "Level N · Pangkat".
   ctx.beginPath();
-  ctx.arc(108, 240, 44, 0, Math.PI * 2);
+  ctx.arc(116, 200, 44, 0, Math.PI * 2);
+  ctx.fillStyle = '#121826';
   ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.font = '800 40px Inter, sans-serif';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#22D3EE';
+  ctx.stroke();
+  ctx.fillStyle = '#F5F7FA';
+  ctx.font = '700 44px Inter, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(initialOf(name), 108, 254);
+  ctx.textBaseline = 'middle';
+  ctx.fillText(initialOf(name), 116, 202);
   ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#F5F7FA';
-  ctx.font = '700 38px Inter, sans-serif';
-  ctx.fillText(name, 176, 232);
+  ctx.font = '700 46px Inter, sans-serif';
+  ctx.fillText(name, 184, 208);
+  const folN = S.followerCounts ? (S.followerCounts[sig.trader_id] || 0) : 0;
   ctx.fillStyle = '#8A94A6';
-  ctx.font = '500 28px Inter, sans-serif';
-  ctx.fillText(`Lv.${level} ${levelName(level, getLang())}${isDemo(sig.trader_id) ? ' · Demo' : ''}`, 176, 272);
-  // Pair + arah.
-  ctx.fillStyle = '#F5F7FA';
-  ctx.font = '800 92px Inter, sans-serif';
-  ctx.fillText(sig.pair, 72, 420);
-  ctx.fillStyle = dirColor;
-  ctx.font = '800 52px Inter, sans-serif';
-  ctx.fillText(sig.direction, 72, 490);
-  ctx.fillStyle = '#8A94A6';
-  ctx.font = '600 30px Inter, sans-serif';
-  ctx.fillText(statusPillLabel(sig.status), 72, 540);
-  // Entry / SL / TP.
-  const rows = [
-    [t('entry'), fmtNum(sig.entry, d)],
-    [t('stopLoss'), fmtNum(sig.stop_loss, d)],
-    [t('takeProfit'), fmtNum(sig.take_profit, d)],
-  ];
   ctx.font = '500 30px Inter, sans-serif';
-  rows.forEach(([label, val], i) => {
-    const y = 640 + i * 72;
-    ctx.fillStyle = '#8A94A6';
-    ctx.fillText(label, 72, y);
-    ctx.fillStyle = '#F5F7FA';
-    ctx.font = '700 34px "IBM Plex Mono", monospace';
-    ctx.fillText(val, 420, y);
-    ctx.font = '500 30px Inter, sans-serif';
-  });
-  ctx.fillStyle = '#8A94A6';
-  ctx.font = '500 28px Inter, sans-serif';
-  ctx.fillText(`${fmtNum(sig.lot_size, 2)} lot · ${t('sigShareId')}: ${shareCardId(sig)}`, 72, 880);
-  ctx.fillText(`${t('sigShareCode')}: ${verifyCode(sig)}`, 72, 924);
-  ctx.fillText(shareVerifyUrl(sig), 72, 968);
-  // Peringatan risiko: string i18n berisi markup HTML (<strong>) — dibuang
-  // dulu, lalu dibungkus agar muat di dalam canvas. Dulu satu fillText tanpa
-  // wrap: tag tampil literal dan teks terpotong di tepi kanan (bug ronde 5b).
-  // Ukuran font adaptif: pakai yang terbesar (22→16px) yang menghasilkan
-  // maksimal 3 baris; blok dijangkarkan ke bawah (baseline terakhir 1064)
-  // supaya tidak menabrak baris URL di atasnya.
-  const riskText = stripTags(t('riskWarn'));
-  const riskMaxW = 1080 - 72 * 2;
-  let riskFont = 16;
-  let riskLines = [];
-  for (const px of [22, 20, 18, 16]) {
-    ctx.font = `500 ${px}px Inter, sans-serif`;
-    riskLines = wrapText(ctx, riskText, riskMaxW);
-    riskFont = px;
-    if (riskLines.length <= 3) break;
-  }
-  const riskLH = riskFont + 8;
-  const riskLastY = 1064;
-  ctx.fillStyle = '#64748B';
-  ctx.font = `500 ${riskFont}px Inter, sans-serif`;
+  ctx.fillText(`Level ${level} · ${levelName(level, getLang())}${folN > 0 ? `  ·  ${folN} ${getLang() === 'en' ? 'followers' : 'pengikut'}` : ''}${isDemo(sig.trader_id) ? ' · Demo' : ''}`, 184, 252);
+  // Pair + pil BUY/SELL.
+  ctx.fillStyle = '#F5F7FA';
+  ctx.font = '800 96px Inter, sans-serif';
+  const pairY = open ? 330 : 350;
+  ctx.fillText(sig.pair, 72, pairY);
+  const pw = ctx.measureText(sig.pair).width;
+  const isBuy = sig.direction === 'BUY';
+  ctx.font = '800 30px Inter, sans-serif';
+  const dw = ctx.measureText(sig.direction).width + 56;
+  const px = 72 + pw + 28;
+  cardRoundRect(ctx, px, pairY - 55, dw, 40, 20);
+  ctx.fillStyle = isBuy ? '#22C55E' : '#EF4444';
+  ctx.fill();
+  ctx.fillStyle = '#05070A';
+  ctx.textAlign = 'center';
+  ctx.fillText(sig.direction, px + dw / 2, pairY - 24);
   ctx.textAlign = 'left';
-  riskLines.forEach((ln, i) => {
-    ctx.fillText(ln, 72, riskLastY - (riskLines.length - 1 - i) * riskLH);
+  // Angka hero + sparkline + detail 3 kolom + footer.
+  cardHero(ctx, sig, open ? 500 : 510);
+  cardSpark(ctx, sig, 72, 632, 540, 138, open);
+  ctx.fillStyle = 'rgba(138,148,166,0.25)';
+  ctx.fillRect(72, 800, 1080 - 144, 2);
+  const cols = [
+    ['ENTRY', fmtNum(sig.entry, d)],
+    ['STOP LOSS', fmtNum(sig.stop_loss, d)],
+    ['TAKE PROFIT', fmtNum(sig.take_profit, d)],
+  ];
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  cols.forEach(([label, val], i) => {
+    const cx = 72 + i * 216;
+    ctx.fillStyle = '#8A94A6';
+    ctx.font = '600 26px Inter, sans-serif';
+    ctx.fillText(label, cx, 836);
+    ctx.fillStyle = '#F5F7FA';
+    ctx.font = '700 38px Inter, sans-serif';
+    ctx.fillText(val, cx, 884);
   });
+  cardFooter(ctx, sig);
   return cv;
 }
 function statusPillLabel(status) {
@@ -994,7 +1515,7 @@ function statusPillLabel(status) {
 }
 async function downloadShareCard(sig) {
   try {
-    const cv = drawShareCard(sig);
+    const cv = await drawShareCard(sig);
     const blob = await new Promise((resolve) => cv.toBlob(resolve, 'image/png'));
     if (!blob) throw new Error('no-blob');
     const url = URL.createObjectURL(blob);
@@ -1033,9 +1554,33 @@ function openSignalDetail(id) {
   const d = decimalsForPair(sig.pair);
   const dirCls = sig.direction === 'BUY' ? 'buy' : 'sell';
   const wr = statsForTrader(sig.trader_id).wr;
-  // Bilah progres AKTIF + harga saat ini (bila tersedia).
+  const editedBadge = (sig.version && Number(sig.version) > 1)
+    ? ` <span class="pill edited">${esc(t('editedBadge'))}</span>` : '';
+  let dupHtml = '';
+  if (sig.duplicate_flagged && sig.duplicate_of) {
+    const orig = findSignal(sig.duplicate_of);
+    const origName = orig ? traderHandle(traderOf(orig)) : '';
+    dupHtml = `<div class="dup-flag">${esc(t('dupFlag', { name: origName }))}</div>`;
+  }
+  // D02: overlay terkunci — tanpa pair/arah/entry/SL/TP; hanya nama/meta +
+  // judul terkunci + tombol Langganan (prototipe: subscribe + Tutup).
+  if (locked) {
+    openOverlay(`
+    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><span class="spacer"></span><span class="pill">Lv.${level} ${esc(levelName(level, getLang()))}</span>${verified}<span class="pill">🔒 ${esc(t('locked'))}</span></div>
+    <div class="locked-body" style="margin-top:14px;"><span aria-hidden="true">🔒</span><div><div class="lt">${esc(t('lockedTitle'))}</div><div class="ld">${esc(lockedDescFor(sig.trader_id))}</div></div></div>
+    ${dupHtml}
+    <div class="detail-actions">${subscribeBtnHtml(sig.trader_id)}${followBtnHtml(sig.trader_id)}<button class="btn" id="ov-close2" type="button">${esc(t('close'))}</button></div>`);
+    $('#ov-close2').onclick = closeOverlay;
+    bindFollowSubscribe($('#overlay-sheet'));
+    $$('#overlay-sheet [data-profile]').forEach((b) => {
+      b.addEventListener('click', () => { closeOverlay(); openTraderProfile(b.dataset.profile); });
+    });
+    return;
+  }
+  // Bilah progres AKTIF (D30): dirender SETELAH detail-rows; ends
+  // "SL X · Floating $Y · TP Z".
   let progHtml = '';
-  if (sig.status === 'AKTIF' && !locked) {
+  if (sig.status === 'AKTIF') {
     const now = priceOf(sig.pair);
     const fl = floatingUsd(sig);
     const denom = Number(sig.take_profit) - Number(sig.stop_loss);
@@ -1044,13 +1589,8 @@ function openSignalDetail(id) {
       : 0;
     progHtml = `<div class="sig-prog"><div class="progress"><div class="track"><div class="fill" style="width:${pct.toFixed(0)}%"></div></div>`
       + `<small>${esc(t('sigFloating'))}: <b>${fl !== null ? esc(fmtUsd(fl)) : '—'}</b>${now !== null ? ` · ${esc(t('sigNow'))} ${esc(fmtNum(now, d))}` : ` · ${esc(t('sigNoPrice'))}`}</small></div>`
-      + `<div class="ends"><span>SL ${esc(fmtNum(sig.stop_loss, d))}</span><span>TP ${esc(fmtNum(sig.take_profit, d))}</span></div></div>`;
+      + `<div class="ends"><span>SL ${esc(fmtNum(sig.stop_loss, d))}</span><span>${esc(t('sigFloating'))} ${fl !== null ? esc(fmtUsd(fl)) : '—'}</span><span>TP ${esc(fmtNum(sig.take_profit, d))}</span></div></div>`;
   }
-  // Grid kotak detail 2 kolom (prototipe): ENTRY/SL/TP/HARGA SEKARANG
-  // (atau HARGA KELUAR bila tertutup)/LOT/RISIKO/RISIKO VS SALDO/POTENSI
-  // PROFIT/R:R/JARAK SL-TP/HOLDING PERIOD/DIPOSTING + baris waktu dan
-  // hasil akhir. RISIKO VS SALDO memakai saldo PEMILIK sinyal, bukan
-  // saldo penonton.
   const rt = riskTargetUsd(sig);
   const ownerProg = progressOf(tr);
   const ownerBal = ownerProg ? Number(ownerProg.balance_usd) : START_BALANCE_USD;
@@ -1069,92 +1609,61 @@ function openSignalDetail(id) {
   }
   const drow = (k, v) => `<div class="lv"><span class="k">${esc(k)}</span><span class="v mono">${v}</span></div>`;
   let rowsHtml = `<div class="detail-rows">`;
-  if (!locked) {
-    rowsHtml += drow(t('entry'), esc(fmtNum(sig.entry, d)))
-      + drow(t('stopLoss'), esc(fmtNum(sig.stop_loss, d)))
-      + drow(t('takeProfit'), esc(fmtNum(sig.take_profit, d)))
-      + drow(done ? t('sigExit') : t('sigNow'), done
-        ? ((sig.close_price !== null && sig.close_price !== undefined) ? esc(fmtNum(sig.close_price, d)) : '—')
-        : (now !== null ? esc(fmtNum(now, d)) : '—'));
-  }
+  rowsHtml += drow(t('entry'), esc(fmtNum(sig.entry, d)))
+    + drow(t('stopLoss'), esc(fmtNum(sig.stop_loss, d)))
+    + drow(t('takeProfit'), esc(fmtNum(sig.take_profit, d)))
+    + drow(done ? t('sigExit') : t('sigNow'), done
+      ? ((sig.close_price !== null && sig.close_price !== undefined) ? esc(fmtNum(sig.close_price, d)) : '—')
+      : (now !== null ? esc(fmtNum(now, d)) : '—'));
   rowsHtml += drow(t('lot'), esc(fmtNum(sig.lot_size, 2)));
-  if (!locked) {
-    rowsHtml += drow(t('riskUsd'), rt.riskUsd !== null ? esc(fmtUsd(rt.riskUsd)) : '—')
-      + drow(t('detRiskBal'), riskPct !== null ? esc(t('detRiskBalVal', { pct: riskPct.toFixed(2), bal: fmtUsd(ownerBal) })) : '—')
-      + drow(t('sigTarget'), rt.targetUsd !== null ? esc(fmtUsd(rt.targetUsd)) : '—')
-      + drow(t('riskReward'), '1:' + (rt.rr !== null ? rt.rr.toFixed(2) : '—'))
-      + drow(t('detDist'), `${Math.round(riskPips)} pips / ${Math.round(targetPips)} pips`);
-  }
+  rowsHtml += drow(t('riskUsd'), rt.riskUsd !== null ? esc(fmtUsd(rt.riskUsd)) : '—')
+    + drow(t('detRiskBal'), riskPct !== null ? esc(t('detRiskBalVal', { pct: riskPct.toFixed(2), bal: fmtUsd(ownerBal) })) : '—')
+    + drow(t('detFullTP'), rt.targetUsd !== null ? esc(fmtUsd(rt.targetUsd)) : '—')
+    + drow(t('riskReward'), '1:' + (rt.rr !== null ? ds(rt.rr.toFixed(2)) : '—'))
+    + drow(t('detDist'), `${Math.round(riskPips)} pips / ${Math.round(targetPips)} pips`);
   rowsHtml += drow(t('detHold'), esc(holdTxt))
     + drow(t('detPosted'), `${esc(fmtRel(sig.created_at))} · ${esc(fmtDate(sig.created_at))}`);
   if (sig.activated_at) rowsHtml += drow(t('dtEntry'), esc(fmtDate(sig.activated_at)));
   if (sig.closed_at) rowsHtml += drow(sig.status === 'WIN' ? t('dtTP') : t('dtSL'), esc(fmtDate(sig.closed_at)));
   if (done) {
+    // D49: hasil akhir datar "$X · +Np · +R" (bukan "$X (Np · R)").
     const finalParts = [];
     if (sig.profit_pips !== null && sig.profit_pips !== undefined) finalParts.push(fmtPipsSigned(sig.profit_pips));
     if (sig.r_value !== null && sig.r_value !== undefined) finalParts.push(fmtRShort(sig.r_value));
-    rowsHtml += drow(t('detFinal'), esc(fmtUsd0(sig.profit_usd)) + (finalParts.length ? ` (${esc(finalParts.join(' · '))})` : ''));
+    rowsHtml += drow(t('detFinal'), esc(fmtUsd0(sig.profit_usd)) + (finalParts.length ? ` · ${esc(finalParts.join(' · '))}` : ''));
   }
   rowsHtml += `</div>`;
+  // D37: SEMUA sinyal PENDING berlabel "Belum terkunci — menunggu entry".
+  const lockNote = sig.status === 'PENDING' ? esc(t('detUnlocked')) : esc(t('detLockedNote'));
   const actions = [];
-  if (mine && sig.status === 'PENDING') {
-    actions.push(`<button class="btn" id="ov-edit" type="button">${esc(t('editSignal'))}</button>`);
-    actions.push(`<button class="btn danger" id="ov-cancel" type="button">${esc(t('cancelSignal'))}</button>`);
+  if (mine) {
+    actions.push(`<button class="btn" id="ov-share" type="button" aria-label="${esc(t('sigShareDownload'))}">⬇ ${esc(t('sigShareDownload'))}</button>`);
   }
-  if (!locked && !mine) {
-    actions.push(`<button class="btn" id="ov-copy" type="button">⧉ ${esc(t('copySignal'))}</button>`);
+  if (sig.status === 'PENDING') {
+    actions.push(`<button class="btn primary" id="ov-copy" type="button" style="flex:1;">⧉ ${esc(t('copySignal'))}</button>`);
   }
   actions.push(`<button class="btn" id="ov-trader" type="button">${esc(t('sigViewTrader'))}</button>`);
   actions.push(`<button class="btn" id="ov-close2" type="button">${esc(t('close'))}</button>`);
-  // Kartu bagikan (hanya sinyal sendiri — sesuai prototipe).
-  const shareHtml = mine ? `<div class="share-card"><h3>${esc(t('sigShareTitle'))}</h3>`
-    + `<dl class="kv"><dt>${esc(t('sigShareId'))}</dt><dd class="share-id">${esc(shareCardId(sig))}</dd>`
-    + `<dt>${esc(t('sigShareCode'))}</dt><dd class="share-id">${esc(verifyCode(sig))}</dd>`
-    + `<dt>${esc(t('sigShareUrl'))}</dt><dd style="word-break:break-all;">${esc(shareVerifyUrl(sig))}</dd></dl>`
-    + `<p class="note">${esc(t('sigShareNote'))}</p>`
-    + `<div class="sig-actions"><button class="btn" id="ov-share-dl" type="button">⬇ ${esc(t('sigShareDownload'))}</button>`
-    + `<button class="btn" id="ov-share-copy" type="button">⧉ ${esc(t('sigShareCopy'))}</button></div></div>` : '';
   openOverlay(`
-    <button class="btn ghost close-x" id="ov-close" type="button">✕</button>
-    <div class="sig-top">${avatarHtml(name, sig.trader_id, 'avatar-sm')}<div class="who"><div class="nm">${esc(name)}${demoBadge(sig.trader_id)}</div><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><span class="spacer"></span><span class="pill">Lv.${level} ${esc(levelName(level, getLang()))}</span>${verified}</div>
-    <div class="sig-main"><span class="sig-pair sig-pair-lg">${esc(sig.pair)}</span><span class="dir ${dirCls}">${esc(sig.direction)}</span>${statusPill(sig.status)}<span class="spacer"></span><span class="det-lock-note">${mine && sig.status === 'PENDING' ? esc(t('detUnlocked')) : esc(t('detLockedNote'))}</span></div>
-    ${locked ? `<div class="locked-box"><strong>🔒 ${esc(t('lockedTitle'))}</strong><br>${esc(t('lockedDesc'))}</div>` : ''}
-    ${progHtml}
+    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><span class="spacer"></span><span class="pill">Lv.${level} ${esc(levelName(level, getLang()))}</span>${verified}${statusPill(sig.status)}${editedBadge}</div>
+    ${dupHtml}
+    <div class="sig-main"><span class="sig-pair sig-pair-lg">${pairHtml(sig.pair)}</span><span class="dir ${dirCls}">${esc(sig.direction)}</span><span class="spacer"></span><span class="det-lock-note">${lockNote}</span></div>
     ${rowsHtml}
+    ${progHtml}
     ${!mine ? `<div class="risk-note">${t('riskNote')}</div>` : ''}
-    ${shareHtml}
     ${actions.length ? `<div class="detail-actions">${actions.join('')}</div>` : ''}`);
-  $('#ov-close').onclick = closeOverlay;
   const closeBtn2 = $('#ov-close2');
   if (closeBtn2) closeBtn2.onclick = closeOverlay;
   const copyBtn = $('#ov-copy');
   if (copyBtn) {
-    copyBtn.onclick = async () => { await copySignalText(sig.id); };
-  }
-  const editBtn = $('#ov-edit');
-  if (editBtn) {
-    editBtn.onclick = () => {
-      closeOverlay();
-      startEditSignal(sig);
+    copyBtn.onclick = async () => {
+      await copySignalText(sig.id);
+      S.copiedIds.add(sig.id);
+      copyBtn.textContent = '✓ ' + t('copied');
     };
   }
-  const cancelBtn = $('#ov-cancel');
-  if (cancelBtn) {
-    cancelBtn.onclick = async () => {
-      const yes = await confirmDialog(t('confirmCancelTitle'), t('confirmCancelBody'), t('yesCancel'));
-      if (!yes) return;
-      closeOverlay();
-      try {
-        const res = await api.cancelSignal(sig.id);
-        if (!res.ok) { toast(rpcErrorMessage(res), true); return; }
-        toast(t('toastCancelled'));
-        await renderOffice();
-        await renderHome();
-      } catch (e) {
-        toast(t('errNetwork'), true);
-      }
-    };
-  }
+  const shareBtn = $('#ov-share');
+  if (shareBtn) shareBtn.onclick = () => downloadShareCard(sig);
   const traderBtn = $('#ov-trader');
   if (traderBtn) {
     traderBtn.onclick = () => {
@@ -1162,15 +1671,9 @@ function openSignalDetail(id) {
       openTraderProfile(sig.trader_id);
     };
   }
-  const shareDl = $('#ov-share-dl');
-  if (shareDl) shareDl.onclick = () => downloadShareCard(sig);
-  const shareCopy = $('#ov-share-copy');
-  if (shareCopy) {
-    shareCopy.onclick = async () => {
-      try { await navigator.clipboard.writeText(shareCardText(sig)); } catch (e) { /* abaikan */ }
-      toast(t('toastShareCopied'));
-    };
-  }
+  $$('#overlay-sheet [data-profile]').forEach((b) => {
+    b.addEventListener('click', () => { closeOverlay(); openTraderProfile(b.dataset.profile); });
+  });
 }
 
 // ------------------------------------------------- renderer statistik ---
@@ -1178,7 +1681,7 @@ function openSignalDetail(id) {
 // Semua angka dari sinyal tertutup nyata (js/stats.js); yang belum bisa
 // dihitung tampil "—".
 function statsGridHtml(s) {
-  const wr = s.wr === null ? '—' : s.wr.toFixed(1) + '%';
+  const wr = s.wr === null ? '—' : ds(s.wr.toFixed(1)) + '%';
   const sk = s.streaks;
   return `<div class="pstats">`
     + `<div class="stat-cell"><div class="num mono">${wr}</div><div class="lbl">${esc(t('stWinRate'))}</div></div>`
@@ -1212,8 +1715,8 @@ function monthTableHtml(months) {
       + `<td class="num mono ${e.profit >= 0 ? 'pips-pos' : 'pips-neg'}">${esc(fmtUsd(e.profit, true))}</td>`
       + `<td class="num mono ${e.pips >= 0 ? 'pips-pos' : 'pips-neg'}">${e.pips >= 0 ? '+' : ''}${Math.round(e.pips)}</td>`
       + `<td class="num mono">${e.trades}</td>`
-      + `<td class="num mono">${e.wr === null ? '—' : e.wr.toFixed(1) + '%'}</td></tr>`;
-  }).join('') : `<tr><td colspan="5" style="color:var(--muted)">${esc(t('stNoTrades'))}</td></tr>`;
+      + `<td class="num mono">${e.wr === null ? '—' : ds(e.wr.toFixed(1)) + '%'}</td></tr>`;
+  }).join('') : `<tr><td colspan="5" style="color:var(--muted)">${esc(t('ppmNoTrades'))}</td></tr>`;
   return `<div class="chart-card"><h3>${esc(t('stMonthTitle'))}</h3><div class="sub">${esc(t('stMonthSub'))}</div>`
     + `<div class="board-wrap" style="box-shadow:none"><table class="board"><thead><tr><th>${esc(t('stThMonth'))}</th><th class="num">${esc(t('stThProfit'))}</th><th class="num">${esc(t('stThPips'))}</th><th class="num">${esc(t('stThTrades'))}</th><th class="num">${esc(t('stThWR'))}</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
@@ -1224,18 +1727,18 @@ function pairTableHtml(s, subKey = 'stPairSub') {
     const longTxt = (sk.longestWin || sk.longestLose) ? `${sk.longestWin}W / ${sk.longestLose}L` : '—';
     return `<tr><td class="mono" style="font-weight:700">${esc(e.pair)}</td>`
       + `<td class="num mono">${e.trades}</td>`
-      + `<td class="num mono">${e.wr === null ? '—' : e.wr.toFixed(1) + '%'}</td>`
+      + `<td class="num mono">${e.wr === null ? '—' : ds(e.wr.toFixed(1)) + '%'}</td>`
       + `<td class="num mono ${e.totalUSD >= 0 ? 'pips-pos' : 'pips-neg'}">${esc(fmtUsd(e.totalUSD, true))}</td>`
       + `<td class="num mono">${fmtPf(e.pf)}</td>`
       + `<td class="num mono ${e.totalR >= 0 ? 'pips-pos' : 'pips-neg'}">${esc(fmtR(e.totalR))}</td>`
       + `<td class="num mono">${e.avgR === null ? '—' : esc(fmtR(e.avgR))}</td>`
-      + `<td class="num mono">${e.avgSL === null ? '—' : e.avgSL.toFixed(1)}</td>`
-      + `<td class="num mono">${e.avgTP === null ? '—' : e.avgTP.toFixed(1)}</td>`
+      + `<td class="num mono">${e.avgSL === null ? '—' : ds(e.avgSL.toFixed(1))}</td>`
+      + `<td class="num mono">${e.avgTP === null ? '—' : ds(e.avgTP.toFixed(1))}</td>`
       + `<td class="num mono">${longTxt}</td>`
       + `<td class="num mono pips-neg">${e.drawdown.usd > 0 ? '-' + esc(fmtUsd(e.drawdown.usd)) + ` (${e.drawdown.pct.toFixed(1)}%)` : '—'}</td>`
       + `<td class="num mono">${fmtRf(e.recovery)}</td>`
       + `<td class="num mono">${fmtHold(e.avgHold)}</td></tr>`;
-  }).join('') : `<tr><td colspan="13" style="color:var(--muted)">${esc(t('stPairEmpty'))}</td></tr>`;
+  }).join('') : `<tr><td colspan="13" style="color:var(--muted)">${esc(t('ppNoTrades'))}</td></tr>`;
   return `<div class="chart-card"><h3>${esc(t('stPairTitle'))}</h3><div class="sub">${esc(t(subKey))}<span class="estbadge">${esc(t('estBadge'))}</span> <button class="guidelink" type="button" data-guide="risk">${esc(t('sigDetail'))} →</button></div>`
     + `<div class="board-wrap" style="box-shadow:none"><table class="board"><thead><tr><th>${esc(t('stThPair'))}</th><th class="num">${esc(t('stThTrades'))}</th><th class="num">${esc(t('stThWR'))}</th><th class="num">${esc(t('stThProfit'))}</th><th class="num">${esc(t('stThPF'))}</th><th class="num">${esc(t('stThTotalR'))}</th><th class="num">${esc(t('stThAvgR'))}</th><th class="num">${esc(t('stThAvgSL'))}</th><th class="num">${esc(t('stThAvgTP'))}</th><th class="num">${esc(t('stThStreak'))}</th><th class="num">${esc(t('stThMaxDD'))}</th><th class="num">${esc(t('stThRecovery'))}</th><th class="num">${esc(t('stThHold'))}</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
@@ -1263,25 +1766,70 @@ function journalRowHtml(sig, opts = {}) {
   const d = decimalsForPair(sig.pair);
   const dirCls = sig.direction === 'BUY' ? 'buy' : 'sell';
   const resCls = sig.status === 'WIN' ? 'pips-pos' : 'pips-neg';
-  const res = `${sig.profit_usd !== null && sig.profit_usd !== undefined ? fmtUsd(sig.profit_usd) : '—'}`
-    + `${sig.profit_pips !== null && sig.profit_pips !== undefined ? ` · ${Math.round(Number(sig.profit_pips))} pips` : ''}`
-    + `${sig.r_value !== null && sig.r_value !== undefined ? ` · ${fmtR(sig.r_value)}` : ''}`;
+  // D14: salinan follower — AKTIF menampilkan floating, PENDING
+  // "Menunggu entry"; hasil tertutup bertanda (D13).
+  let res;
+  if (opts.isCopy && sig.status === 'PENDING') {
+    res = esc(t('jrnlWaiting'));
+  } else if (opts.isCopy && sig.status === 'AKTIF') {
+    const fl = floatingUsd(sig);
+    res = esc(t('jrnlFloating', { amt: fl !== null ? fmtUsd0(fl) : '—' }));
+  } else {
+    res = `${sig.profit_usd !== null && sig.profit_usd !== undefined ? fmtUsd0(sig.profit_usd) : '—'}`
+      + `${sig.profit_pips !== null && sig.profit_pips !== undefined ? ` · ${fmtPipsSigned(sig.profit_pips)}` : ''}`
+      + `${sig.r_value !== null && sig.r_value !== undefined ? ` · ${fmtRShort(sig.r_value)}` : ''}`;
+  }
   const traderName = opts.showTrader ? (() => { const tr = traderOf(sig); return esc(traderHandle(tr)) + ' · '; })() : '';
-  const timeline = `${esc(t('detPosted'))} ${esc(fmtDateShort(sig.created_at))}`
-    + (sig.activated_at ? ` · ${esc(t('dtEntry'))} ${esc(fmtDateShort(sig.activated_at))}` : '')
-    + (sig.closed_at ? ` · ${esc(sig.status === 'WIN' ? t('dtTP') : t('dtSL'))} ${esc(fmtDateShort(sig.closed_at))}` : '');
+  // D13: timeline tanggal + jam (bukan tanggal saja).
+  const timeline = `${esc(t('detPosted'))} ${esc(fmtDate(sig.created_at))}`
+    + (sig.activated_at ? ` · ${esc(t('dtEntry'))} ${esc(fmtDate(sig.activated_at))}` : '')
+    + (sig.closed_at ? ` · ${esc(sig.status === 'WIN' ? t('dtTP') : t('dtSL'))} ${esc(fmtDate(sig.closed_at))}` : '');
+  const postedTxt = opts.isCopy
+    ? t('jrnlCopiedAgo', { ago: fmtRel(sig.created_at), lot: fmtNum(sig.lot_size, 2) })
+    : t('myJrnlPosted', { ago: fmtRel(sig.created_at), lot: fmtNum(sig.lot_size, 2) });
+  // D13: tombol Bagikan untuk sinyal sendiri. D14: tombol hapus salinan
+  // (non-AKTIF saja; AKTIF menampilkan ikon nonaktif + catatan).
+  let extraBtns = '';
+  if (opts.mine) {
+    extraBtns += `<button class="iconbtn" type="button" data-jshare="${esc(sig.id)}" aria-label="${esc(t('sigShareDownload'))}" style="width:34px;height:34px;font-size:14px;">⬇</button>`;
+  }
+  if (opts.isCopy && opts.copyId) {
+    if (sig.status === 'AKTIF') {
+      extraBtns += `<button class="iconbtn" type="button" disabled title="${esc(t('jrnlNoDeleteActive'))}" style="width:34px;height:34px;font-size:14px;">🗑</button>`;
+    } else {
+      extraBtns += `<button class="iconbtn trashbtn" type="button" data-uncopy="${esc(opts.copyId)}" aria-label="${esc(t('cancel'))}" style="width:34px;height:34px;font-size:14px;">🗑</button>`;
+    }
+  }
   return `<div class="hist-row"><span class="p mono">${esc(sig.pair)}</span>`
     + `<span class="dir ${dirCls}" style="font-size:11px;padding:3px 9px">${esc(sig.direction)}</span>`
-    + `<span style="color:var(--muted)">${traderName}${esc(t('myJrnlPosted', { ago: fmtRel(sig.created_at), lot: fmtNum(sig.lot_size, 2) }))}</span>`
-    + `<span class="pill ${sig.status === 'WIN' ? 'green' : 'red'}">${esc(sig.status)}</span>`
-    + `<span class="res mono ${resCls}">${esc(res)}</span>`
+    + `<span style="color:var(--muted)">${traderName}${esc(postedTxt)}</span>`
+    + `<span class="pill ${sig.status === 'WIN' ? 'green' : sig.status === 'LOSS' ? 'red' : ''}">${esc(sig.status)}</span>`
+    + `<span class="res mono ${resCls}">${res}</span>`
     + `<button class="btn" type="button" data-jdetail="${esc(sig.id)}" style="min-height:34px;padding:6px 12px;font-size:12.5px;">${esc(t('sigDetail'))}</button>`
+    + extraBtns
     + `<div class="hist-detail">${timeline}</div>`
     + `</div>`;
 }
 function bindJournalRows(root) {
   $$('[data-jdetail]', root).forEach((b) => {
     b.addEventListener('click', () => openSignalDetail(b.dataset.jdetail));
+  });
+  $$('[data-jshare]', root).forEach((b) => {
+    b.addEventListener('click', () => {
+      const sg = findSignal(b.dataset.jshare);
+      if (sg) downloadShareCard(sg);
+    });
+  });
+  $$('[data-uncopy]', root).forEach((b) => {
+    b.addEventListener('click', async () => {
+      try {
+        await api.uncopy(b.dataset.uncopy);
+        toast(t('jrnlDeleted'));
+        if (S.view === 'office') await renderOffice();
+      } catch (e) {
+        toast(t('errNetwork'), true);
+      }
+    });
   });
 }
 
@@ -1337,16 +1885,9 @@ function homeFilteredSignals() {
 function renderHomeList() {
   const list = $('#home-list');
   if (!list) return;
-  if (S.homeSignals.length === 0) {
-    list.innerHTML = `<div class="empty"><strong>${esc(t('feedEmpty'))}</strong>${esc(t('feedEmptyHint'))}</div>`;
-    return;
-  }
   const rows = homeFilteredSignals();
   if (rows.length === 0) {
-    const msg = S.feedFilter.followed && S.myFollows.length === 0
-      ? `<strong>${esc(t('feedFollowedEmpty'))}</strong>${esc(t('feedFollowedHint'))}`
-      : `<strong>${esc(t('feedNoMatch'))}</strong>`;
-    list.innerHTML = `<div class="empty">${msg}</div>`;
+    list.innerHTML = `<div class="empty">${t('feedEmpty')}</div>`;
     return;
   }
   list.innerHTML = rows.map(signalCardHtml).join('');
@@ -1378,28 +1919,28 @@ function traderCardHtml(tr, rank) {
   const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
   const st = statsForTrader(tr.profile_id);
   const price = tr.subscription_price_usd;
-  // Lencana langganan (Gratis / $X /bln) + jumlah pengikut (diisi async).
+  // D34: lencana langganan dalam IDR (fmtIDR prototipe).
   const subBadge = price !== null && price !== undefined && Number(price) > 0
-    ? esc(fmtUsd(price)) + ' ' + esc(t('perMonth'))
+    ? `${esc(t('subscribe'))} ${esc(fmtIdr(price))}${esc(t('perMonth'))}`
     : esc(t('profFree'));
   const handle = traderHandle(tr); // publik: hanya @username (ronde 5)
+  const folN = S.followerCounts[tr.profile_id];
   return `<article class="tcard" data-trader="${esc(tr.profile_id)}" tabindex="0" role="button">
     <div class="head">
       <span class="rank-num${rank <= 3 ? ' top' : ''}">${rank}</span>
       ${avatarImg(handle, tr.profile_id, tr.trader_avatar_url, 'avatar')}
       <div style="min-width:0; flex:1;">
         <div class="n">${esc(handle)}${verified}${demoBadge(tr.profile_id)}</div>
-        <div style="font-size:12.5px; color:var(--muted);">Lv.${level} ${esc(levelName(level, getLang()))}</div>
       </div>
-      <span class="pill">Lv.${level}</span>
+      <span class="lvlbadge">Lv.${level} ${esc(levelName(level, getLang()))}</span>
     </div>
     <div class="mini">
       <div><div class="v">${st.wr === null ? '—' : st.wr.toFixed(0) + '%'}</div><div class="k">${esc(t('stWinRate'))}</div></div>
       <div><div class="v">${st.totalSignals}</div><div class="k">${esc(t('stSignals'))}</div></div>
-      <div><div class="v">${st.closed ? esc(fmtUsd(st.totalUSD, true)) : '—'}</div><div class="k">${esc(t('stProfitUSD'))}</div></div>
+      <div><div class="v">${esc(fmtUsd(st.totalUSD, true))}</div><div class="k">${esc(t('stProfitUSD'))}</div></div>
     </div>
-    <div class="meta"><span class="pill">${subBadge}</span><span class="fol" data-fol="${esc(tr.profile_id)}"></span></div>
-    <div class="actions"><button class="btn" type="button" data-act="view" data-trader="${esc(tr.profile_id)}">${esc(t('sigViewTrader'))}</button></div>
+    <div class="meta"><span class="pill">${subBadge}</span><span class="fol">${folN === undefined ? '—' : esc(t('followersCount', { n: folN }))}</span></div>
+    <div class="actions">${followBtnHtml(tr.profile_id)}${subscribeBtnHtml(tr.profile_id)}<button class="btn" type="button" data-act="view" data-trader="${esc(tr.profile_id)}">${esc(t('sigViewTrader'))}</button></div>
   </article>`;
 }
 
@@ -1458,6 +1999,7 @@ function renderSearchList() {
     else if (S.searchFilters.sort === 'totalr') primary = st.totalR;
     else if (S.searchFilters.sort === 'wr') primary = st.wr === null ? -1 : st.wr;
     else if (S.searchFilters.sort === 'rf') primary = st.recovery === null || st.recovery === undefined ? -1 : (st.recovery === Infinity ? 999 : st.recovery);
+    else if (S.searchFilters.sort === 'followers') primary = S.followerCounts[tr.profile_id] || 0;
     else primary = p ? Number(p.level) || 1 : 1;
     return [primary, st.totalR, st.totalUSD, (tr.trader_display_name || '').toLowerCase()];
   };
@@ -1471,7 +2013,6 @@ function renderSearchList() {
   });
   S.searchPfHidden = pfHidden;
   let html = `<p class="sub">${esc(t('searchCount', { n: rows.length, total: S.traders.length }))}</p>`;
-  if (pfHidden > 0) html += `<p class="note">${esc(t('searchPfNote', { n: pfHidden }))}</p>`;
   if (rows.length === 0) {
     html += `<div class="empty"><strong>${esc(t('searchNoMatch'))}</strong></div>`;
     list.innerHTML = html;
@@ -1488,13 +2029,7 @@ function renderSearchList() {
     el.addEventListener('click', open);
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
   });
-  // Jumlah pengikut per kartu (async; kosong bila gagal).
-  $$('[data-fol]', list).forEach(async (el) => {
-    try {
-      const n = await api.countFollowers(el.dataset.fol);
-      el.textContent = t('followersCount', { n });
-    } catch (e) { /* abaikan */ }
-  });
+  bindFollowSubscribe(list);
 }
 
 function searchFilterOptions(values, current) {
@@ -1507,23 +2042,24 @@ function renderSearchControls() {
   if (S.searchTab !== 'traders') { controls.innerHTML = ''; return; }
   if (!S.searchDraft) S.searchDraft = { ...S.searchFilters };
   const d = S.searchDraft;
-  const pairs = [...new Set(S.allSignals.map((s) => s.pair))].sort((a, b) => PAIRS.indexOf(a) - PAIRS.indexOf(b));
-  const pairOpts = `<option value="ALL">${esc(t('feedFilterAll'))}</option>` + pairs.map((p) => `<option value="${p}"${d.pair === p ? ' selected' : ''}>${p}</option>`).join('');
-  const topPairOpts = `<option value="ALL">${esc(t('feedFilterAll'))}</option>` + pairs.map((p) => `<option value="${p}"${d.topPair === p ? ' selected' : ''}>${p}</option>`).join('');
+  // D25: 8 pair statis prototipe (bukan hanya pair yang sudah ada sinyalnya).
+  const pairs = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCHF', 'EURGBP', 'GBPJPY', 'XAUUSD'];
+  const pairOpts = `<option value="ALL">${esc(t('optAllPairs'))}</option>` + pairs.map((p) => `<option value="${p}"${d.pair === p ? ' selected' : ''}>${p}</option>`).join('');
+  const topPairOpts = `<option value="ALL">${esc(t('optAllPairs'))}</option>` + pairs.map((p) => `<option value="${p}"${d.topPair === p ? ' selected' : ''}>${p}</option>`).join('');
   controls.innerHTML = `<div class="search-grid">
     <div class="field"><label>${esc(t('searchNameLabel'))}</label><input id="search-q" type="search" placeholder="${esc(t('searchPh'))}" value="${esc(d.q)}" aria-label="${esc(t('searchPh'))}" /></div>
     <div class="field"><label>${esc(t('searchFilterPair'))}</label><select id="search-pair">${pairOpts}</select></div>
     <div class="field"><label>${esc(t('searchFilterTopPair'))}</label><select id="search-top-pair">${topPairOpts}</select><span class="hint">${esc(t('searchFilterTopPairHint'))}</span></div>
     <div class="field"><label>${esc(t('sortBy'))}</label><select id="search-sort">${searchFilterOptions([
-      ['wr', t('sortWr')], ['profit', t('sortProfit')], ['rf', t('sortRf')],
+      ['wr', t('sortWr')], ['profit', t('sortProfit')], ['followers', t('sortFollowers')], ['rf', t('sortRf')],
       ['totalr', t('sortTotalR')], ['level', t('sortLevel')],
     ], d.sort)}</select></div>
-    <div class="field"><label>${esc(t('searchFilterWrMin'))}</label><select id="search-wr-min">${searchFilterOptions([[0, t('feedFilterAll')], [30, '≥ 30%'], [50, '≥ 50%'], [70, '≥ 70%'], [90, '≥ 90%']], d.wrMin)}</select></div>
-    <div class="field"><label>${esc(t('searchFilterRrMin'))}</label><select id="search-rr-min">${searchFilterOptions([[0, t('feedFilterAll')], [1, '≥ 1:1'], [1.5, '≥ 1:1,5'], [2, '≥ 1:2'], [3, '≥ 1:3']], d.rrMin)}</select></div>
+    <div class="field"><label>${esc(t('searchFilterWrMin'))}</label><select id="search-wr-min">${searchFilterOptions([[0, t('feedFilterAll')], [50, '≥ 50%'], [55, '≥ 55%'], [60, '≥ 60%'], [65, '≥ 65%']], d.wrMin)}</select></div>
+    <div class="field"><label>${esc(t('searchFilterRrMin'))}</label><select id="search-rr-min">${searchFilterOptions([[0, t('feedFilterAll')], [1.5, '≥ 1:1,5'], [2, '≥ 1:2'], [2.5, '≥ 1:2,5']], d.rrMin)}</select></div>
     <div class="field"><label>${esc(t('searchFilterPfMin'))}</label><select id="search-pf-min">${searchFilterOptions([[0, t('feedFilterAll')], [1, '≥ 1,0'], [1.5, '≥ 1,5'], [2, '≥ 2,0'], [3, '≥ 3,0']], d.pfMin)}</select></div>
-    <div class="field"><label>${esc(t('searchFilterLevelMin'))}</label><select id="search-level-min">${searchFilterOptions([[0, t('feedFilterAll')], [2, '≥ Lv.2'], [3, '≥ Lv.3'], [5, '≥ Lv.5'], [10, '≥ Lv.10']], d.levelMin)}</select></div>
+    <div class="field"><label>${esc(t('searchFilterLevelMin'))}</label><select id="search-level-min">${searchFilterOptions([[1, t('optAllLevels')], [2, `≥ Level 2 · ${levelName(2, getLang())}`], [3, `≥ Level 3 · ${levelName(3, getLang())}`], [4, `≥ Level 4 · ${levelName(4, getLang())}`], [5, `≥ Level 5 · ${levelName(5, getLang())}`]], d.levelMin)}</select></div>
     <div class="field"><label>${esc(t('searchFilterPrice'))}</label><select id="search-price">${searchFilterOptions([['all', t('feedFilterAll')], ['free', t('searchPriceFree')], ['paid', t('searchPricePaid')]], d.price)}</select></div>
-    <div class="field"><label>${esc(t('searchFilterRfMin'))}</label><select id="search-rf-min">${searchFilterOptions([[0, t('feedFilterAll')], [1, '≥ 1,0x'], [1.5, '≥ 1,5x'], [2, '≥ 2,0x'], [3, '≥ 3,0x']], d.rfMin)}</select></div>
+    <div class="field"><label>${esc(t('searchFilterRfMin'))}</label><select id="search-rf-min">${searchFilterOptions([[0, t('feedFilterAll')], [3, '≥ 3x'], [5, '≥ 5x'], [8, '≥ 8x']], d.rfMin)}</select></div>
   </div>
   <div class="search-actions">
     <button class="btn primary btn-go" id="search-apply" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> ${esc(t('searchBtn'))}</button>
@@ -1551,7 +2087,7 @@ function renderSearchControls() {
   });
   $('#search-apply').addEventListener('click', () => { readDraft(); applySearchDraft(); });
   $('#search-reset').addEventListener('click', () => {
-    S.searchFilters = { q: '', pair: 'ALL', topPair: 'ALL', sort: 'wr', wrMin: '0', rrMin: '0', pfMin: '0', levelMin: '0', price: 'all', rfMin: '0' };
+    S.searchFilters = { q: '', pair: 'ALL', topPair: 'ALL', sort: 'wr', wrMin: '0', rrMin: '0', pfMin: '0', levelMin: '1', price: 'all', rfMin: '0' };
     S.searchDraft = { ...S.searchFilters };
     renderSearchControls();
     renderSearchList();
@@ -1574,6 +2110,11 @@ async function renderSearch() {
       ensureAllSignals(),
     ]);
     S.traders = traders;
+    try {
+      const counts = await Promise.all(S.traders.map((tr) => api.countFollowers(tr.profile_id).catch(() => 0)));
+      S.followerCounts = {};
+      S.traders.forEach((tr, i) => { S.followerCounts[tr.profile_id] = counts[i]; });
+    } catch (e) { /* abaikan */ }
   } catch (e) {
     list.innerHTML = `<div class="empty"><strong>${esc(t('errNetwork'))}</strong></div>`;
     return;
@@ -1585,27 +2126,28 @@ async function renderSearch() {
 // --------------------------------------------------------------- Peringkat ---
 function boardCardHtml(row, rank) {
   const tr = row.tr;
-  const s = row.stats;
+  const st = row.stats;
   const p = progressOf(tr);
   const level = p ? Number(p.level) || 1 : 1;
   const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
   const name = traderHandle(tr); // publik: hanya @username (ronde 5)
   return `<article class="board-card" data-trader="${esc(tr.profile_id)}" tabindex="0" role="button">
     <div class="board-top">
-      <span class="board-rank${rank <= 3 ? ' top' : ''}">#${rank}</span>
-      ${avatarHtml(name, tr.profile_id, 'avatar-md')}
+      <span class="board-rank${rank <= 3 ? ' top' : ''}">${rank}</span>
+      <button class="avatar-btn" data-profile="${esc(tr.profile_id)}" aria-label="${esc(name)}">${avatarImg(name, tr.profile_id, tr.trader_avatar_url, 'avatar-md')}</button>
       <div style="min-width:0; flex:1;">
         <div style="font-weight:800; font-size:15.5px;">${esc(name)}${verified}${demoBadge(tr.profile_id)}</div>
-        <div style="font-size:12.5px; color:var(--muted);">Lv.${level} ${esc(levelName(level, getLang()))}</div>
       </div>
+      <span class="lvlbadge">Lv.${level} ${esc(levelName(level, getLang()))}</span>
+      ${followBtnHtml(tr.profile_id)}
     </div>
     <div class="board-stats">
-      <div class="bs"><b class="${s.totalUSD >= 0 ? 'pips-pos' : 'pips-neg'}">${s.closed ? esc(fmtUsd(s.totalUSD, true)) : '—'}</b><small>${esc(t('thProfit'))}</small></div>
-      <div class="bs"><b>${s.closed ? esc(fmtR(s.totalR)) : '—'}</b><small>${esc(t('stTotalRNet'))}</small></div>
-      <div class="bs"><b>${s.closed && s.drawdown.usd > 0 ? '-' + esc(fmtUsd(s.drawdown.usd)) + ` (${s.drawdown.pct.toFixed(1)}%)` : '—'}</b><small>${esc(t('thMaxDD'))}</small></div>
-      <div class="bs"><b>${s.closed ? fmtPf(s.pf) : '—'}</b><small>${esc(t('thPF'))}</small></div>
-      <div class="bs"><b>${s.closed ? fmtRf(s.recovery) : '—'}</b><small>${esc(t('thRecovery'))}</small></div>
-      <div class="bs"><b>${s.totalSignals}</b><small>${esc(t('thSignals'))}</small></div>
+      <div class="bs"><b class="${st.totalUSD >= 0 ? 'pips-pos' : 'pips-neg'}">${esc(fmtUsd(st.totalUSD, true))}</b><small>${esc(t('thProfit'))}</small></div>
+      <div class="bs"><b>${esc(fmtR(st.totalR))}</b><small>${esc(t('stTotalRNet'))}</small></div>
+      <div class="bs"><b>${st.drawdown.usd > 0 ? '-' + esc(fmtUsd(st.drawdown.usd)) + ` (${ds(st.drawdown.pct.toFixed(1))}%)` : '—'}</b><small>${esc(t('thMaxDD'))}</small></div>
+      <div class="bs"><b>${fmtPf(st.pf)}</b><small>${esc(t('thPF'))}</small></div>
+      <div class="bs"><b>${fmtRf(st.recovery)}</b><small>${esc(t('thRecovery'))}</small></div>
+      <div class="bs"><b>${st.totalSignals}</b><small>${esc(t('thSignals'))}</small></div>
     </div>
   </article>`;
 }
@@ -1618,23 +2160,26 @@ function renderBoardList() {
   let html = `<div class="board-intro"><p class="lead-sm">${t('boardLead')}</p>`
     + `<ul class="board-rules"><li>${t('boardRule1')}</li><li>${t('boardRule2')}</li><li>${t('boardRule3')}</li></ul>`
     + `<button class="guidelink" id="board-guide-link" type="button">${esc(t('guideCta'))}<span aria-hidden="true"> →</span></button></div>`;
-  if (!hasClosed) {
-    html += `<div class="empty" style="margin-top:14px;"><strong>${esc(t('boardEmptyTitle'))}</strong>${esc(t('boardEmptyBody'))}</div>`;
-    list.innerHTML = html;
-    $('#board-guide-link').addEventListener('click', () => openGuideSection('board'));
-    return;
-  }
+  // D55: prototipe tidak menampilkan pesan apa pun bila daftar kosong.
   const perPage = 10;
   const pages = Math.max(1, Math.ceil(ranked.length / perPage));
   S.boardPage = Math.min(S.boardPage, pages);
   const start = (S.boardPage - 1) * perPage;
   const shown = ranked.slice(start, start + perPage);
   html += `<div style="margin-top:14px;">` + shown.map((r, i) => boardCardHtml(r, start + i + 1)).join('') + `</div>`;
-  if (pages > 1) {
-    html += `<div class="row" style="justify-content:center; margin-top:8px;">`
-      + `<button class="btn" id="board-prev" type="button" ${S.boardPage <= 1 ? 'disabled' : ''}>←</button>`
-      + `<span style="font-size:13px; color:var(--muted);">${S.boardPage} / ${pages}</span>`
-      + `<button class="btn" id="board-next" type="button" ${S.boardPage >= pages ? 'disabled' : ''}>→</button></div>`;
+  // D32: catatan risiko di bawah board.
+  html += `<div class="risk-note">${t('boardRiskNote')}</div>`;
+  if (pages > 1 || ranked.length > 0) {
+    const from = ranked.length ? start + 1 : 0;
+    const to = Math.min(start + perPage, ranked.length);
+    let btns = '';
+    for (let pg = 1; pg <= pages; pg++) {
+      btns += `<button class="btn${pg === S.boardPage ? ' cur' : ''}" type="button" data-boardpage="${pg}"${pg === S.boardPage ? ' aria-current="page"' : ''}>${pg}</button>`;
+    }
+    html += `<div class="board-pager"><span class="pinfo">${esc(t('boardPageOf', { page: S.boardPage, pages }))} · ${esc(t('boardPageRange', { from, to, total: ranked.length }))}</span>`
+      + `<button class="btn" id="board-prev" type="button" ${S.boardPage <= 1 ? 'disabled' : ''}>${esc(t('boardPrev'))}</button>`
+      + btns
+      + `<button class="btn" id="board-next" type="button" ${S.boardPage >= pages ? 'disabled' : ''}>${esc(t('boardNext'))}</button></div>`;
   }
   list.innerHTML = html;
   $('#board-guide-link').addEventListener('click', () => openGuideSection('board'));
@@ -1642,6 +2187,19 @@ function renderBoardList() {
   if (prev) prev.addEventListener('click', () => { S.boardPage--; renderBoardList(); });
   const next = $('#board-next');
   if (next) next.addEventListener('click', () => { S.boardPage++; renderBoardList(); });
+  $$('[data-boardpage]', list).forEach((b) => {
+    b.addEventListener('click', () => {
+      S.boardPage = Number(b.dataset.boardpage);
+      renderBoardList();
+    });
+  });
+  bindFollowSubscribe(list);
+  $$('[data-profile]', list).forEach((b) => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openTraderProfile(b.dataset.profile);
+    });
+  });
   $$('[data-trader]', list).forEach((el) => {
     const open = () => openTraderProfile(el.dataset.trader);
     el.addEventListener('click', open);
@@ -1688,11 +2246,7 @@ async function renderTraderProfile() {
   const level = p ? Number(p.level) || 1 : 1;
   const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
   const name = traderHandle(tr); // publik: hanya @username (ronde 5)
-  const price = tr.subscription_price_usd;
-  const priceLabel = price !== null && price !== undefined && Number(price) > 0
-    ? `${esc(fmtUsd(price))} ${esc(t('perMonth'))}` : esc(t('profFree'));
   const mine = S.user && traderId === S.user.id;
-  const balance = p ? Number(p.balance_usd) : START_BALANCE_USD;
   box.innerHTML = `
     <button class="btn backbtn" id="tp-back" type="button">← ${esc(t('back'))}</button>
     <div class="profile-head">
@@ -1701,9 +2255,8 @@ async function renderTraderProfile() {
         <h2>${esc(name)}${verified}${demoBadge(traderId)}</h2>
         <div class="sub">Lv.${level} ${esc(levelName(level, getLang()))}</div>
       </div>
-      <div class="followbox"><div class="followers" id="tp-followers">—</div></div>
+      <div class="followbox">${followBtnHtml(traderId)}${subscribeBtnHtml(traderId)}<button class="iconbtn" id="tp-share" type="button" aria-label="${esc(t('shareTrader'))}">↗</button><div class="followers" id="tp-followers">—</div></div>
     </div>
-    <div class="prof-info"><span>${esc(t('balance'))}: <b>${esc(fmtUsd(balance))}</b></span><span>${esc(t('profFollowers'))}: <b id="tp-followers-2">—</b></span><span>${esc(t('profSubPrice'))}: <b>${priceLabel}</b></span></div>
     ${!mine ? `<div class="risk-note">${t('riskNote')}</div>` : ''}
     <div class="subtabs" role="tablist" style="margin-top:14px;">
       <button class="subtab" role="tab" data-ptab="sinyal" aria-selected="${S.traderProfileTab === 'sinyal'}">${esc(t('profTabSignals'))}</button>
@@ -1713,6 +2266,15 @@ async function renderTraderProfile() {
   $('#tp-back').addEventListener('click', () => {
     showView(['home', 'office', 'search'].includes(S.traderProfileFrom) ? S.traderProfileFrom : 'search');
   });
+  bindFollowSubscribe(box);
+  const tpShare = $('#tp-share');
+  if (tpShare) {
+    tpShare.addEventListener('click', async () => {
+      const text = `OLE Signals — ${name} (Lv.${level} ${levelName(level, getLang())})\n${window.location.origin}/#trader/${traderId}`;
+      try { await navigator.clipboard.writeText(text); } catch (e) { /* abaikan */ }
+      toast(t('toastTraderShared'));
+    });
+  }
   $$('#trader-profile [data-ptab]').forEach((b) => {
     b.addEventListener('click', () => {
       S.traderProfileTab = b.dataset.ptab;
@@ -1730,8 +2292,6 @@ async function renderTraderProfile() {
     const fTxt = followers === null ? '—' : t('followersCount', { n: followers });
     const fEl = $('#tp-followers');
     if (fEl) fEl.textContent = fTxt;
-    const fEl2 = $('#tp-followers-2');
-    if (fEl2) fEl2.textContent = followers === null ? '—' : String(followers);
     renderTraderProfileBody(traderId);
   } catch (e) {
     const b = $('#trader-profile-body');
@@ -1753,25 +2313,27 @@ function renderTraderProfileBody(traderId) {
     return;
   }
   const open = sigs.filter((s) => s.status === 'PENDING' || s.status === 'AKTIF');
-  const done = sigs.filter((s) => ['WIN', 'LOSS', 'CANCELLED', 'EXPIRED'].includes(s.status));
+  // D11: Riwayat hanya sinyal kena TP/SL (WIN/LOSS).
+  const done = sigs.filter((s) => ['WIN', 'LOSS'].includes(s.status));
   const f = S.traderProfileFilter;
   const chip = (val, label, n) => `<button class="chip" type="button" data-pfilter="${val}" aria-pressed="${f === val}">${esc(label)}${n !== undefined ? ` (${n})` : ''}</button>`;
   const traderName = traderHandle(S.traders.find((x) => x.profile_id === traderId) || {}); // publik: hanya @username (ronde 5)
-  let html = `<h2 style="font-size:16px; margin: 6px 0 10px;">${esc(t('profSignalsAll'))}</h2>`
+  let html = `<h3 class="section">${esc(t('profSignalsAll'))}</h3>`
     + `<p class="sub">${esc(t('profSignalsAllSub', { name: traderName }))}</p>`
     + `<div class="pfilters">${chip('ALL', t('pfAll', { n: open.length }))}${chip('PENDING', t('pfPending'))}${chip('AKTIF', t('pfActive'))}<button class="chip hist-tab" type="button" data-pfilter="HISTORY" aria-pressed="${f === 'HISTORY'}">${esc(t('tabHistory'))} (${done.length})</button></div>`;
   if (f === 'HISTORY') {
     const range = S.traderProfileRange;
     const shown = done.filter((s) => withinHistRange(s.closed_at || s.created_at, range, S.traderProfileCustom));
     html += `<div class="pfilters"><button class="chip" type="button" data-prange="ALL" aria-pressed="${range === 'ALL'}">${esc(t('rangeAll'))}</button>${dateFilterBarHtml('trader')}</div>`;
+    const mineHere = S.user && traderId === S.user.id;
     html += shown.length
-      ? `<div class="hist journal-scroll tall" tabindex="0">` + shown.map((s) => journalRowHtml(s)).join('') + `</div>`
+      ? `<div class="hist journal-scroll tall" tabindex="0">` + shown.map((x) => journalRowHtml(x, { mine: mineHere })).join('') + `</div>`
       : `<div class="empty"><strong>${esc(range === 'ALL' ? t('profJournalEmpty') : t('histEmptyRange'))}</strong></div>`;
   } else {
     const shown = f === 'ALL' ? open : open.filter((s) => s.status === f);
     html += shown.length
       ? shown.map(signalCardHtml).join('')
-      : `<div class="empty"><strong>${esc(t('profNoFilter'))}</strong></div>`;
+      : `<div class="empty"><strong>${esc(sigs.length === 0 ? t('profNoSignals') : t('profNoFilter'))}</strong></div>`;
   }
   box.innerHTML = html;
   $$('[data-pfilter]', box).forEach((b) => {
@@ -1848,9 +2410,9 @@ function balanceCardHtml() {
       </div>
     </div>
     <div class="sig-facts" style="margin-top:0;">
-      <span>${esc(t('balCumProfit'))}: <b>${esc(fmtUsd(cumProfit))}</b> (${pctStart >= 0 ? '+' : ''}${pctStart.toFixed(1)}% ${esc(t('balPctStart'))})</span>
+      <span>${esc(t('balStartPrefix'))}${esc(t('balCumProfit'))}: <b>${esc(fmtUsd(cumProfit))}</b> (${pctStart >= 0 ? '+' : ''}${ds(pctStart.toFixed(1))}% ${esc(t('balPctStart'))})</span>
       <span>${esc(t('balEquity'))}: <b>${equity !== null ? esc(fmtUsd(equity)) : '—'}</b></span>
-      <span>${esc(t('balFloating'))}: <b>${floating !== null ? esc(fmtUsd(floating)) : '—'}</b></span>
+      <span>${esc(t('balFloating'))}: <b>${floating !== null ? esc(fmtUsd(floating)) : '—'}</b>${esc(t('balFloatingFrom'))}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <span class="pill gold">Level ${level} · ${esc(levelName(level, getLang()))}</span>
@@ -1891,21 +2453,22 @@ function signalFormHtml(editing) {
     <div class="risk-note">${t('formRisk')}</div>
     <form id="sig-form">
       <div class="field">
-        <label>${esc(t('searchFilterPair'))}</label>
+        <label>${esc(t('formPairLbl'))}</label>
         <select id="sf-pair">${pairOpts}</select>
         <span class="hint" id="sf-quota"></span>
       </div>
       <div class="field">
         <label>${esc(t('direction'))}</label>
         <div class="dir-toggle" role="group">
-          <button type="button" class="buy" id="sf-buy" aria-pressed="${sig ? String(sig.direction === 'BUY') : 'true'}">▲ ${esc(t('buy'))}</button>
-          <button type="button" class="sell" id="sf-sell" aria-pressed="${sig ? String(sig.direction === 'SELL') : 'false'}">▼ ${esc(t('sell'))}</button>
+          <button type="button" class="buy" id="sf-buy" aria-pressed="${sig ? String(sig.direction === 'BUY') : 'true'}">${esc(t('buy'))}</button>
+          <button type="button" class="sell" id="sf-sell" aria-pressed="${sig ? String(sig.direction === 'SELL') : 'false'}">${esc(t('sell'))}</button>
         </div>
       </div>
       <div class="row">
         <div class="field" style="flex:1; min-width:120px;">
           <label for="sf-entry">${esc(t('formEntryLbl'))}</label>
           <input id="sf-entry" type="number" step="any" min="0" required value="${sig ? esc(sig.entry) : ''}" placeholder="${esc(t('phEntry'))}" />
+          <span class="hint">${esc(t('fEntryHint'))}</span>
         </div>
         <div class="field" style="flex:1; min-width:120px;">
           <label for="sf-tp">${esc(t('takeProfit'))}</label>
@@ -1919,7 +2482,8 @@ function signalFormHtml(editing) {
         </div>
         <div class="field" style="flex:1; min-width:120px;">
           <label for="sf-lot">${esc(t('lot'))}</label>
-          <input id="sf-lot" type="number" step="0.01" min="0.01" required value="${sig ? esc(sig.lot_size) : '0.01'}" />
+          <input id="sf-lot" type="number" step="0.01" min="0.01" required value="${sig ? esc(sig.lot_size) : '0.10'}" />
+          <span class="hint">${esc(t('fLotHint'))}</span>
         </div>
       </div>
       <div id="sf-risk"></div>
@@ -2063,49 +2627,138 @@ function startEditSignal(sig) {
   }, 50);
 }
 
-async function renderOffice() {
-  const body = $('#office-body');
-  if (!S.trader) {
-    body.innerHTML = `<div class="card">
-      <h2>${esc(t('setupIdentityTitle'))}</h2>
-      <p>${esc(t('setupIdentityDesc'))}</p>
-      <div class="notice err" id="id-err" hidden></div>
-      <form id="id-form">
-        <div class="field">
-          <label for="id-username">${esc(t('username'))}</label>
-          <input id="id-username" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_][A-Za-z0-9_.]{2,29}" placeholder="trader_jago" />
-          <div class="hint">${esc(t('usernameHint'))}</div>
-        </div>
-        <div class="field">
-          <label for="id-display">${esc(t('displayName'))}</label>
-          <input id="id-display" required maxlength="60" placeholder="Trader Jago" />
-        </div>
-        <button class="btn primary" type="submit">${esc(t('save'))}</button>
-      </form>
-    </div>`;
-    $('#id-form').addEventListener('submit', async (e) => {
+
+// ------------------------------------------------------- form username ---
+// D05: satu komponen untuk kedua peran (prototipe usernameFormHTML):
+// input + cek ketersediaan debounce 250 ms + langkah konfirmasi
+// ("Ya, ubah/tetapkan username" + "Kembali") sebelum menyimpan.
+// Validasi + cooldown 1x/bulan ditegakkan server-side (RPC check_username
+// / setup_trader_identity / set_follower_username, sql/13); klien hanya
+// menampilkan hasil server.
+function usernameStatusMsg(res) {
+  if (!res) return '';
+  if (res.ok) return { txt: t('usernameAvailable'), cls: 'ok' };
+  if (res.code === 'cooldown') return { txt: res.message || t('usernameCheckCooldown', { date: '—' }), cls: 'bad' };
+  const map = { format: 'usernameCheckFormat', banned: 'usernameCheckBanned', reserved: 'usernameCheckReserved', taken: 'usernameCheckTaken', empty: 'usernameCheckEmpty' };
+  return { txt: t(map[res.code] || 'usernameCheckEmpty'), cls: 'bad' };
+}
+function usernameFormHtml(kind) {
+  const ui = S.usernameUI[kind];
+  const isTrader = kind === 'trader';
+  const set = isTrader ? !!S.trader : !!(S.profile && S.profile.username);
+  const cur = isTrader ? (S.trader?.username || '') : (S.profile?.username || '');
+  if (!ui.draft && set) { ui.draft = cur; }
+  const warn = isTrader ? t('usernameWarnTrader') : t('usernameWarnFollower');
+  const note = `<div class="risk-note"><span>${esc(warn)}</span></div>`;
+  if (ui.pending) {
+    return note + `<p class="lead-sm"><b>@${esc(ui.pending)}</b> — ${esc(set ? t('usernameChangeTo') : t('usernameSetTo'))}</p>`
+      + `<div class="detail-actions"><button type="button" class="btn primary" data-uconfirm="${kind}">${esc(set ? t('usernameYesChange') : t('usernameYesSet'))}</button><button type="button" class="btn" data-uback="${kind}">${esc(t('back'))}</button></div>`;
+  }
+  const st = usernameStatusMsg(ui.res);
+  return note + `<form class="wal-panel" data-username-form="${kind}" novalidate><div class="field"><label for="uname-${kind}">${esc(isTrader ? t('usernameTraderLbl') : t('usernameFollowerLbl'))}</label><input id="uname-${kind}" data-username-input="${kind}" maxlength="30" autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(ui.draft || '')}"><div class="hint${st.cls ? ' ' + st.cls : ''}" data-username-status="${kind}">${esc(st.txt)}</div></div>`
+    + `<div class="form-err" data-username-err="${kind}" role="alert"></div><div class="detail-actions"><button type="submit" class="btn primary" data-username-submit="${kind}"${ui.res && ui.res.ok ? '' : ' disabled'}>${esc(set ? t('usernameChangeBtn') : t('usernameCreateBtn'))}</button></div></form>`;
+}
+function paintUsernameStatus(kind, root = document) {
+  const ui = S.usernameUI[kind];
+  const st = usernameStatusMsg(ui.res);
+  const el = root.querySelector(`[data-username-status="${kind}"]`);
+  if (el) {
+    el.textContent = st.txt;
+    el.classList.remove('ok', 'bad');
+    if (st.cls) el.classList.add(st.cls);
+  }
+  const b = root.querySelector(`[data-username-submit="${kind}"]`);
+  if (b) b.disabled = !(ui.res && ui.res.ok);
+}
+function bindUsernameForm(root, kind, onDone) {
+  const ui = S.usernameUI[kind];
+  const input = root.querySelector(`[data-username-input="${kind}"]`);
+  if (input) {
+    input.addEventListener('input', () => {
+      const v = input.value.trim().replace(/^@+/, '');
+      ui.draft = v;
+      ui.res = null;
+      paintUsernameStatus(kind, root);
+      clearTimeout(ui.timer);
+      if (!v) return;
+      ui.timer = setTimeout(async () => {
+        try {
+          const r = await api.checkUsername(kind, v);
+          if (ui.draft !== v) return;
+          ui.res = r;
+        } catch (e) {
+          ui.res = null;
+        }
+        paintUsernameStatus(kind, root);
+      }, 250);
+    });
+  }
+  const form = root.querySelector(`[data-username-form="${kind}"]`);
+  if (form) {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const errBox = $('#id-err');
-      errBox.hidden = true;
+      if (!ui.draft) return;
       try {
-        const res = await api.setupTraderIdentity($('#id-username').value.trim(), $('#id-display').value.trim());
-        if (!res.ok) {
-          errBox.textContent = rpcErrorMessage(res);
-          errBox.hidden = false;
+        const r = await api.checkUsername(kind, ui.draft);
+        if (!r.ok) {
+          ui.res = r;
+          paintUsernameStatus(kind, root);
+          const er = root.querySelector(`[data-username-err="${kind}"]`);
+          if (er) er.textContent = usernameStatusMsg(r).txt;
           return;
         }
-        toast(t('toastIdentity'));
-        await refreshIdentity();
-        await renderOffice();
+        ui.pending = r.value || ui.draft;
+        onDone();
       } catch (err) {
-        errBox.textContent = t('errNetwork');
-        errBox.hidden = false;
+        toast(t('errNetwork'), true);
       }
     });
-    return;
   }
+  const confirmBtn = root.querySelector(`[data-uconfirm="${kind}"]`);
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', async () => {
+      const value = ui.pending;
+      ui.pending = null;
+      confirmBtn.disabled = true;
+      try {
+        let res;
+        if (kind === 'trader') {
+          const displayName = S.trader?.trader_display_name
+            || document.querySelector('#id-display')?.value?.trim()
+            || value;
+          res = await api.setupTraderIdentity(value, displayName);
+        } else {
+          res = await api.setFollowerUsername(value);
+        }
+        if (!res.ok) {
+          toast(rpcErrorMessage(res), true);
+          onDone();
+          return;
+        }
+        ui.draft = '';
+        ui.res = null;
+        toast(t('usernameSet') + '@' + value);
+        await refreshIdentity();
+        onDone();
+      } catch (err) {
+        toast(t('errNetwork'), true);
+        onDone();
+      }
+    });
+  }
+  const backBtn = root.querySelector(`[data-uback="${kind}"]`);
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      ui.pending = null;
+      onDone();
+    });
+  }
+}
 
-  // Role switcher (prototipe: di Office, bukan di Profil).
+async function renderOffice() {
+  const body = $('#office-body');
+  // D04: role toggle SELALU tampil — yang diblokir bila belum ada identitas
+  // trader hanyalah posting (banner + form identitas), bukan peran Pengikut.
   body.innerHTML = `<div class="role-toggle" role="group" aria-label="${esc(t('officeTitle'))}">
       <button type="button" data-orole="trader" aria-pressed="${S.officeRole === 'trader'}">${esc(t('officeRoleTrader'))}</button>
       <button type="button" data-orole="follower" aria-pressed="${S.officeRole === 'follower'}">${esc(t('officeRoleFollower'))}</button>
@@ -2127,6 +2780,17 @@ async function renderOfficeRole() {
     await renderOfficeFollower(box);
     return;
   }
+  if (!S.trader) {
+    // D04: belum ada identitas trader — tampilkan banner + form penyiapan
+    // (nama tampilan + username, komponen D05); peran Pengikut tetap
+    // bisa dibuka lewat toggle di atas.
+    box.innerHTML = `<div class="warnbar" role="alert">${esc(t('officeNeedUsernameBanner'))}</div>`
+      + `<div class="subcard" style="margin-top:14px;"><h3>${esc(t('officeIdentityTitle'))}</h3>`
+      + `<form id="id-setup-form" novalidate><div class="field"><label for="id-display">${esc(t('traderNameLbl'))}</label><input id="id-display" maxlength="60" autocomplete="off" value=""></div>`
+      + `<div id="id-username-wrap">${usernameFormHtml('trader')}</div></form></div>`;
+    bindUsernameForm(box, 'trader', () => renderOffice());
+    return;
+  }
   await renderOfficeTrader(box);
 }
 
@@ -2134,24 +2798,33 @@ function traderIdentityCardHtml() {
   const tr = S.trader;
   const p = progressOf(tr);
   const level = p ? Number(p.level) || 1 : 1;
-  const name = tr.trader_display_name || t('noName');
+  const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
   const username = tr.username ? '@' + tr.username : '—';
+  const price = tr.subscription_price_usd;
+  const subLabel = price !== null && price !== undefined && Number(price) > 0
+    ? `${esc(t('subscribe'))} ${esc(fmtIdr(price))}${esc(t('perMonth'))}` : esc(t('profFree'));
+  const draftDel = !!S.photoDraft.trader;
+  const avUrl = draftDel ? null : tr.trader_avatar_url;
   return `<div class="card">
     <div class="board-top">
-      ${avatarImg(name, tr.profile_id, tr.trader_avatar_url, 'avatar-md')}
+      ${avatarImg(username, tr.profile_id, avUrl, 'avatar-md')}
       <div style="min-width:0; flex:1;">
-        <div style="font-weight:800; font-size:16px;">${esc(name)}${demoBadge(tr.profile_id)}</div>
-        <div style="font-size:13px; color:var(--muted);">${esc(username)} · Lv.${level} ${esc(levelName(level, getLang()))}</div>
+        <div style="font-weight:800; font-size:16px;">${esc(username)}${verified}${demoBadge(tr.profile_id)}</div>
+        <div style="font-size:13px; color:var(--muted);">Lv.${level} ${esc(levelName(level, getLang()))} · ${subLabel}</div>
       </div>
+      <button class="iconbtn" id="trader-share-btn" type="button" aria-label="${esc(t('shareTrader'))}">↗</button>
+      <label class="iconbtn" for="trader-photo-input" title="${esc(t('photoChangeTrader'))}" style="cursor:pointer;">📷</label>
     </div>
-    <p class="note">${esc(t('officeIdentityNote'))}</p>
     <div class="avatar-edit">
       <label class="btn" for="trader-photo-input">${esc(t('photoChangeTrader'))}</label>
       <input type="file" id="trader-photo-input" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
-      <span class="note">${esc(t('photoUploadHint'))}</span>
+      ${avUrl ? `<button class="iconbtn trashbtn" id="trader-photo-del" type="button" aria-label="${esc(t('photoRemoveTrader'))}" title="${esc(t('photoRemoveTrader'))}">🗑</button>` : ''}
+      <span class="note">${esc(draftDel ? t('photoRemoveDraft') : t('photoHintDraft'))}</span>
+      ${draftDel ? `<button class="btn primary" id="trader-photo-done" type="button">${esc(t('doneBtn'))}</button>` : ''}
     </div>
   </div>`;
 }
+
 function avatarImg(name, id, url, sizeCls) {
   if (url) return `<img class="avatar ${sizeCls}" src="${esc(url)}" alt="" style="object-fit:cover;" />`;
   return avatarHtml(name, id, sizeCls);
@@ -2164,6 +2837,7 @@ function bindPhotoInput(inputId, target) {
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) { toast(t('photoError'), true); input.value = ''; return; }
     try {
+      S.photoDraft[target] = false;
       await api.uploadAvatar(file, S.user.id, { target });
       toast(t('photoUploaded'));
       await refreshIdentity();
@@ -2222,7 +2896,7 @@ function renderOfficeTraderTab(editing = null) {
           <div class="kv-row"><div class="k">${esc(t('profileName'))}</div><div class="v">${esc(tr.trader_display_name || t('noName'))}</div></div>
           <div class="kv-row"><div class="k">${esc(t('username'))}</div><div class="v">${tr.username ? '@' + esc(tr.username) : '—'}</div></div>
         </div>
-        <p class="note">${esc(t('officeIdentityNote'))}</p>`
+        <div id="trader-username-wrap" style="margin-top:12px;">${usernameFormHtml('trader')}</div>`
       : `<p class="note">${esc(t('traderAccountNeed'))}</p>`;
     const resetRow = (k, v) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="color:var(--muted);">${esc(k)}</span><b>${esc(v)}</b></div>`;
     box.innerHTML = `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeIdentityTitle'))}</h2>`
@@ -2244,8 +2918,39 @@ function renderOfficeTraderTab(editing = null) {
           <div style="margin-top:12px;"><button class="btn primary" type="button" disabled>${esc(t('resetBtn'))}</button></div>
           <p class="note">${esc(t('resetSoonNote'))}</p>
         </div>`
-      + `<p class="sub">${esc(t('officeStatsSub'))}</p>` + statsSectionHtml(st, 'officeStatsTitle');
+      + statsSectionHtml(st, 'officeStatsTitle');
     bindPhotoInput('trader-photo-input', 'trader');
+    bindUsernameForm(box, 'trader', () => renderOfficeTraderTab());
+    const trShare = $('#trader-share-btn');
+    if (trShare) {
+      trShare.addEventListener('click', async () => {
+        const lv = progressOf(tr) ? Number(progressOf(tr).level) || 1 : 1;
+        const text = `OLE Signals — @${tr.username || ''} (Lv.${lv} ${levelName(lv, getLang())})\n${window.location.origin}/#trader/${tr.profile_id}`;
+        try { await navigator.clipboard.writeText(text); } catch (e) { /* abaikan */ }
+        toast(t('toastTraderShared'));
+      });
+    }
+    const trDel = $('#trader-photo-del');
+    if (trDel) {
+      trDel.addEventListener('click', () => {
+        S.photoDraft.trader = true;
+        renderOfficeTraderTab();
+      });
+    }
+    const trDone = $('#trader-photo-done');
+    if (trDone) {
+      trDone.addEventListener('click', async () => {
+        try {
+          await api.deleteAvatar(S.user.id, { target: 'trader' });
+          S.photoDraft.trader = false;
+          toast(t('photoRemoveTrader'));
+          await refreshIdentity();
+          renderOfficeTraderTab();
+        } catch (e) {
+          toast(t('photoError'), true);
+        }
+      });
+    }
     const accToggle = $('#trader-account-toggle');
     if (accToggle) accToggle.addEventListener('click', () => {
       const panel = $('#trader-account-panel');
@@ -2269,13 +2974,15 @@ function renderOfficeTraderTab(editing = null) {
   const lastPost = S.mySignals.length
     ? S.mySignals.reduce((a, b) => (new Date(a.created_at) > new Date(b.created_at) ? a : b))
     : null;
+  const daysSincePost = lastPost ? Math.floor((Date.now() - new Date(lastPost.created_at).getTime()) / 86400000) : null;
   const lastPostTxt = !lastPost ? t('lastPostNever')
-    : ((Date.now() - new Date(lastPost.created_at).getTime()) < 86400000 ? t('lastPostToday')
-      : t('lastPostDays', { n: Math.floor((Date.now() - new Date(lastPost.created_at).getTime()) / 86400000) }));
+    : (daysSincePost === 0 ? t('lastPostToday') : t('lastPostDays', { n: daysSincePost }));
+  const inactWarnHtml = daysSincePost !== null && daysSincePost >= 23
+    ? ` <span class="inact-warn">${esc(t('inactWarn', { d: 30 - daysSincePost }))}</span>` : '';
   const chip = (val, label, n) => `<button class="chip" type="button" data-olist="${val}" aria-pressed="${S.officeTab === val}">${esc(label)}${n !== undefined ? ` (${n})` : ''}</button>`;
   let html = signalFormHtml(ed);
   html += `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeMySignalsTitle'))}</h2>`;
-  html += `<p class="sub">${esc(t('lastPostLabel'))}: ${esc(lastPostTxt)}</p>`;
+  html += `<p class="sub">${esc(t('lastPostLabel'))}: ${esc(lastPostTxt)}${inactWarnHtml}</p>`;
   html += `<div class="pfilters">${chip('ALL', t('pfAll', { n: openCount }))}${chip('PENDING', t('pfPending'))}${chip('AKTIF', t('pfActive'))}<button class="chip hist-tab" type="button" data-olist="HISTORY" aria-pressed="${S.officeTab === 'HISTORY'}">${esc(t('tabHistory'))} (${doneCount})</button></div>`;
   html += `<div id="office-list"><p class="sub">${esc(t('loading'))}</p></div>`;
   box.innerHTML = html;
@@ -2302,7 +3009,7 @@ async function renderOfficeList() {
   const filtered = S.mySignals.filter((s) => {
     if (S.officeTab === 'PENDING') return s.status === 'PENDING';
     if (S.officeTab === 'AKTIF') return s.status === 'AKTIF';
-    if (S.officeTab === 'HISTORY') return ['WIN', 'LOSS', 'CANCELLED', 'EXPIRED'].includes(s.status);
+    if (S.officeTab === 'HISTORY') return ['WIN', 'LOSS'].includes(s.status);
     return s.status === 'PENDING' || s.status === 'AKTIF'; // ALL = sinyal terbuka
   });
   if (S.officeTab === 'HISTORY') {
@@ -2325,10 +3032,13 @@ async function renderOfficeList() {
     return;
   }
   if (filtered.length === 0) {
-    const emptyKey = S.officeTab === 'PENDING' ? 'officeEmptyPending'
-      : S.officeTab === 'AKTIF' ? 'officeEmptyActive' : 'officeEmptyOpen';
-    const hint = S.officeTab === 'PENDING' ? esc(t('feedEmptyHint')) : '';
-    list.innerHTML = `<div class="empty"><strong>${esc(t(emptyKey))}</strong>${hint}</div>`;
+    // D44: kosong tanpa sinyal sama sekali -> officeNoSignals; ada sinyal
+    // tapi tidak ada yang terbuka -> officeNoOpenSignals; ada sinyal terbuka
+    // tapi tidak cocok filter -> profNoFilter.
+    const anyOpen = S.mySignals.some((s) => s.status === 'PENDING' || s.status === 'AKTIF');
+    const emptyKey = S.mySignals.length === 0 ? 'officeNoSignals'
+      : !anyOpen ? 'officeNoOpenSignals' : 'profNoFilter';
+    list.innerHTML = `<div class="empty"><strong>${esc(t(emptyKey))}</strong></div>`;
     return;
   }
   list.innerHTML = filtered.map(signalCardHtml).join('');
@@ -2339,8 +3049,8 @@ async function renderOfficeList() {
 // "Diikuti", di atas sub-tab Langganan/Trader (seperti prototipe).
 function followerAccountInfoHtml() {
   const p = S.profile || {};
-  const displayName = p.display_name || p.username || S.user?.email || '—';
   const username = p.username ? '@' + p.username : esc(t('officeFollowerNoUser'));
+  const displayName = username;
   const followedIds = new Set(S.myFollows.map((x) => x.trader_id));
   const followedSignals = S.allSignals.filter((s) => followedIds.has(s.trader_id));
   const followedOpen = followedSignals.filter((s) => s.status === 'PENDING' || s.status === 'AKTIF').length;
@@ -2350,8 +3060,8 @@ function followerAccountInfoHtml() {
     <div class="board-top">
       ${avatarImg(displayName, S.user.id, p.avatar_url, 'avatar-md')}
       <div style="min-width:0; flex:1;">
-        <div style="font-weight:800; font-size:16px;">${esc(displayName)}</div>
-        <div style="font-size:13px; color:var(--muted);">${username} · Indonesia</div>
+        <div style="font-weight:800; font-size:17px;">${esc(username)}</div>
+        <div style="font-size:13px; color:var(--muted);">${esc(p.region || 'Indonesia')}</div>
       </div>
     </div>
     <div class="pstats" style="margin-top:12px;">
@@ -2411,7 +3121,7 @@ function renderOfficeFollowerTab() {
     // belum ada harga live; jujur bila tak ada salinan aktif).
     let floatNote = '';
     if (!copiedSignals.length) {
-      floatNote = `<p class="journal-note">${esc(t('jrnlNoActive'))}</p>`;
+      floatNote = `<p class="journal-note">${esc(t('jrnlEmpty'))}</p>`;
     } else {
       const vals = aktif.map((s) => floatingUsd(s));
       const sum = vals.some((v) => v !== null) ? vals.reduce((a, b) => a + (b || 0), 0) : null;
@@ -2419,7 +3129,8 @@ function renderOfficeFollowerTab() {
       const pendPart = pend.length ? t('jrnlPendPart', { n: pend.length }) : '';
       floatNote = `<p class="journal-note">${t('jrnlNote', { amt, n: aktif.length, pend: pendPart })}</p>`;
     }
-    box.innerHTML = statsSectionHtml(st, 'officeJournalStatsTitle', 'jrnlStatsSub', floatNote);
+    box.innerHTML = (copiedSignals.length ? '' : `<div class="empty">${t('jrnlEmpty')}</div>`)
+      + statsSectionHtml(st, 'officeJournalStatsTitle', 'jrnlStatsSub', floatNote);
     updateBoardScrollHints(box);
     return;
   }
@@ -2447,27 +3158,27 @@ function renderOfficeFollowerTab() {
   const followedSignals = S.allSignals
     .filter((s) => followedIds.has(s.trader_id))
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  // D14: salinan aktif memakai journalRowHtml(isCopy) — floating/waiting
+  // + hapus salinan (non-AKTIF).
   const activeCopies = S.myCopies
-    .map((c) => one(c.signals))
-    .filter((s) => s && (s.status === 'PENDING' || s.status === 'AKTIF'));
+    .map((c) => ({ sig: one(c.signals), copyId: c.id }))
+    .filter((x) => x.sig && (x.sig.status === 'PENDING' || x.sig.status === 'AKTIF'));
   const f = S.followFilter;
   const openSigs = followedSignals.filter((s) => s.status === 'PENDING' || s.status === 'AKTIF');
-  const doneSigs = followedSignals.filter((s) => ['WIN', 'LOSS', 'CANCELLED', 'EXPIRED'].includes(s.status));
+  // D12: riwayat hanya sinyal kena TP/SL (WIN/LOSS).
+  const doneSigs = followedSignals.filter((s) => ['WIN', 'LOSS'].includes(s.status));
   const fchip = (val, label, n) => `<button class="chip" type="button" data-ffilter="${val}" aria-pressed="${f === val}">${esc(label)}${n !== undefined ? ` (${n})` : ''}</button>`;
   const filtersHtml = `<div class="pfilters">${fchip('ALL', t('pfAll', { n: openSigs.length }))}${fchip('PENDING', t('pfPending'))}${fchip('AKTIF', t('pfActive'))}<button class="chip hist-tab" type="button" data-ffilter="HISTORY" aria-pressed="${f === 'HISTORY'}">${esc(t('tabHistory'))} (${doneSigs.length})</button></div>`;
   let html = `<h2 style="font-size:16px; margin: 6px 0 10px;">${esc(t('officeActiveCopies'))} (${activeCopies.length})</h2>`;
   html += activeCopies.length
-    ? `<div class="hist journal-scroll" tabindex="0">` + activeCopies.map((s) => journalRowHtml(s, { showTrader: true })).join('') + `</div>`
-    : `<div class="empty"><strong>${esc(t('officeActiveCopiesEmpty'))}</strong></div>`;
+    ? `<div class="hist journal-scroll" tabindex="0">` + activeCopies.map((x) => journalRowHtml(x.sig, { showTrader: true, isCopy: true, copyId: x.copyId })).join('') + `</div>`
+    : `<div class="empty"><strong>${esc(S.myCopies.length === 0 ? t('jrnlEmpty') : t('jrnlNoActive'))}</strong></div>`;
   if (f === 'HISTORY') {
-    html += `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('tabHistory'))} (${doneSigs.length})</h2>`;
-    html += filtersHtml;
-    // Baris kedua: chip "Semua" + tombol "Filter tanggal ▾" (komponen
-    // yang sama dengan Dompet / Riwayat Office Trader / profil trader).
-    // Memfilter daftar sinyal tertutup dari trader yang diikuti.
+    // D33: tanpa judul H2 "Riwayat (n)"; chip periode + filter tanggal
+    // digabung dalam satu baris pfilters.
     const range = S.followerRange;
     const shown = doneSigs.filter((s) => withinHistRange(s.closed_at || s.created_at, range, S.followerCustom));
-    html += `<div class="pfilters"><button class="chip" type="button" data-frng="ALL" aria-pressed="${range === 'ALL'}">${esc(t('rangeAll'))}</button>${dateFilterBarHtml('follower')}</div>`;
+    html += filtersHtml.replace('</div>', `${dateFilterBarHtml('follower')}</div>`);
     html += shown.length
       ? `<div class="hist journal-scroll tall" tabindex="0">` + shown.map((s) => journalRowHtml(s, { showTrader: true })).join('') + `</div>`
       : `<div class="empty"><strong>${esc(range === 'ALL' ? t('officeCopyHistoryEmpty') : t('histEmptyRange'))}</strong></div>`;
@@ -2513,10 +3224,23 @@ function renderOfficeFollowedBody() {
     box.innerHTML = h3 + S.mySubs.map((sub) => {
       const tr = one(sub.traders) || {};
       const name = traderHandle(tr); // publik: hanya @username (ronde 5)
+      const stChip = sub.status === 'active' ? t('subActive')
+        : sub.status === 'cancelled' ? t('subCancelled') : t('subEnded');
+      const pillCls = sub.status === 'active' ? 'green' : sub.status === 'cancelled' ? 'red' : '';
+      const action = sub.status === 'active'
+        ? `<button class="btn" type="button" data-sub-manage="${esc(sub.id)}" style="min-height:34px;padding:6px 12px;font-size:12.5px;">${esc(t('subManage'))}</button>`
+        : `<button class="btn" type="button" data-sub-again="${esc(sub.trader_id)}" style="min-height:34px;padding:6px 12px;font-size:12.5px;">${esc(t('subAgain'))}</button>`;
+      // D34: harga langganan dalam IDR (fmtIDR prototipe).
       return `<div class="hist-row"><span class="p mono">${esc(name)}</span>`
-        + `<span class="pill ${sub.status === 'active' ? 'green' : ''}">${esc(sub.status)}</span>`
-        + `<span style="color:var(--muted)">${esc(fmtUsd(sub.price_usd))} · ${esc(fmtDate(sub.ends_at))}</span></div>`;
+        + `<span class="pill ${pillCls}">${esc(stChip)}</span>`
+        + `<span style="color:var(--muted)">${esc(fmtIdr(sub.price_usd))} · ${esc(t('subRange', { start: fmtDateShort(sub.starts_at), end: sub.ends_at ? fmtDateShort(sub.ends_at) : '—' }))}</span>${action}</div>`;
     }).join('');
+    $$('[data-sub-manage]', box).forEach((b) => {
+      b.addEventListener('click', () => toast(t('subManageSoon')));
+    });
+    $$('[data-sub-again]', box).forEach((b) => {
+      b.addEventListener('click', () => toast(t('subManageSoon')));
+    });
     return;
   }
   const h3tr = `<h3 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeFollowedTraders'))}</h3>`;
@@ -2531,11 +3255,56 @@ function renderOfficeFollowedBody() {
     const name = traderHandle(tr); // publik: hanya @username (ronde 5)
     return `<div class="hist-row">${avatarHtml(name, f.trader_id, 'avatar-sm')}<span class="p">${esc(name)}${demoBadge(f.trader_id)}</span>`
       + `<span style="color:var(--muted)">Lv.${level} ${esc(levelName(level, getLang()))}</span>`
-      + `<button class="btn" type="button" data-ftrader="${esc(f.trader_id)}" style="min-height:34px;padding:6px 12px;font-size:12.5px;margin-left:auto;">${esc(t('sigDetail'))}</button></div>`;
+      + `${subscribeBtnHtml(f.trader_id)}`
+      + `<button class="btn" type="button" data-ftrader="${esc(f.trader_id)}" style="min-height:34px;padding:6px 12px;font-size:12.5px;">${esc(t('sigDetail'))}</button></div>`;
   }).join('');
   $$('[data-ftrader]', box).forEach((b) => {
     b.addEventListener('click', () => openTraderProfile(b.dataset.ftrader));
   });
+  bindFollowSubscribe(box);
+}
+
+
+// ------------------------------------------------------------- KYC (Zyphe) ---
+// D20: struktur alur 4 langkah prototipe (dokumen → KTP → selfie/liveness
+// → memverifikasi). Backend verifikasi Zyphe belum ada — langkah terakhir
+// menampilkan pesan "menyusul" yang jujur; TIDAK ada keberhasilan palsu.
+function openKycFlow() {
+  const f = S.kycFlow;
+  const step = f.step;
+  const steps = [t('kycStepDoc'), t('kycStepKtp'), t('kycStepSelfie'), t('kycStepVerify')];
+  let body = `<div class="kyc-steps">${steps.map((s2, i) => `<span class="kyc-step${i + 1 === step ? ' cur' : ''}">${i + 1}. ${esc(s2)}</span>`).join('')}</div>`;
+  if (step === 1) {
+    body += `<div class="field"><label for="kyc-name">${esc(t('kycNameLbl'))}</label><input id="kyc-name" maxlength="80" value="${esc(f.name || S.profile?.display_name || '')}" placeholder="${esc(t('kycNamePh'))}"><span class="hint">${esc(t('kycNameNote'))}</span></div>`;
+    body += `<div class="detail-actions"><button class="btn primary" id="kyc-next" type="button">${esc(t('kycNext'))}</button></div>`;
+  } else if (step === 2) {
+    body += `<p class="lead-sm">${esc(t('kycStepKtp'))}</p>`
+      + `<div class="detail-actions"><button class="btn" id="kyc-demo-ktp" type="button">${esc(t('kycDemoKtp'))}</button></div>`
+      + (f.ktpAttached ? `<p class="note ok">${esc(t('kycKtpAttached'))}</p>` : '')
+      + `<div class="detail-actions"><button class="btn" id="kyc-back" type="button">${esc(t('back'))}</button><button class="btn primary" id="kyc-next" type="button" ${f.ktpAttached ? '' : 'disabled'}>${esc(t('kycNext'))}</button></div>`;
+  } else if (step === 3) {
+    body += `<p class="lead-sm">${esc(t('kycStepSelfie'))}</p>`
+      + `<div class="detail-actions"><button class="btn" id="kyc-back" type="button">${esc(t('back'))}</button><button class="btn primary" id="kyc-next" type="button">${esc(t('kycNext'))}</button></div>`;
+  } else {
+    body += `<p class="lead-sm">${esc(t('kycSoon'))}</p>`
+      + `<p class="note">${esc(t('kycDocsNote'))}</p>`
+      + `<div class="detail-actions"><button class="btn primary" id="kyc-close" type="button">${esc(t('close'))}</button></div>`;
+  }
+  openOverlay(`<div class="overlay-head"><h2>${esc(t('kycTitle'))}</h2><span class="spacer"></span><span class="pill">${esc(t('kycStepLbl', { step, total: 4 }))}</span></div>${body}`);
+  const next = $('#kyc-next');
+  if (next) {
+    next.addEventListener('click', () => {
+      if (f.step === 1) f.name = $('#kyc-name')?.value?.trim() || f.name;
+      f.step = Math.min(4, f.step + 1);
+      openKycFlow();
+    });
+  }
+  const back = $('#kyc-back');
+  if (back) back.addEventListener('click', () => { f.step = Math.max(1, f.step - 1); openKycFlow(); });
+  const demo = $('#kyc-demo-ktp');
+  if (demo) demo.addEventListener('click', () => { f.ktpAttached = true; openKycFlow(); });
+  const close = $('#kyc-close');
+  if (close) close.addEventListener('click', () => { f.step = 1; f.ktpAttached = false; closeOverlay(); });
 }
 
 // -------------------------------------------------------------- Profil ---
@@ -2549,33 +3318,35 @@ async function renderProfile() {
   const displayName = p.display_name || p.username || S.user?.email || '—';
   const kycStatus = p.kyc_status || 'none';
   const kycVerified = kycStatus === 'verified';
-  // ID akun (skema kartu bagikan): SM- + 8 karakter pertama UID.
-  const uid = 'SM-' + String(S.user?.id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
+  // D63: ID akun SM-XXXX-XXXX (4 + 4 karakter dari UUID tanpa tanda hubung).
+  const uidHex = String(S.user?.id || '').replace(/-/g, '').toUpperCase();
+  const uid = 'SM-' + uidHex.slice(0, 4) + '-' + uidHex.slice(4, 8);
   body.innerHTML = `
     <div class="profile-head">
-      ${avatarImg(displayName, S.user.id, p.avatar_url, 'avatar-lg')}
+      ${avatarImg(displayName, S.user.id, S.photoDraft.profile ? null : p.avatar_url, 'avatar-lg')}
       <div class="profile-id">
         <div class="profile-name">${esc(displayName)}</div>
-        <div class="profile-user">${username}</div>
       </div>
       <button class="iconbtn" id="profile-photo-btn" type="button" aria-label="${esc(t('photoChange'))}">📷</button>
       <input type="file" id="profile-photo-input" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+      ${p.avatar_url && !S.photoDraft.profile ? `<button class="iconbtn trashbtn" id="profile-photo-del" type="button" aria-label="${esc(t('photoRemove'))}" title="${esc(t('photoRemove'))}">🗑</button>` : ''}
     </div>
+    ${S.photoDraft.profile ? `<div class="avatar-edit" style="margin-top:10px;"><span class="note">${esc(t('photoRemoveDraft'))}</span><button class="btn primary" id="profile-photo-done" type="button">${esc(t('doneBtn'))}</button></div>` : ''}
     <div class="subcard kyc-card">
       <h3>${esc(t('kycTitle'))}</h3>
       <div class="kyc-row">${kycVerified
-        ? `<span class="stchip ok">${esc(t('kycVerified'))}</span>${p.kyc_full_name ? `<span>${esc(p.kyc_full_name)}</span>` : ''}`
-        : `<span style="color:var(--muted);">${esc(t('kycNotVerified'))}</span><button class="btn" type="button" disabled>${esc(t('kycVerifyBtn'))}</button>`}</div>
+        ? `<span class="stchip ok">${esc(t('kycVerified'))}</span>${p.kyc_full_name ? `<span>${esc(p.kyc_full_name)}</span>` : ''}${p.kyc_reference ? `<span class="kyc-ref mono">${esc(t('kycRef'))} ${esc(p.kyc_reference)}</span>` : ''}`
+        : `<span style="color:var(--muted);">${esc(t('kycNotVerified'))}</span><button class="btn" type="button" id="kyc-start-btn">${esc(t('kycVerifyBtn'))}</button>`}</div>
       <p>${esc(t('kycHint'))}</p>
-      ${kycVerified ? `<p>${esc(t('kycNameLocked'))}</p>` : ''}
+      ${kycVerified ? `<p>${esc(t('kycNameLocked'))}</p><p class="note">${esc(t('kycDocsNote'))}</p>` : `<p class="note">${esc(t('kycVerifyHint'))}</p>`}
     </div>
     <div class="subcard">
       <h3>${esc(t('accountDetail'))}</h3>
-      <div class="kv-rows">
-        <div class="kv-row"><div class="k">${esc(t('uid'))}</div><div class="v">${esc(uid)}</div></div>
-        <div class="kv-row"><div class="k">${esc(t('profileName'))}</div><div class="v">${esc(p.display_name || '—')}</div></div>
-        <div class="kv-row"><div class="k">${esc(t('username'))}</div><div class="v">${username}</div></div>
-        <div class="kv-row"><div class="k">${esc(t('region'))}</div><div class="v">Indonesia</div></div>
+      <div class="detail-menu">
+        <div class="menurow"><span class="grow"><span class="t">${esc(t('uid'))}</span><span class="d">${esc(uid)}</span></span></div>
+        <div class="menurow"><span class="grow"><span class="t">${esc(t('profileName'))}</span><span class="d">${esc(p.display_name || '—')}</span></span></div>
+        <div class="menurow"><span class="grow"><span class="t">${esc(t('username'))}</span><span class="d">${username}</span></span></div>
+        <div class="menurow"><span class="grow"><span class="t">${esc(t('region'))}</span><span class="d">Indonesia</span></span></div>
       </div>
       <div class="detail-menu">
         <button type="button" class="menurow" id="menu-settings"><span class="grow"><span class="t">${esc(t('settings'))}</span></span><span class="marrow">→</span></button>
@@ -2584,6 +3355,29 @@ async function renderProfile() {
       </div>
     </div>`;
   bindPhotoInput('profile-photo-input', 'profile');
+  const photoDel = $('#profile-photo-del');
+  if (photoDel) {
+    photoDel.addEventListener('click', () => {
+      S.photoDraft.profile = true;
+      renderProfile();
+    });
+  }
+  const photoDone = $('#profile-photo-done');
+  if (photoDone) {
+    photoDone.addEventListener('click', async () => {
+      try {
+        await api.deleteAvatar(S.user.id, { target: 'profile' });
+        S.photoDraft.profile = false;
+        toast(t('photoRemoved'));
+        await refreshIdentity();
+        renderProfile();
+      } catch (e) {
+        toast(t('photoError'), true);
+      }
+    });
+  }
+  const kycBtn = $('#kyc-start-btn');
+  if (kycBtn) kycBtn.addEventListener('click', () => openKycFlow());
   const photoBtn = $('#profile-photo-btn');
   if (photoBtn) photoBtn.addEventListener('click', () => { const inp = $('#profile-photo-input'); if (inp) inp.click(); });
   $('#menu-settings').addEventListener('click', () => { S.settingsSub = null; showView('settings'); });
@@ -2643,22 +3437,51 @@ function bindSettingsBack() {
 }
 function renderSettingsAccount(body) {
   const p = S.profile || {};
+  const kycVerified = p.kyc_status === 'verified';
   body.innerHTML = settingsBackButton()
     + `<div class="page-head"><h2>${esc(t('setAccount'))}</h2><p class="sub">${esc(t('setAccountSubhead'))}</p></div>`
-    + `<div class="subcard"><div class="field"><label for="set-name">${esc(t('profileName'))}</label><input id="set-name" type="text" value="${esc(p.display_name || '')}" readonly /><div class="hint">${esc(t('setNameHint'))}</div></div></div>`
-    + `<div class="subcard"><div class="risk-note"><span>${esc(t('setUsernameStrip'))}</span></div><div class="field"><label for="set-username">${esc(t('username'))}</label><input id="set-username" type="text" value="${p.username ? '@' + esc(p.username) : ''}" readonly /><div class="hint">${esc(t('setUsernameHint'))}</div></div>`
-    + `<div class="field"><label>${esc(t('region'))}</label><input type="text" value="Indonesia" readonly /></div></div>`;
+    + `<div class="subcard"><form id="set-name-form" novalidate><div class="field"><label for="set-name">${esc(t('profileName'))}</label><input id="set-name" type="text" maxlength="80" value="${esc(p.display_name || '')}"${kycVerified ? ' disabled' : ''} /><div class="hint">${esc(t('setNameHint'))}</div></div><div class="form-err" id="set-name-err" role="alert"></div><div class="detail-actions"><button class="btn primary" type="submit"${kycVerified ? ' disabled' : ''}>${esc(t('save'))}</button></div></form></div>`
+    + `<div class="subcard"><div id="follower-username-wrap">${usernameFormHtml('follower')}</div></div>`;
   bindSettingsBack();
+  bindUsernameForm(body, 'follower', () => renderSettingsAccount(body));
+  const form = $('#set-name-form');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errBox = $('#set-name-err');
+      const v = $('#set-name').value.trim();
+      errBox.textContent = '';
+      if (!v) return;
+      try {
+        const res = await api.setProfileName(v);
+        if (!res.ok) {
+          errBox.textContent = rpcErrorMessage(res);
+          return;
+        }
+        toast(t('nameSaved'));
+        await refreshIdentity();
+        renderSettingsAccount(body);
+      } catch (err) {
+        errBox.textContent = t('errNetwork');
+      }
+    });
+  }
 }
 function renderSettingsSecurity(body) {
   // Sub-halaman "Ubah Kata Sandi" / "Ubah Email" — judul halaman berubah.
+  // D21: struktur OTP 2 langkah prototipe. Pengiriman kode (email OTP)
+  // adalah backend yang belum ada — tombol verifikasi menampilkan pesan
+  // "menyusul" yang jujur. Tombol "Simpan tanpa kode" DIHAPUS (keputusan
+  // user 24 Nov 2026: opsi teraman) — ganti kata sandi menunggu OTP.
   if (S.secPage === 'pw') { renderSettingsPwForm(body); return; }
+  if (S.secPage === 'pw2') { renderSettingsPwVerify(body); return; }
   if (S.secPage === 'email') { renderSettingsEmailForm(body); return; }
+  if (S.secPage === 'email2') { renderSettingsEmailVerify(body); return; }
   body.innerHTML = settingsBackButton()
     + `<div class="page-head"><h2>${esc(t('securityTitle'))}</h2></div>`
     + `<div class="subcard">
       <div class="menurow" style="cursor:default;"><span class="grow"><span class="t">${esc(t('email'))}</span><span class="d">${esc(S.user?.email || '—')}</span></span><button type="button" class="iconbtn" id="sec-open-email" aria-label="${esc(t('secChangeEmail'))}">✎</button></div>
-      <div class="menurow" style="cursor:default;"><span class="grow"><span class="t">${esc(t('password'))}</span><span class="d">••••••••</span></span><button type="button" class="iconbtn" id="sec-open-pw" aria-label="${esc(t('secChangePw'))}">✎</button></div>
+      <div class="menurow" style="cursor:default;"><span class="grow"><span class="t">${esc(t('password'))}</span><span class="d">••••••••${S.user?.updated_at ? ' · ' + esc(t('secPwChangedOn', { date: fmtDateShort(S.user.updated_at) })) : ''}</span></span><button type="button" class="iconbtn" id="sec-open-pw" aria-label="${esc(t('secChangePw'))}">✎</button></div>
     </div>`;
   bindSettingsBack();
   $('#sec-open-pw').addEventListener('click', () => { S.secPage = 'pw'; renderSettings(); });
@@ -2682,7 +3505,7 @@ function renderSettingsPwForm(body) {
         <p class="lead-sm" style="margin-top:0">${esc(t('secPwHint'))}</p>
         <div class="hint" id="pw-match-hint"></div>
         <div class="notice err" id="pw-err" hidden></div>
-        <div class="detail-actions"><button class="btn primary" type="submit" id="pw-submit">${esc(t('save'))}</button><button class="btn" type="button" id="pw-cancel">${esc(t('cancel'))}</button></div>
+        <div class="detail-actions"><button class="btn primary" type="submit" id="pw-submit">${esc(t('secContinueVerify'))}</button><button class="btn" type="button" id="pw-cancel">${esc(t('cancel'))}</button></div>
       </form></div>`;
   bindSettingsBack();
   const pwNew = $('#pw-new');
@@ -2709,27 +3532,29 @@ function renderSettingsPwForm(body) {
     const pw = pwNew.value;
     if (!passwordValid(pw)) { errBox.textContent = t('authErrWeak'); errBox.hidden = false; return; }
     if (pw !== pwCf.value) { errBox.textContent = t('passwordMismatch'); errBox.hidden = false; return; }
-    const btn = $('#pw-submit');
-    const label = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = t('loading') + '…';
-    try {
-      await api.updatePassword(pw);
-      toast(t('passwordChanged'));
-      pwNew.value = '';
-      pwCf.value = '';
-      refreshPwHint();
-    } catch (err) {
-      errBox.textContent = authErrorMessage(err);
-      errBox.hidden = false;
-    } finally {
-      btn.disabled = false;
-      btn.textContent = label;
-    }
+    S.secFlow.password = pw;
+    S.secPage = 'pw2';
+    renderSettings();
   });
 }
+function renderSettingsPwVerify(body) {
+  // Langkah 2 kata sandi: kode verifikasi belum bisa dikirim (backend
+  // OTP belum ada). "Verifikasi & simpan" menampilkan pesan menyusul.
+  // Tombol "Simpan tanpa kode" dihapus (24 Nov 2026) — tidak ada jalan
+  // simpan langsung; ganti kata sandi menunggu backend OTP.
+  body.innerHTML = settingsBackButton()
+    + `<div class="page-head"><h2>${esc(t('secChangePw'))}</h2></div>`
+    + `<div class="subcard">
+      <div class="field"><label for="pw-code">${esc(t('secVerifyCode'))}</label><input id="pw-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" /><span class="hint">${esc(t('secOtpSoon'))}</span></div>
+      <div class="notice err" id="pw2-err" hidden></div>
+      <div class="detail-actions"><button class="btn primary" type="button" id="pw2-verify">${esc(t('secVerifySavePw'))}</button><button class="btn" type="button" id="pw2-resend">${esc(t('secResendCode'))}</button><button class="btn" type="button" id="pw2-cancel">${esc(t('cancel'))}</button></div>
+    </div>`;
+  bindSettingsBack();
+  $('#pw2-verify').addEventListener('click', () => toast(t('secOtpSoon')));
+  $('#pw2-resend').addEventListener('click', () => toast(t('secOtpSoon')));
+  $('#pw2-cancel').addEventListener('click', () => { S.secPage = null; S.secFlow.password = ''; renderSettings(); });
+}
 function renderSettingsEmailForm(body) {
-  // Ubah email NONAKTIF: butuh alur konfirmasi email (Supabase) — belum dibangun.
   body.innerHTML = settingsBackButton()
     + `<div class="page-head"><h2>${esc(t('secChangeEmail'))}</h2></div>`
     + `<div class="subcard">
@@ -2737,20 +3562,41 @@ function renderSettingsEmailForm(body) {
         <div class="wal-grid">
           <div class="field">
             <label for="em-new">${esc(t('secEmailNew'))}</label>
-            <input id="em-new" type="email" maxlength="80" autocomplete="email" disabled />
+            <input id="em-new" type="email" maxlength="80" autocomplete="email" />
           </div>
           <div class="field">
             <label for="em-pw">${esc(t('passwordConfirm'))}</label>
-            <input id="em-pw" type="password" autocomplete="current-password" disabled />
+            <input id="em-pw" type="password" autocomplete="current-password" />
           </div>
         </div>
         <p class="lead-sm" style="margin-top:0">${esc(t('secEmailHint'))}</p>
-        <p class="note">${esc(t('secEmailSoon'))}</p>
-        <div class="detail-actions"><button class="btn primary" type="submit" disabled>${esc(t('save'))}</button><button class="btn" type="button" id="em-cancel">${esc(t('cancel'))}</button></div>
+        <div class="detail-actions"><button class="btn primary" type="submit" id="em-send">${esc(t('secSendCode'))}</button><button class="btn" type="button" id="em-cancel">${esc(t('cancel'))}</button></div>
       </form></div>`;
   bindSettingsBack();
-  $('#email-form').addEventListener('submit', (e) => e.preventDefault());
   $('#em-cancel').addEventListener('click', () => { S.secPage = null; renderSettings(); });
+  $('#email-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const em = $('#em-new').value.trim();
+    if (!em || !em.includes('@')) return;
+    S.secFlow.email = em;
+    S.secPage = 'email2';
+    renderSettings();
+  });
+}
+function renderSettingsEmailVerify(body) {
+  // Langkah 2 email: kode belum bisa dikirim (backend OTP belum ada).
+  body.innerHTML = settingsBackButton()
+    + `<div class="page-head"><h2>${esc(t('secChangeEmail'))}</h2></div>`
+    + `<div class="subcard">
+      <p class="lead-sm">${esc(t('secCodeSentTo', { email: S.secFlow.email || '' }))}</p>
+      <p class="note">${esc(t('secCodeValid'))}</p>
+      <div class="field"><label for="em-code">${esc(t('secVerifyCode'))}</label><input id="em-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" /><span class="hint">${esc(t('secOtpSoon'))}</span></div>
+      <div class="detail-actions"><button class="btn primary" type="button" id="em-verify">${esc(t('secVerifySave'))}</button><button class="btn" type="button" id="em-resend">${esc(t('secResendCode'))}</button><button class="btn" type="button" id="em-cancel2">${esc(t('cancel'))}</button></div>
+    </div>`;
+  bindSettingsBack();
+  $('#em-verify').addEventListener('click', () => toast(t('secOtpSoon')));
+  $('#em-resend').addEventListener('click', () => toast(t('secOtpSoon')));
+  $('#em-cancel2').addEventListener('click', () => { S.secPage = null; S.secFlow.email = ''; renderSettings(); });
 }
 function renderSettingsAppearance(body) {
   const pref = getThemePref();
@@ -2788,9 +3634,9 @@ function renderSettingsNotifications(body) {
   body.innerHTML = settingsBackButton()
     + `<div class="page-head"><h2>${esc(t('setNotif'))}</h2></div>`
     + `<div class="subcard"><p>${esc(t('setNotifSub'))}</p>`
-    + `<div class="setrow"><span class="grow"><span class="t">${esc(t('notifSysTitle'))}</span><span class="d">${esc(sysDesc)}</span></span><input type="checkbox" id="sys-notif-cb" ${sysPerm === 'granted' ? 'checked' : ''} ${sysPerm === 'granted' || sysPerm === 'unsupported' ? 'disabled' : ''} aria-label="${esc(t('notifSysTitle'))}" /></div>`
-    + items.map(([key, label, desc]) => `<div class="setrow"><span class="grow"><span class="t">${esc(label)}</span><span class="d">${esc(desc)}</span></span><input type="checkbox" data-notif-pref="${key}" ${prefs[key] ? 'checked' : ''} aria-label="${esc(label)}" /></div>`).join('')
-    + `<p>${esc(t('notifSavedNote'))}</p></div>`;
+    + `<div class="setrow"><span class="grow"><span class="t">${esc(t('notifSysTitle'))}</span><span class="d">${esc(sysDesc)}</span></span><label class="switch"><input type="checkbox" id="sys-notif-cb" ${sysPerm === 'granted' ? 'checked' : ''} ${sysPerm === 'granted' || sysPerm === 'unsupported' ? 'disabled' : ''} aria-label="${esc(t('notifSysTitle'))}"><span class="slider"></span></label></div>`
+    + items.map(([key, label, desc]) => `<div class="setrow"><span class="grow"><span class="t">${esc(label)}</span><span class="d">${esc(desc)}</span></span><label class="switch"><input type="checkbox" data-notif-pref="${key}" ${prefs[key] ? 'checked' : ''} aria-label="${esc(label)}"><span class="slider"></span></label></div>`).join('')
+    + `</div>`;
   bindSettingsBack();
   const sysCb = $('#sys-notif-cb');
   if (sysCb) sysCb.addEventListener('change', async () => {
@@ -2867,7 +3713,7 @@ function renderWallet() {
   const tab = S.walletTab === 'subs' ? 'subs' : 'tx';
   const range = S.walletRange;
   const kycVerified = (S.profile?.kyc_status) === 'verified';
-  const emptyKey = tab === 'tx' ? 'walletTxEmpty' : 'walletSubsEmpty';
+  const emptyKey = tab === 'tx' ? 'histEmptyMonth' : 'walletSubsEmpty';
   body.innerHTML = `<div class="wal-hero"><span class="demo-badge">${esc(t('walletHeroBadge'))}</span>`
     + `<div class="wal-bal-label">${esc(t('walletBalLabel'))}</div><div class="wal-bal-value mono">${esc(fmtIdr(0))}</div>`
     + `<div class="wal-actions"><button type="button" class="btn" disabled>${esc(t('walletWithdraw'))}</button></div></div>`
@@ -2878,9 +3724,11 @@ function renderWallet() {
     + `<button type="button" class="subtab" role="tab" data-waltab="tx" aria-selected="${tab === 'tx'}">${esc(t('walletHistTx'))}</button>`
     + `<button type="button" class="subtab" role="tab" data-waltab="subs" aria-selected="${tab === 'subs'}">${esc(t('walletHistSubs'))}</button></div>`
     + `<h3 class="section">${esc(tab === 'tx' ? t('walletHistTx') : t('walletHistSubs'))}</h3>`
-    + `<div class="row" style="margin-bottom:12px;"><button type="button" class="chip" aria-pressed="true">${esc(t('rangeAll'))}</button>${dateFilterBarHtml('wallet')}</div>`
+    + `<div class="row" style="margin-bottom:12px;"><button type="button" class="chip" data-waltx="all" aria-pressed="${range === 'ALL'}">${esc(t('rangeAll'))}</button>${dateFilterBarHtml('wallet')}</div>`
     + `<div class="empty"><strong>${esc(range === 'ALL' ? t(emptyKey) : t('histEmptyRange'))}</strong></div>`;
   $('#wallet-add-acc').addEventListener('click', () => { S.settingsSub = 'withdraw'; S.secPage = null; S.wdAdd = false; showView('settings'); });
+  const waltxAll = $('[data-waltx="all"]', body);
+  if (waltxAll) waltxAll.addEventListener('click', () => { S.walletRange = 'ALL'; renderWallet(); });
   $$('[data-waltab]', body).forEach((b) => {
     b.addEventListener('click', () => { S.walletTab = b.dataset.waltab; renderWallet(); });
   });
@@ -2899,7 +3747,8 @@ function renderHelp() {
     }).catch(() => {});
   }
   const faqs = [1, 2, 3, 4, 5].map((n) => `<details class="more"><summary>${esc(t('helpFaq' + n + 'Q'))}<span aria-hidden="true">▾</span></summary><div class="more-body"><p>${esc(t('helpFaq' + n + 'A'))}</p></div></details>`).join('');
-  const traders = (S.traders || []).map((tr) => {
+  // D22: diri sendiri dikeluarkan dari select laporan.
+  const traders = (S.traders || []).filter((tr) => tr.profile_id !== S.user?.id).map((tr) => {
     // Publik: opsi laporan hanya @username, tanpa nama profil (ronde 5).
     const label = traderHandle(tr);
     return `<option value="${esc(tr.profile_id)}">${esc(label)}</option>`;
@@ -2913,16 +3762,35 @@ function renderHelp() {
         <div class="field"><label for="rp-reason">${esc(t('helpReportReason'))}</label><select id="rp-reason">${reasons}</select></div>
       </div>
       <div class="field"><label for="rp-desc">${esc(t('helpReportDesc'))}</label><textarea id="rp-desc" maxlength="500" rows="3"></textarea></div>
-      <p class="note">${esc(t('helpReportSoon'))}</p>
-      <div class="detail-actions"><button type="submit" class="btn primary" disabled>${esc(t('helpReportSubmit'))}</button></div>
+      <div class="form-err" id="rp-err" role="alert"></div>
+      <div class="detail-actions"><button type="submit" class="btn primary">${esc(t('helpReportSubmit'))}</button></div>
     </form>`
+    + (S.reports.length
+      ? `<h3 class="section">${esc(t('helpMyReports'))}</h3><div class="subcard">` + S.reports.map((r) => {
+        const tr = (S.traders || []).find((x) => x.profile_id === r.trader_id);
+        const label = tr ? traderHandle(tr) : r.trader_id;
+        return `<div class="hist-row"><span class="p mono">${esc(label)}</span><span class="pill">${esc(r.reason)}</span><span style="color:var(--muted)">${esc(fmtDate(r.created_at))}</span></div>`;
+      }).join('') + `</div>`
+      : `<p class="note" style="margin-top:10px;">${esc(t('helpReportEmpty'))}</p>`)
     + `<h3 class="section">${esc(t('helpRulesTitle'))}</h3>`
     + `<details class="more"><summary>${esc(t('helpRuleTos'))}<span aria-hidden="true">▾</span></summary><div class="more-body"><p>${esc(t('helpRuleTosBody'))}</p></div></details>`
     + `<details class="more"><summary>${esc(t('helpRulePrivacy'))}<span aria-hidden="true">▾</span></summary><div class="more-body"><p>${esc(t('helpRulePrivacyBody'))}</p></div></details>`
     + `<details class="more"><summary>${esc(t('helpRuleRefund'))}<span aria-hidden="true">▾</span></summary><div class="more-body"><p>${esc(t('helpRuleRefundBody'))}</p></div></details>`;
   const form = $('#help-report-form');
-  // Tombol kirim nonaktif (Fase 5) — cegah submit implisit apa pun.
-  if (form) form.addEventListener('submit', (e) => e.preventDefault());
+  if (form) form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const errBox = $('#rp-err');
+    const traderId = $('#rp-trader')?.value;
+    if (!traderId) { errBox.textContent = t('helpReportPick'); return; }
+    const reason = $('#rp-reason')?.value || '';
+    const desc = $('#rp-desc')?.value?.trim() || '';
+    // Backend laporan belum ada (Fase 5) — laporan disimpan lokal di
+    // perangkat ini saja dan tampil di "Laporan kamu".
+    S.reports.unshift({ trader_id: traderId, reason, desc, created_at: new Date().toISOString() });
+    saveReports();
+    toast(t('helpReportSaved'));
+    renderHelp();
+  });
 }
 
 // -------------------------------------------------------------- Panduan ---
@@ -2993,7 +3861,7 @@ function renderGuide() {
     guideSectionHtml('signal', t('guideSecSignal'),
       flow + `<p>${t('heroDetail1')}</p><p>${t('heroDetail2')}</p><p>${t('formLockDetail')}</p><p>${t('guideRRRule')}</p><p>${t('guideExpiry')}</p><p>${t('guideDupRule')}</p>`)
     + guideSectionHtml('level', t('guideSecLevel'),
-      ladder + `<p>${t('boardD2')}</p><p>${t('guideRefFixed')}</p>` + t('lvlRulesDetail') + t('lvlRulesDetail2') + `<p>${t('guideMinTrades')}</p><p>${t('guideOverRiskRule')}</p>`)
+      ladder + `<p>${t('boardD2')}</p><p>${t('boardD3')}</p><p>${t('boardD4')}</p>` + t('lvlRulesDetail') + t('lvlRulesDetail2') + `<p>${t('guideOverRiskRule')}</p><p>${t('boardD7')}</p><p>${t('guideRefFixed')}</p><p>${t('guideMinTrades')}</p>`)
     + guideSectionHtml('board', t('guideSecBoard'), `<p>${t('boardD1')}</p>`)
     + guideSectionHtml('risk', t('guideSecRisk'), t('guideRisk1') + t('guideRisk2') + t('guideRisk3'))
     + guideSectionHtml('subs', t('guideSecSubs'),
@@ -3016,11 +3884,102 @@ function renderGuide() {
   updateLvlTableScrollHint();
 }
 
+// ------------------------------------------------------- verifikasi /v/ ---
+// D03: tampilan verifikasi client-side untuk /v/SM-…?code=… — dibaca dari
+// database (cocokkan kode FNV-1a sinyal yang ID kartunya sama). Langkah
+// deploy Render yang WAJIB dilakukan terpisah (bukan kode): di dashboard
+// Render → service olesignals → Redirects/Rewrites, tambah aturan
+// Rewrite  /v/*  →  /index.html  (200). Tanpa aturan itu Render tetap
+// mengembalikan 404 sebelum JavaScript sempat jalan.
+function isVerifyPath() {
+  return window.location.pathname.startsWith('/v/');
+}
+async function renderVerifyView() {
+  const box = $('#verify-view');
+  hideSplash();
+  $('#app').hidden = true;
+  $('#auth-view').hidden = true;
+  box.hidden = false;
+  window.__oleBooted = true;
+  const m = window.location.pathname.match(/^\/v\/(SM-[A-Za-z0-9]+)/i);
+  const code = new URLSearchParams(window.location.search).get('code') || '';
+  const head = `<div class="logo" style="text-align:center; margin-bottom: 4px;">OLE <em>Signals</em></div>`
+    + `<h1 style="text-align:center;">${esc(t('verifyTitle'))}</h1>`;
+  const openBtn = `<div class="row" style="justify-content:center; margin-top:16px;"><button class="btn primary" type="button" id="verify-home" style="width:auto; min-width:200px;">${esc(t('verifyOpenApp'))}</button></div>`;
+  const bindHome = () => {
+    const b = $('#verify-home');
+    if (b) b.addEventListener('click', () => { window.location.href = '/'; });
+  };
+  if (!m) {
+    box.innerHTML = head + `<div class="verify-card"><p class="verify-bad">${esc(t('verifyInvalid'))}</p></div>` + openBtn;
+    bindHome();
+    return;
+  }
+  const cardId = m[1].toUpperCase();
+  box.innerHTML = head + `<div class="verify-card"><p class="sub">${esc(t('verifyLoading'))}</p></div>` + openBtn;
+  bindHome();
+  let sig = null;
+  let failed = false;
+  try {
+    const all = await api.listAllSignals();
+    sig = all.find((x) => shareCardId(x) === cardId) || null;
+  } catch (e) {
+    failed = true;
+  }
+  const ok = sig && verifyCode(sig).toUpperCase() === code.toUpperCase();
+  let body;
+  if (failed) {
+    body = `<p class="verify-bad">${esc(t('verifyCheckFailed'))}</p>`;
+  } else if (ok) {
+    const tr = traderOf(sig);
+    const d = decimalsForPair(sig.pair);
+    body = `<p class="verify-ok">✓ ${esc(t('verifyValid'))}</p>`
+      + `<dl class="kv"><dt>${esc(t('sigShareId'))}</dt><dd class="share-id">${esc(cardId)}</dd>`
+      + `<dt>${esc(t('sigShareCode'))}</dt><dd class="share-id">${esc(verifyCode(sig))}</dd>`
+      + `<dt>${esc(t('pair'))}</dt><dd><b>${esc(sig.pair)}</b> ${esc(sig.direction)} — ${esc(statusPillLabel(sig.status))}</dd>`
+      + `<dt>${esc(t('username'))}</dt><dd>${esc(traderHandle(tr))}</dd>`
+      + `<dt>${esc(t('entry'))}</dt><dd class="mono">${esc(fmtNum(sig.entry, d))}</dd>`
+      + `<dt>${esc(t('stopLoss'))}</dt><dd class="mono">${esc(fmtNum(sig.stop_loss, d))}</dd>`
+      + `<dt>${esc(t('takeProfit'))}</dt><dd class="mono">${esc(fmtNum(sig.take_profit, d))}</dd>`
+      + `<dt>${esc(t('detPosted'))}</dt><dd>${esc(fmtDate(sig.created_at))}</dd></dl>`
+      + `<p class="note">${t('riskNote')}</p>`;
+  } else {
+    body = `<p class="verify-bad">${esc(t('verifyInvalid'))}</p>`
+      + `<dl class="kv"><dt>${esc(t('sigShareId'))}</dt><dd class="share-id">${esc(cardId)}</dd>`
+      + `<dt>${esc(t('sigShareCode'))}</dt><dd class="share-id">${esc(code) || '—'}</dd></dl>`;
+  }
+  box.innerHTML = head + `<div class="verify-card">${body}</div>` + openBtn;
+  bindHome();
+}
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('session-timeout')), ms)),
+  ]);
+}
+
 // ------------------------------------------------------------------ init ---
 applyTheme();
 applyI18n();
-api.onAuthChange((session) => { handleSession(session); });
-handleSession(await api.getSession()).catch((e) => {
-  console.error('init session', e);
-  showAuth();
-});
+if (isVerifyPath()) {
+  renderVerifyView();
+} else {
+  api.onAuthChange((session) => { handleSession(session); });
+  try {
+    // D07: getSession() yang menggantung tidak boleh membiarkan halaman
+    // blank tanpa batas — batas 10 detik, lalu tampilkan layar masuk
+    // dengan pesan + tombol muat ulang di splash.
+    const session = await withTimeout(api.getSession(), 10000);
+    await handleSession(session);
+  } catch (e) {
+    console.error('init session', e);
+    showAuth();
+    const errBox = $('#auth-error');
+    if (errBox) {
+      errBox.textContent = t('errSessionTimeout');
+      errBox.hidden = false;
+    }
+  } finally {
+    window.__oleBooted = true;
+  }
+}
