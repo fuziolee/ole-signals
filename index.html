@@ -10,9 +10,28 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./css/style.css" />
+  <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
+  <div id="boot-splash" role="status" aria-live="polite">
+    <div class="boot-box">
+      <div class="logo">OLE <em>Signals</em></div>
+      <p class="boot-msg">Memuat OLE Signals&hellip;</p>
+      <p class="boot-err" id="boot-error" hidden>Gagal memuat aplikasi &mdash; koneksi ke server mungkin bermasalah. Periksa koneksimu lalu coba lagi.</p>
+      <button class="btn primary" id="boot-retry" type="button" hidden>Muat ulang</button>
+    </div>
+  </div>
+  <script>
+    document.getElementById('boot-retry').addEventListener('click', function () { location.reload(); });
+    setTimeout(function () {
+      if (!window.__oleBooted) {
+        var e = document.getElementById('boot-error');
+        var b = document.getElementById('boot-retry');
+        if (e) e.hidden = false;
+        if (b) b.hidden = false;
+      }
+    }, 12000);
+  </script>
   <div class="app" id="app" hidden>
     <header class="app-header">
       <div class="logo">OLE <em>Signals</em></div>
@@ -172,6 +191,9 @@
     <p class="foot" data-i18n-html="riskWarn"></p>
   </div>
 
+  <!-- Verifikasi kartu bagikan (/v/SM-...?code=...) -->
+  <div class="app auth-wrap" id="verify-view" hidden></div>
+
   <!-- Overlay detail / konfirmasi -->
   <div class="overlay" id="overlay" role="dialog" aria-modal="true">
     <div class="sheet" id="overlay-sheet"></div>
@@ -179,6 +201,7 @@
 
   <div id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="./js/app.js"></script>
+  <script src="/js/qrcode.js"></script>
+  <script type="module" src="/js/app.js"></script>
 </body>
 </html>
