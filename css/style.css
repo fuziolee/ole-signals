@@ -286,6 +286,7 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
 
 @media (max-width: 560px) {
   .sig-levels { grid-template-columns: repeat(2, 1fr); }
+  .conds { grid-template-columns: 1fr; }
   .overlay { padding: 24px 10px; }
   .search-grid { grid-template-columns: 1fr; }
   .board-stats { grid-template-columns: repeat(2, 1fr); }
@@ -323,6 +324,19 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
 
 /* Filter feed Beranda */
 .feed-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 14px; align-items: center; }
+/* Strip pair Beranda: satu baris, scroll horizontal jari/roda mouse saja
+   (tanpa tombol geser ‹ ›); baris status terpisah di bawahnya. */
+.pair-strip { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; flex: 1 1 auto; flex-basis: 100%; min-width: 0; scrollbar-width: none; -ms-overflow-style: none; padding: 2px 0; }
+.pair-strip::-webkit-scrollbar { display: none; }
+.pair-strip .fchip { flex: none; }
+.feed-filters .filter-break { flex-basis: 100%; height: 0; }
+.feed-filters .sep { width: 1px; height: 24px; background: var(--line); margin: 0 2px; }
+/* Grid kotak syarat level (prototipe): 2 kolom; 1 kolom di layar sempit. */
+.conds { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.cond-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; flex-wrap: wrap; }
+.cond .cval { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+/* Catatan floating di bawah grid statistik Jurnal. */
+.journal-note { color: var(--muted); font-size: 13.5px; margin: 10px 0; }
 .fchip {
   appearance: none; border: 1px solid var(--line); background: var(--panel);
   color: var(--ink); border-radius: 999px; padding: 7px 13px;
@@ -362,7 +376,7 @@ table.board th { text-align: left; font-size: 11px; text-transform: uppercase; l
 table.board td { padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
 table.board tbody tr:last-child td { border-bottom: none; }
 table.board td.num, table.board th.num { text-align: right; }
-.estbadge { display: inline-block; font-size: 10.5px; font-weight: 700; background: var(--panel-2); color: var(--muted); border-radius: 999px; padding: 2px 8px; margin-left: 6px; vertical-align: middle; }
+.estbadge { display: inline-block; font-size: 10.5px; font-weight: 700; background: var(--gold-bg); color: var(--gold); border-radius: 999px; padding: 2px 8px; margin-left: 6px; vertical-align: middle; }
 
 /* Jurnal (baris riwayat ringkas) */
 .journal-scroll { max-height: 420px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -410,7 +424,7 @@ table.board td.num, table.board th.num { text-align: right; }
 /* Chip status (KYC, syarat level) */
 .stchip { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--panel-2); color: var(--muted); }
 .stchip.ok { background: var(--buy-bg); color: var(--buy); }
-.stchip.no { background: var(--sell-bg); color: var(--sell); }
+.stchip.no { background: var(--panel); color: var(--muted); }
 .kyc-card { margin-bottom: 12px; }
 .kyc-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
 
