@@ -63,7 +63,12 @@
       <!-- Cari -->
       <section class="view" id="view-search" aria-label="Cari">
         <h1 data-i18n="searchTitle"></h1>
-        <p class="sub" data-i18n="searchHint"></p>
+        <p class="sub" data-i18n="searchSub"></p>
+        <div id="search-controls"></div>
+        <div class="tabs" role="tablist" id="search-tabs">
+          <button class="tab" role="tab" data-stab="traders" aria-selected="true"><span data-i18n="searchTabTraders"></span></button>
+          <button class="tab" role="tab" data-stab="board" aria-selected="false"><span data-i18n="searchTabBoard"></span></button>
+        </div>
         <div id="search-list"></div>
       </section>
 
