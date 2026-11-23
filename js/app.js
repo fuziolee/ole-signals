@@ -523,7 +523,6 @@ $$('#search-tabs [data-stab]').forEach((b) => {
 });
 $('#btn-guide-back').addEventListener('click', () => showView('profile'));
 $('#btn-help-back').addEventListener('click', () => showView('profile'));
-$('#btn-refresh-home').addEventListener('click', () => renderHome(true));
 $('#btn-hero-top').addEventListener('click', () => { S.searchTab = 'board'; showView('search'); });
 $('#btn-hero-follow').addEventListener('click', () => { S.searchTab = 'traders'; showView('search'); });
 $('#btn-hero-guide').addEventListener('click', () => showView('guide'));
@@ -533,6 +532,8 @@ $('#notif-bell').addEventListener('click', (e) => {
 });
 document.addEventListener('click', (e) => {
   if (S.notifOpen && !e.target.closest('.notif-wrap')) setNotifPanel(false);
+  const guideBtn = e.target.closest('[data-guide]');
+  if (guideBtn) { openGuideSection(guideBtn.dataset.guide); }
 });
 
 // ----------------------------------------------------------------- auth ---
@@ -723,25 +724,20 @@ function signalCardHtml(sig) {
     actions.push(`<button class="btn" type="button" data-act="copy" data-sig="${esc(sig.id)}">⧉ ${esc(t('copySignal'))}</button>`);
   }
   if (mine && sig.status === 'PENDING') {
-    // Bagikan membuka detail (kartu bagikan ada di sana); Salin memakai
-    // aksi salin teks yang sudah ada.
-    actions.push(`<button class="iconbtn" type="button" data-act="share" data-sig="${esc(sig.id)}" aria-label="${esc(t('sigShareTitle'))}">↗</button>`);
+    // Bagikan ada di overlay detail; kartu hanya Detail/Salin/Ubah/Batalkan.
     actions.push(`<button class="btn" type="button" data-act="copy" data-sig="${esc(sig.id)}">⧉ ${esc(t('copySignal'))}</button>`);
     actions.push(`<button class="btn" type="button" data-act="edit" data-sig="${esc(sig.id)}">${esc(t('editSignal'))}</button>`);
     actions.push(`<button class="btn danger" type="button" data-act="cancel" data-sig="${esc(sig.id)}">${esc(t('cancelSignal'))}</button>`);
-  } else if (mine) {
-    actions.push(`<button class="iconbtn" type="button" data-act="share" data-sig="${esc(sig.id)}" aria-label="${esc(t('sigShareTitle'))}">↗</button>`);
   }
   return `<article class="sig ${dirCls}" data-sig="${esc(sig.id)}" tabindex="0" role="button">
+    <div class="sig-top">${avatarHtml(name, sig.trader_id, 'avatar-sm')}<div class="who"><div class="nm">${mine ? esc(t('you')) + ' · ' : ''}${esc(name)}${demoBadge(sig.trader_id)}</div><div class="mt">Lv.${level} ${esc(levelName(level, getLang()))} · ${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}${verified}</div></div></div>
     <div class="sig-head">
       <span class="sig-pair sig-pair-lg">${esc(sig.pair)}</span>
       <span class="dir ${dirCls}">${esc(sig.direction)}</span>
       ${statusPill(sig.status)}
       <span class="spacer"></span>
-      <span class="pill">${esc(fmtNum(sig.lot_size, 2))} lot</span>
       ${resultHtml}
     </div>
-    <div class="sig-top">${avatarHtml(name, sig.trader_id, 'avatar-sm')}<div class="who"><div class="nm">${mine ? esc(t('you')) + ' · ' : ''}${esc(name)}${demoBadge(sig.trader_id)}</div><div class="mt">Lv.${level} ${esc(levelName(level, getLang()))} · ${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}${verified}</div></div></div>
     ${levelsHtml}
     ${progHtml}
     ${pendHtml}
@@ -1133,7 +1129,7 @@ function monthTableHtml(months) {
   return `<div class="chart-card"><h3>${esc(t('stMonthTitle'))}</h3><div class="sub">${esc(t('stMonthSub'))}</div>`
     + `<div class="board-wrap" style="box-shadow:none"><table class="board"><thead><tr><th>${esc(t('stThMonth'))}</th><th class="num">${esc(t('stThProfit'))}</th><th class="num">${esc(t('stThPips'))}</th><th class="num">${esc(t('stThTrades'))}</th><th class="num">${esc(t('stThWR'))}</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
-function pairTableHtml(s) {
+function pairTableHtml(s, subKey = 'stPairSub') {
   const rows = s.perPair.filter((e) => e.trades > 0);
   const body = rows.length ? rows.map((e) => {
     const sk = e.streaks;
@@ -1152,13 +1148,15 @@ function pairTableHtml(s) {
       + `<td class="num mono">${fmtRf(e.recovery)}</td>`
       + `<td class="num mono">${fmtHold(e.avgHold)}</td></tr>`;
   }).join('') : `<tr><td colspan="13" style="color:var(--muted)">${esc(t('stPairEmpty'))}</td></tr>`;
-  return `<div class="chart-card"><h3>${esc(t('stPairTitle'))}</h3><div class="sub">${esc(t('stPairSub'))}</div>`
+  return `<div class="chart-card"><h3>${esc(t('stPairTitle'))}</h3><div class="sub">${esc(t(subKey))}<span class="estbadge">${esc(t('estBadge'))}</span> <button class="guidelink" type="button" data-guide="risk">${esc(t('sigDetail'))} →</button></div>`
     + `<div class="board-wrap" style="box-shadow:none"><table class="board"><thead><tr><th>${esc(t('stThPair'))}</th><th class="num">${esc(t('stThTrades'))}</th><th class="num">${esc(t('stThWR'))}</th><th class="num">${esc(t('stThProfit'))}</th><th class="num">${esc(t('stThPF'))}</th><th class="num">${esc(t('stThTotalR'))}</th><th class="num">${esc(t('stThAvgR'))}</th><th class="num">${esc(t('stThAvgSL'))}</th><th class="num">${esc(t('stThAvgTP'))}</th><th class="num">${esc(t('stThStreak'))}</th><th class="num">${esc(t('stThMaxDD'))}</th><th class="num">${esc(t('stThRecovery'))}</th><th class="num">${esc(t('stThHold'))}</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
-function statsSectionHtml(s, titleKey) {
+function statsSectionHtml(s, titleKey, subKey = null, afterGridHtml = '') {
   return `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t(titleKey))}</h2>`
+    + (subKey ? `<p class="sub">${esc(t(subKey))}</p>` : '')
     + (s.closed === 0 ? `<div class="empty"><strong>${esc(t('stNoTrades'))}</strong></div>` : '')
     + statsGridHtml(s)
+    + afterGridHtml
     + chartCardHtml(s)
     + monthTableHtml(s.months)
     + pairTableHtml(s);
@@ -1203,21 +1201,30 @@ function bindJournalRows(root) {
 function renderHomeFilters() {
   const box = $('#home-filters');
   if (!box) return;
-  // Sembilan chip pair tetap (urutan prototipe) + baris status di bawahnya.
+  // Strip pair sendiri (scroll horizontal, tanpa tombol geser) lalu
+  // baris status terpisah di bawahnya — seperti prototipe.
+  // Daftar pair = PAIR_LIST prototipe (8 pair + "Semua pair" = 9 chip).
   const pairs = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCHF', 'EURGBP', 'GBPJPY', 'XAUUSD'];
   const f = S.feedFilter;
+  const strip = box.querySelector('#pair-strip');
+  const keepX = strip ? strip.scrollLeft : 0;
   let html = '<div class="feed-filters">';
+  html += '<div class="pair-strip" id="pair-strip">';
   html += `<button class="fchip" type="button" data-fpair="ALL" aria-pressed="${f.pair === 'ALL'}">${esc(t('feedAllPairs'))}</button>`;
   for (const p of pairs) {
     html += `<button class="fchip" type="button" data-fpair="${esc(p)}" aria-pressed="${f.pair === p}">${esc(p)}</button>`;
   }
-  html += `<span style="width:8px;"></span>`;
+  html += '</div>';
+  html += '<span class="filter-break" aria-hidden="true"></span>';
   html += `<button class="fchip" type="button" data-fstatus="ALL" aria-pressed="${f.status === 'ALL'}">${esc(t('feedAllStatus'))}</button>`;
   html += `<button class="fchip" type="button" data-fstatus="PENDING" aria-pressed="${f.status === 'PENDING'}">${esc(t('tabPending'))}</button>`;
   html += `<button class="fchip" type="button" data-fstatus="AKTIF" aria-pressed="${f.status === 'AKTIF'}">${esc(t('tabActive'))}</button>`;
+  html += '<span class="sep" aria-hidden="true"></span>';
   html += `<button class="fchip" type="button" data-ffollowed="1" aria-pressed="${f.followed}">${esc(t('feedFollowedOnly'))}</button>`;
   html += '</div>';
   box.innerHTML = html;
+  const strip2 = box.querySelector('#pair-strip');
+  if (strip2) strip2.scrollLeft = keepX;
   $$('[data-fpair]', box).forEach((b) => {
     b.addEventListener('click', () => { S.feedFilter.pair = b.dataset.fpair; renderHomeList(); renderHomeFilters(); });
   });
@@ -1654,7 +1661,7 @@ function renderTraderProfileBody(traderId) {
       + statsGridHtml(st)
       + chartCardHtml(st)
       + monthTableHtml(st.months)
-      + pairTableHtml(st);
+      + pairTableHtml(st, 'stPairSubAbove');
     updateBoardScrollHints(box);
     return;
   }
@@ -1721,27 +1728,36 @@ function balanceCardHtml() {
   const pctBal = Math.min(100, Math.max(0, (balance / nextRef) * 100));
   const pctR = Math.min(100, Math.max(0, (r / 5) * 100));
   const pctTr = Math.min(100, (trades / 5) * 100);
-  const condUp = (met, label, detail, pct) => `<div class="cond" style="margin-top:8px;">
-      <div class="rowline"><span>${esc(label)}</span><span class="stchip ${met ? 'ok' : 'no'}">${esc(met ? t('balCondMet') : t('balCondUnmet'))}</span></div>
-      <div class="progress" style="margin-top:8px;">
-        <div class="track"><div class="fill" style="width:${pct.toFixed(0)}%"></div></div>
-        <small>${esc(detail)}</small>
-      </div>
+  const pctDownBal = ref > downRef ? Math.min(100, Math.max(0, ((ref - balance) / (ref - downRef)) * 100)) : 0;
+  const pctDownR = r < 0 ? Math.min(100, (-r / 5) * 100) : 0;
+  const upCount = (balance >= nextRef ? 1 : 0) + (r >= 5 ? 1 : 0) + (trades >= 5 ? 1 : 0);
+  const downCount = (balance <= downRef ? 1 : 0) + (r <= -5 ? 1 : 0);
+  const rShort = (thr) => Math.abs(thr - r).toFixed(2).replace(/\.?0+$/, '');
+  // Kotak syarat seperti prototipe: label + pill, bilah, lalu detail
+  // (angka acuan + "kurang $X"). Nilai i18n mengandung <span class="mono">
+  // sehingga detail dirender mentah (tanpa esc) — isinya angka/format aman.
+  const condBox = (met, label, detail, pct) => `<div class="cond">
+      <div class="cond-head"><span>${esc(label)}</span><span class="stchip ${met ? 'ok' : 'no'}">${esc(met ? t('balCondMet') : t('balCondUnmet'))}</span></div>
+      <div class="progress"><div class="track"><div class="fill" style="width:${pct.toFixed(0)}%"></div></div></div>
+      <div class="cval">${detail}</div>
     </div>`;
-  const condDown = (met, label, detail) => `<div class="cond" style="margin-top:8px;">
-      <div class="rowline"><span>${esc(label)}</span><span class="stchip ${met ? 'no' : 'ok'}">${esc(met ? t('balCondMet') : t('balCondUnmet'))}</span></div>
-      <small style="color:var(--muted);">${esc(detail)}</small>
-    </div>`;
+  const balUpMet = balance >= nextRef;
+  const rUpMet = r >= 5;
+  const balDownMet = balance <= downRef;
+  const rDownMet = r <= -5;
+  const balUpDetail = t('condBalDetail', { bal: fmtUsd(balance), ref: fmtUsd(ref), thr: fmtUsd(nextRef) })
+    + (balUpMet ? t('condReached') : t('condShort', { amt: fmtUsd(nextRef - balance) }));
+  const rUpDetail = t('condRDetail', { r: fmtRShort(r), thr: '+5R' })
+    + (rUpMet ? t('condRReached') : t('condRShort', { amt: rShort(5) }));
+  const balDownDetail = t('condBalDetailDown', { bal: fmtUsd(balance), ref: fmtUsd(ref), thr: fmtUsd(downRef) })
+    + (balDownMet ? t('condReached') : t('condAbove', { amt: fmtUsd(balance - downRef) }));
+  const rDownDetail = t('condRDetail', { r: fmtRShort(r), thr: '−5R' })
+    + (rDownMet ? t('condRReached') : t('condRShort', { amt: rShort(-5) }));
   return `<div class="balance-card">
     <div class="balance-top">
       <div>
-        <div style="font-size:12.5px;color:var(--muted);">${esc(t('balanceCard'))}</div>
+        <div style="font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">${esc(t('balanceCard'))}</div>
         <div class="amt">${esc(fmtUsd(balance))}</div>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-size:12.5px;color:var(--muted);">${esc(t('level'))}</div>
-        <div style="font-weight:800;">Lv.${level} ${esc(levelName(level, getLang()))}</div>
-        ${level >= PAY_GATE_LEVEL ? `<span class="pill gold">✓ ${esc(t('verified'))}</span>` : ''}
       </div>
     </div>
     <div class="sig-facts" style="margin-top:0;">
@@ -1749,16 +1765,25 @@ function balanceCardHtml() {
       <span>${esc(t('balEquity'))}: <b>${equity !== null ? esc(fmtUsd(equity)) : '—'}</b></span>
       <span>${esc(t('balFloating'))}: <b>${floating !== null ? esc(fmtUsd(floating)) : '—'}</b></span>
     </div>
-    <div>
-      <div style="font-weight:700; font-size:14px;">${esc(t('balUpTitle'))}</div>
-      ${condUp(balance >= nextRef, `${t('balance')} ≥ ${fmtUsd(nextRef)}`, `${t('balance')} ${fmtUsd(balance)} / ${fmtUsd(nextRef)}`, pctBal)}
-      ${condUp(r >= 5, `${t('rSince')} ≥ +5R`, `${t('rSince')}: ${fmtR(r)} / +5R`, pctR)}
-      ${condUp(trades >= 5, `${t('tradesSince')} ≥ 5`, `${t('tradesSince')}: ${trades} / 5`, pctTr)}
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span class="pill gold">Level ${level} · ${esc(levelName(level, getLang()))}</span>
+      ${level >= PAY_GATE_LEVEL ? `<span class="pill gold">✓ ${esc(t('verified'))}</span>` : ''}
+      <span style="font-size:13px;color:var(--muted);">${t('lvlProgress', { up: upCount, down: downCount })}</span>
     </div>
     <div>
-      <div style="font-weight:700; font-size:14px;">${esc(t('balDownTitle'))}</div>
-      ${condDown(balance <= downRef, `${t('balance')} ≤ ${fmtUsd(downRef)}`, `${t('balance')} ${fmtUsd(balance)} · ${t('level')} ${level} (${t('balance')} ${fmtUsd(ref)} × 0,95)`)}
-      ${condDown(r <= -5, `${t('rSince')} ≤ −5R`, `${t('rSince')}: ${fmtR(r)} / −5R`)}
+      <div style="font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);">${esc(t('balUpTitle'))}</div>
+      <div class="conds">
+        ${condBox(balUpMet, t('condBalUp'), balUpDetail, pctBal)}
+        ${condBox(rUpMet, t('condRUp'), rUpDetail, pctR)}
+        ${condBox(trades >= 5, t('condTradesUp'), t('condTradesDetail', { n: trades }), pctTr)}
+      </div>
+    </div>
+    <div>
+      <div style="font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);">${esc(t('balDownTitle'))}</div>
+      <div class="conds">
+        ${condBox(balDownMet, t('condBalDown'), balDownDetail, pctDownBal)}
+        ${condBox(rDownMet, t('condRDown'), rDownDetail, pctDownR)}
+      </div>
     </div>
     <p class="note">${esc(t('balLatch'))}</p>
     <button class="guidelink" id="bal-guide-link" type="button" style="padding-top:0;">${esc(t('balGuide'))}<span aria-hidden="true"> →</span></button>
@@ -1776,6 +1801,7 @@ function signalFormHtml(editing) {
       <ul class="mini-list"><li>${t('formLock1')}</li><li>${t('formLock2')}</li><li>${t('formLock3')}</li></ul>
       <button class="guidelink" id="sf-guide-link" type="button">${esc(t('guideCta'))}<span aria-hidden="true"> →</span></button>
     </div></div>
+    <div class="risk-note">${t('formRisk')}</div>
     <form id="sig-form">
       <div class="field">
         <label>${esc(t('searchFilterPair'))}</label>
@@ -1810,10 +1836,9 @@ function signalFormHtml(editing) {
         </div>
       </div>
       <div id="sf-risk"></div>
-      <div class="risk-note">${t('formRisk')}</div>
       <div class="err" id="sf-err" style="color:var(--sell); font-size:13px; min-height:1.2em; margin-bottom:8px;"></div>
       <div class="row">
-        <button class="btn primary" type="submit" id="sf-submit" style="flex:1;">${editing ? esc(t('submitEdit')) : `🔒 ${esc(t('postSignal'))}`}</button>
+        <button class="btn primary" type="submit" id="sf-submit" style="flex:1;">${editing ? esc(t('submitEdit')) : esc(t('postSignal'))}</button>
         ${editing ? `<button class="btn" type="button" id="sf-cancel-edit">${esc(t('cancelEdit'))}</button>` : ''}
       </div>
     </form>
@@ -2102,9 +2127,46 @@ function renderOfficeTraderTab(editing = null) {
   $$('[data-otab]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.otab === S.officeTraderTab)));
   if (S.officeTraderTab === 'profil') {
     const st = statsForTrader(S.user.id);
-    box.innerHTML = traderIdentityCardHtml() + balanceCardHtml()
+    const tr = S.trader;
+    const hasIdentity = !!tr;
+    const accDesc = hasIdentity ? t('traderAccountSet') : t('traderAccountNeed');
+    const accPanel = hasIdentity
+      ? `<div class="kv-rows">
+          <div class="kv-row"><div class="k">${esc(t('profileName'))}</div><div class="v">${esc(tr.trader_display_name || t('noName'))}</div></div>
+          <div class="kv-row"><div class="k">${esc(t('username'))}</div><div class="v">${S.profile?.username ? '@' + esc(S.profile.username) : '—'}</div></div>
+        </div>
+        <p class="note">${esc(t('officeIdentityNote'))}</p>`
+      : `<p class="note">${esc(t('traderAccountNeed'))}</p>`;
+    const resetRow = (k, v) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="color:var(--muted);">${esc(k)}</span><b>${esc(v)}</b></div>`;
+    box.innerHTML = `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeIdentityTitle'))}</h2>`
+      + `<p class="sub">${esc(t('officeIdentitySub'))}</p>`
+      + traderIdentityCardHtml()
+      + `<div class="subcard" style="margin-top:14px;">
+          <button type="button" class="menurow" id="trader-account-toggle" aria-expanded="false">
+            <span class="grow"><span class="t">${esc(t('traderAccountTitle'))}</span><span class="d">${esc(accDesc)}</span></span><span class="marrow">→</span>
+          </button>
+          <div id="trader-account-panel" hidden>${accPanel}</div>
+        </div>`
+      + balanceCardHtml()
+      + `<div class="subcard" style="margin-top:14px;">
+          <h3>${esc(t('resetTitle'))}</h3>
+          <p>${esc(t('resetDesc'))}</p>
+          ${resetRow(t('resetRule'), t('resetOnceMonth'))}
+          ${resetRow(t('resetLast'), '—')}
+          ${resetRow(t('resetNext'), t('resetNow'))}
+          <div style="margin-top:12px;"><button class="btn primary" type="button" disabled>${esc(t('resetBtn'))}</button></div>
+          <p class="note">${esc(t('resetSoonNote'))}</p>
+        </div>`
       + `<p class="sub">${esc(t('officeStatsSub'))}</p>` + statsSectionHtml(st, 'officeStatsTitle');
     bindPhotoInput('trader-photo-input', 'trader');
+    const accToggle = $('#trader-account-toggle');
+    if (accToggle) accToggle.addEventListener('click', () => {
+      const panel = $('#trader-account-panel');
+      if (!panel) return;
+      const open = panel.hidden;
+      panel.hidden = !open;
+      accToggle.setAttribute('aria-expanded', String(open));
+    });
     const balGuide = $('#bal-guide-link');
     if (balGuide) balGuide.addEventListener('click', () => openGuideSection('level'));
     updateBoardScrollHints(box);
@@ -2116,8 +2178,6 @@ function renderOfficeTraderTab(editing = null) {
   }
   const ed = editing !== null ? editing : (S.editingId ? S.mySignals.find((s) => s.id === S.editingId) || null : null);
   const openCount = S.mySignals.filter((s) => s.status === 'PENDING' || s.status === 'AKTIF').length;
-  const pendCount = S.mySignals.filter((s) => s.status === 'PENDING').length;
-  const aktifCount = S.mySignals.filter((s) => s.status === 'AKTIF').length;
   const doneCount = S.mySignals.filter((s) => ['WIN', 'LOSS', 'CANCELLED', 'EXPIRED'].includes(s.status)).length;
   const lastPost = S.mySignals.length
     ? S.mySignals.reduce((a, b) => (new Date(a.created_at) > new Date(b.created_at) ? a : b))
@@ -2128,8 +2188,8 @@ function renderOfficeTraderTab(editing = null) {
   const chip = (val, label, n) => `<button class="chip" type="button" data-olist="${val}" aria-pressed="${S.officeTab === val}">${esc(label)}${n !== undefined ? ` (${n})` : ''}</button>`;
   let html = signalFormHtml(ed);
   html += `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeMySignalsTitle'))}</h2>`;
-  html += `<p class="sub">${esc(t('lastPostLabel'))} ${esc(lastPostTxt)}</p>`;
-  html += `<div class="pfilters">${chip('ALL', t('pfAll', { n: openCount }))}${chip('PENDING', t('pfPending'), pendCount)}${chip('AKTIF', t('pfActive'), aktifCount)}<button class="chip hist-tab" type="button" data-olist="HISTORY" aria-pressed="${S.officeTab === 'HISTORY'}">${esc(t('tabHistory'))} (${doneCount})</button></div>`;
+  html += `<p class="sub">${esc(t('lastPostLabel'))}: ${esc(lastPostTxt)}</p>`;
+  html += `<div class="pfilters">${chip('ALL', t('pfAll', { n: openCount }))}${chip('PENDING', t('pfPending'))}${chip('AKTIF', t('pfActive'))}<button class="chip hist-tab" type="button" data-olist="HISTORY" aria-pressed="${S.officeTab === 'HISTORY'}">${esc(t('tabHistory'))} (${doneCount})</button></div>`;
   html += `<div id="office-list"><p class="sub">${esc(t('loading'))}</p></div>`;
   box.innerHTML = html;
   bindSignalForm(ed);
@@ -2258,19 +2318,21 @@ function renderOfficeFollowerTab() {
       .filter(Boolean)
       .map((s) => ({ ...s, traders: s.traders || {} }));
     const st = computeStats(copiedSignals);
-    const done = copiedSignals.filter((s) => s.status === 'WIN' || s.status === 'LOSS');
-    const active = copiedSignals.filter((s) => s.status === 'PENDING' || s.status === 'AKTIF');
-    let html = statsSectionHtml(st, 'officeJournalStatsTitle');
-    html += `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeActiveCopies'))} (${active.length})</h2>`;
-    html += active.length
-      ? `<div class="hist journal-scroll" tabindex="0">` + active.map((s) => journalRowHtml(s, { showTrader: true })).join('') + `</div>`
-      : `<div class="empty"><strong>${esc(t('officeActiveCopiesEmpty'))}</strong></div>`;
-    html += `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeCopyHistory'))} (${done.length})</h2>`;
-    html += done.length
-      ? `<div class="hist journal-scroll tall" tabindex="0">` + done.map((s) => journalRowHtml(s, { showTrader: true })).join('') + `</div>`
-      : `<div class="empty"><strong>${esc(t('officeCopyHistoryEmpty'))}</strong></div>`;
-    box.innerHTML = html;
-    bindJournalRows(box);
+    const aktif = copiedSignals.filter((s) => s.status === 'AKTIF');
+    const pend = copiedSignals.filter((s) => s.status === 'PENDING');
+    // Catatan floating di bawah grid statistik (nilai nyata; "—" bila
+    // belum ada harga live; jujur bila tak ada salinan aktif).
+    let floatNote = '';
+    if (!copiedSignals.length) {
+      floatNote = `<p class="journal-note">${esc(t('jrnlNoActive'))}</p>`;
+    } else {
+      const vals = aktif.map((s) => floatingUsd(s));
+      const sum = vals.some((v) => v !== null) ? vals.reduce((a, b) => a + (b || 0), 0) : null;
+      const amt = sum !== null ? fmtUsd0(sum) : '—';
+      const pendPart = pend.length ? t('jrnlPendPart', { n: pend.length }) : '';
+      floatNote = `<p class="journal-note">${t('jrnlNote', { amt, n: aktif.length, pend: pendPart })}</p>`;
+    }
+    box.innerHTML = statsSectionHtml(st, 'officeJournalStatsTitle', 'jrnlStatsSub', floatNote);
     updateBoardScrollHints(box);
     return;
   }
@@ -2305,18 +2367,20 @@ function renderOfficeFollowerTab() {
   const openSigs = followedSignals.filter((s) => s.status === 'PENDING' || s.status === 'AKTIF');
   const doneSigs = followedSignals.filter((s) => ['WIN', 'LOSS', 'CANCELLED', 'EXPIRED'].includes(s.status));
   const fchip = (val, label, n) => `<button class="chip" type="button" data-ffilter="${val}" aria-pressed="${f === val}">${esc(label)}${n !== undefined ? ` (${n})` : ''}</button>`;
-  let html = `<div class="pfilters">${fchip('ALL', t('pfAll', { n: openSigs.length }))}${fchip('PENDING', t('pfPending'))}${fchip('AKTIF', t('pfActive'))}<button class="chip hist-tab" type="button" data-ffilter="HISTORY" aria-pressed="${f === 'HISTORY'}">${esc(t('tabHistory'))} (${doneSigs.length})</button></div>`;
-  html += `<h2 style="font-size:16px; margin: 6px 0 10px;">${esc(t('officeActiveCopies'))} (${activeCopies.length})</h2>`;
+  const filtersHtml = `<div class="pfilters">${fchip('ALL', t('pfAll', { n: openSigs.length }))}${fchip('PENDING', t('pfPending'))}${fchip('AKTIF', t('pfActive'))}<button class="chip hist-tab" type="button" data-ffilter="HISTORY" aria-pressed="${f === 'HISTORY'}">${esc(t('tabHistory'))} (${doneSigs.length})</button></div>`;
+  let html = `<h2 style="font-size:16px; margin: 6px 0 10px;">${esc(t('officeActiveCopies'))} (${activeCopies.length})</h2>`;
   html += activeCopies.length
     ? `<div class="hist journal-scroll" tabindex="0">` + activeCopies.map((s) => journalRowHtml(s, { showTrader: true })).join('') + `</div>`
     : `<div class="empty"><strong>${esc(t('officeActiveCopiesEmpty'))}</strong></div>`;
   if (f === 'HISTORY') {
     html += `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('tabHistory'))} (${doneSigs.length})</h2>`;
+    html += filtersHtml;
     html += doneSigs.length
       ? `<div class="hist journal-scroll tall" tabindex="0">` + doneSigs.map((s) => journalRowHtml(s, { showTrader: true })).join('') + `</div>`
       : `<div class="empty"><strong>${esc(t('officeCopyHistoryEmpty'))}</strong></div>`;
   } else {
     html += `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeFollowSignals'))}</h2>`;
+    html += filtersHtml;
     const shown = f === 'ALL' ? openSigs : openSigs.filter((s) => s.status === f);
     if (!S.myFollows.length) {
       html += `<div class="empty"><strong>${esc(t('officeFollowedEmpty'))}</strong>${esc(t('officeFollowedHint'))}</div>`;
@@ -2341,11 +2405,12 @@ function renderOfficeFollowedBody() {
   if (!box) return;
   $$('[data-followedtab]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.followedtab === S.officeFollowedTab)));
   if (S.officeFollowedTab === 'subs') {
+    const h3 = `<h3 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeFollowedSubs'))}</h3>`;
     if (!S.mySubs.length) {
-      box.innerHTML = `<div class="empty"><strong>${esc(t('officeSubsMyEmpty'))}</strong>${esc(t('officeSubsNote'))}</div>`;
+      box.innerHTML = h3 + `<div class="empty"><strong>${esc(t('officeSubsMyEmpty'))}</strong>${esc(t('officeSubsNote'))}</div>`;
       return;
     }
-    box.innerHTML = S.mySubs.map((sub) => {
+    box.innerHTML = h3 + S.mySubs.map((sub) => {
       const tr = one(sub.traders) || {};
       const name = tr.trader_display_name || t('noName');
       return `<div class="hist-row"><span class="p mono">${esc(name)}</span>`
@@ -2354,11 +2419,12 @@ function renderOfficeFollowedBody() {
     }).join('');
     return;
   }
+  const h3tr = `<h3 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeFollowedTraders'))}</h3>`;
   if (!S.myFollows.length) {
-    box.innerHTML = `<div class="empty"><strong>${esc(t('officeFollowedEmpty'))}</strong>${esc(t('officeFollowedHint'))}</div>`;
+    box.innerHTML = h3tr + `<div class="empty"><strong>${esc(t('officeFollowedEmpty'))}</strong>${esc(t('officeFollowedHint'))}</div>`;
     return;
   }
-  box.innerHTML = S.myFollows.map((f) => {
+  box.innerHTML = h3tr + S.myFollows.map((f) => {
     const tr = one(f.traders) || {};
     const p = progressOf(tr);
     const level = p ? Number(p.level) || 1 : 1;
