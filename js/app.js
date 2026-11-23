@@ -863,6 +863,37 @@ function shareCardText(sig) {
     + `${t('sigShareId')}: ${shareCardId(sig)} | ${t('sigShareCode')}: ${verifyCode(sig)}\n`
     + `${shareVerifyUrl(sig)}`;
 }
+// Buang tag HTML dari string i18n sebelum digambar di canvas — canvas tidak
+// me-render markup, tag akan tampil literal (bug ronde 5b: <strong> tampil
+// di PNG kartu bagikan). Spasi ganda hasil penghapusan ikut dirapikan.
+function stripTags(s) {
+  return String(s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+}
+// Bungkus teks ke beberapa baris sesuai lebar maksimum (diukur dengan font
+// canvas yang sedang aktif). Kata tunggal yang melebihi lebar maksimum
+// dipotong per karakter supaya tidak meluber keluar canvas.
+function wrapText(ctx, text, maxWidth) {
+  const lines = [];
+  let line = '';
+  const pushLine = () => { if (line) { lines.push(line); line = ''; } };
+  for (const word of String(text).split(' ').filter(Boolean)) {
+    let w = word;
+    while (ctx.measureText(w).width > maxWidth) {
+      pushLine();
+      let cut = w.length;
+      while (cut > 1 && ctx.measureText(w.slice(0, cut)).width > maxWidth) cut--;
+      lines.push(w.slice(0, cut));
+      w = w.slice(cut);
+      if (!w) break;
+    }
+    if (!w) continue;
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width <= maxWidth) line = test;
+    else { pushLine(); line = w; }
+  }
+  pushLine();
+  return lines.length ? lines : [''];
+}
 function drawShareCard(sig) {
   const cv = document.createElement('canvas');
   cv.width = 1080;
@@ -931,9 +962,30 @@ function drawShareCard(sig) {
   ctx.fillText(`${fmtNum(sig.lot_size, 2)} lot · ${t('sigShareId')}: ${shareCardId(sig)}`, 72, 880);
   ctx.fillText(`${t('sigShareCode')}: ${verifyCode(sig)}`, 72, 924);
   ctx.fillText(shareVerifyUrl(sig), 72, 968);
+  // Peringatan risiko: string i18n berisi markup HTML (<strong>) — dibuang
+  // dulu, lalu dibungkus agar muat di dalam canvas. Dulu satu fillText tanpa
+  // wrap: tag tampil literal dan teks terpotong di tepi kanan (bug ronde 5b).
+  // Ukuran font adaptif: pakai yang terbesar (22→16px) yang menghasilkan
+  // maksimal 3 baris; blok dijangkarkan ke bawah (baseline terakhir 1064)
+  // supaya tidak menabrak baris URL di atasnya.
+  const riskText = stripTags(t('riskWarn'));
+  const riskMaxW = 1080 - 72 * 2;
+  let riskFont = 16;
+  let riskLines = [];
+  for (const px of [22, 20, 18, 16]) {
+    ctx.font = `500 ${px}px Inter, sans-serif`;
+    riskLines = wrapText(ctx, riskText, riskMaxW);
+    riskFont = px;
+    if (riskLines.length <= 3) break;
+  }
+  const riskLH = riskFont + 8;
+  const riskLastY = 1064;
   ctx.fillStyle = '#64748B';
-  ctx.font = '500 24px Inter, sans-serif';
-  ctx.fillText(t('riskWarn'), 72, 1030);
+  ctx.font = `500 ${riskFont}px Inter, sans-serif`;
+  ctx.textAlign = 'left';
+  riskLines.forEach((ln, i) => {
+    ctx.fillText(ln, 72, riskLastY - (riskLines.length - 1 - i) * riskLH);
+  });
   return cv;
 }
 function statusPillLabel(status) {
