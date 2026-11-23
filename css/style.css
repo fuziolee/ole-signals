@@ -51,7 +51,7 @@ button, [role="button"], select, input:not([type="checkbox"], [type="radio"]) { 
 .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 /* ---- kerangka ---- */
-.app { max-width: 720px; margin: 0 auto; padding: 0 14px 92px; }
+.app { max-width: 1060px; margin: 0 auto; padding: 0 16px 100px; }
 .app-header {
   position: sticky; top: 0; z-index: 30;
   background: var(--bg); padding: 14px 0 10px;
@@ -65,6 +65,31 @@ button, [role="button"], select, input:not([type="checkbox"], [type="radio"]) { 
 .view.active { display: block; }
 h1 { font-size: 19px; margin: 2px 0 4px; }
 .sub { color: var(--muted); font-size: 13.5px; margin: 0 0 14px; }
+
+/* ---- hero Beranda (port prototipe) ---- */
+.hero { padding: 20px 0 4px; }
+.hero h1 { font-size: clamp(22px, 4vw, 32px); line-height: 1.15; margin: 0 0 8px; font-weight: 800; letter-spacing: -.01em; max-width: 24ch; }
+.hero p { margin: 0; color: var(--muted); font-size: 15px; max-width: 62ch; }
+.lead-sm { font-size: 14.5px; color: var(--muted); margin: 12px 0 0; max-width: 66ch; }
+.flow { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.fstep { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px 13px; box-shadow: var(--shadow); }
+.fstep b { display: block; font-size: 13px; letter-spacing: .05em; line-height: 1.3; }
+.fstep i { font-style: normal; font-size: 12px; color: var(--muted); }
+.fstep.win b { color: var(--buy); }
+.farr { align-self: center; color: var(--muted); font-weight: 700; flex: none; }
+.hero-cta { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.hero-cta .btn.primary { width: auto; min-width: 180px; }
+.guidelink { appearance: none; background: none; border: 0; color: var(--teal); font-weight: 700; font-size: 14px; cursor: pointer; padding: 12px 0 0; display: inline-flex; gap: 6px; align-items: center; }
+
+/* ---- roadmap ---- */
+.roadmap { margin-top: 44px; }
+.roadmap h2 { font-size: 20px; font-weight: 800; margin: 0 0 4px; }
+.roadmap p { color: var(--muted); margin: 0 0 14px; font-size: 14.5px; }
+.roadmap ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.roadmap li { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; font-size: 14px; display: flex; gap: 10px; align-items: flex-start; }
+.roadmap li .tick { width: 16px; height: 16px; flex: none; margin-top: 3px; color: var(--teal); font-weight: 800; line-height: 1; }
+.roadmap li b { display: block; font-size: 14.5px; }
+.roadmap li div span { color: var(--muted); font-size: 13px; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .spacer { flex: 1; }
 
@@ -124,6 +149,7 @@ h1 { font-size: 19px; margin: 2px 0 4px; }
 .sig.sell { border-left: 4px solid var(--sell); }
 .sig-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .sig-pair { font-weight: 800; font-size: 16px; }
+.sig-pair-lg { font-size: 24px; }
 .dir { font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px; }
 .dir.buy { background: var(--buy-bg); color: var(--buy); }
 .dir.sell { background: var(--sell-bg); color: var(--sell); }
@@ -158,7 +184,7 @@ h1 { font-size: 19px; margin: 2px 0 4px; }
   background: var(--panel); border-top: 1px solid var(--line);
   display: flex; justify-content: center; padding-bottom: env(safe-area-inset-bottom);
 }
-.bottom-nav nav { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; max-width: 720px; }
+.bottom-nav nav { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; max-width: 1060px; }
 .bottom-nav button {
   appearance: none; background: none; border: 0; color: var(--muted);
   font-size: 11.5px; font-weight: 600; padding: 10px 4px 12px; cursor: pointer;
@@ -205,6 +231,10 @@ h1 { font-size: 19px; margin: 2px 0 4px; }
 .guide-list { margin: 0; padding-left: 18px; font-size: 14px; }
 .guide-list li { margin-bottom: 8px; }
 .foot { margin-top: 26px; font-size: 12px; color: var(--muted); text-align: center; }
+
+@media (max-width: 760px) {
+  .roadmap ul { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 560px) {
   .sig-levels { grid-template-columns: repeat(3, 1fr); }
