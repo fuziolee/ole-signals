@@ -284,13 +284,22 @@ end $$;
 do $$
 declare
   r0 jsonb; rn jsonb; rneg jsonb; rnan jsonb; ru jsonb;
-  v_id uuid; n_before int; n_after int;
+  v_id uuid; v_tmp uuid; n_before int; n_after int;
 begin
   perform set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated","aud":"authenticated"}', false);
   select count(*) into n_before from public.signals where trader_id='11111111-1111-1111-1111-111111111111';
   r0   := public.create_signal('XAUUSD','BUY',3000,2990,3020,0,'t11-lot0');
   rneg := public.create_signal('XAUUSD','BUY',3000,2990,3020,-0.5,'t11-lotneg');
   rnan := public.create_signal('XAUUSD','BUY',3000,2990,3020,'NaN'::numeric,'t11-lotnan');
+  -- Batalkan dulu sinyal GBPUSD yang masih terbuka dari tes sebelumnya,
+  -- supaya batas 2/pair tidak memblokir pembuatan sinyal dasar di bawah.
+  for v_tmp in
+    select id from public.signals
+    where trader_id='11111111-1111-1111-1111-111111111111'
+      and pair='GBPUSD' and status in ('PENDING','ACTIVE')
+  loop
+    perform public.cancel_signal(v_tmp);
+  end loop;
   -- Update: buat satu PENDING GBPUSD dulu, lalu coba ubah lot-nya jadi 0.
   ru := public.create_signal('GBPUSD','BUY',1.2700,1.2680,1.2740,0.05,'t11-base');
   select id into v_id from public.signals where trader_id='11111111-1111-1111-1111-111111111111' and idempotency_key='t11-base';
@@ -317,10 +326,19 @@ end $$;
 -- ---------------------------------------------------------------------------
 do $$
 declare
-  rc jsonb; ru jsonb; v_id uuid;
+  rc jsonb; ru jsonb; v_id uuid; v_tmp uuid;
 begin
   perform set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated","aud":"authenticated"}', false);
   rc := public.create_signal('XXXYYY','BUY',3000,2990,3020,0.01,'t12-badpair');
+  -- Batalkan dulu sinyal GBPUSD yang masih terbuka dari tes sebelumnya,
+  -- supaya batas 2/pair tidak memblokir pembuatan sinyal dasar di bawah.
+  for v_tmp in
+    select id from public.signals
+    where trader_id='11111111-1111-1111-1111-111111111111'
+      and pair='GBPUSD' and status in ('PENDING','ACTIVE')
+  loop
+    perform public.cancel_signal(v_tmp);
+  end loop;
   perform public.create_signal('GBPUSD','BUY',1.2700,1.2680,1.2740,0.05,'t12-base');
   select id into v_id from public.signals where trader_id='11111111-1111-1111-1111-111111111111' and idempotency_key='t12-base';
   if v_id is not null then

@@ -375,19 +375,22 @@ begin
     return public.api_error('invalid', 'Arah harus BUY atau SELL.');
   end if;
   --    §12 bug #4: NaN lolos dari perbandingan `<= 0` di Postgres (NaN
-  --    diurutkan di atas semua angka), jadi uji juga `x <> x` — hanya
-  --    NaN yang tidak sama dengan dirinya sendiri. (Lewat API REST JSON
-  --    NaN tidak bisa sampai ke sini — JSON mengubahnya jadi null —
-  --    tapi pertahanan ini menutup jalur SQL langsung.)
-  if p_entry is null or p_entry <> p_entry
-     or p_stop_loss is null or p_stop_loss <> p_stop_loss
-     or p_take_profit is null or p_take_profit <> p_take_profit
+  --    diurutkan di atas semua angka). PERHATIAN: untuk tipe numeric,
+  --    NaN SAMA DENGAN dirinya sendiri ('NaN'::numeric =
+  --    'NaN'::numeric adalah true), jadi uji `x <> x` TIDAK menangkap
+  --    NaN — terbukti T-11 gagal 23 Nov 2026. Uji yang benar:
+  --    `x = 'NaN'::numeric`. (Lewat API REST JSON NaN tidak bisa
+  --    sampai ke sini — JSON mengubahnya jadi null — tapi pertahanan
+  --    ini menutup jalur SQL langsung.)
+  if p_entry is null or p_entry = 'NaN'::numeric
+     or p_stop_loss is null or p_stop_loss = 'NaN'::numeric
+     or p_take_profit is null or p_take_profit = 'NaN'::numeric
      or p_entry <= 0 or p_stop_loss <= 0 or p_take_profit <= 0 then
     return public.api_error(
       'invalid', 'Entry, stop loss, dan take profit harus lebih dari 0.'
     );
   end if;
-  if p_lot is null or p_lot <> p_lot or p_lot <= 0 then
+  if p_lot is null or p_lot = 'NaN'::numeric or p_lot <= 0 then
     return public.api_error('invalid', 'Lot harus lebih dari 0.');
   end if;
   if (p_direction = 'BUY'
@@ -572,16 +575,17 @@ begin
   if p_direction not in ('BUY', 'SELL') then
     return public.api_error('invalid', 'Arah harus BUY atau SELL.');
   end if;
-  -- §12 bug #4: tolak NaN (uji `x <> x`) — lihat create_signal.
-  if p_entry is null or p_entry <> p_entry
-     or p_stop_loss is null or p_stop_loss <> p_stop_loss
-     or p_take_profit is null or p_take_profit <> p_take_profit
+  -- §12 bug #4: tolak NaN (uji `x = 'NaN'::numeric` — `x <> x` tidak
+  -- berfungsi untuk numeric, lihat create_signal).
+  if p_entry is null or p_entry = 'NaN'::numeric
+     or p_stop_loss is null or p_stop_loss = 'NaN'::numeric
+     or p_take_profit is null or p_take_profit = 'NaN'::numeric
      or p_entry <= 0 or p_stop_loss <= 0 or p_take_profit <= 0 then
     return public.api_error(
       'invalid', 'Entry, stop loss, dan take profit harus lebih dari 0.'
     );
   end if;
-  if p_lot is null or p_lot <> p_lot or p_lot <= 0 then
+  if p_lot is null or p_lot = 'NaN'::numeric or p_lot <= 0 then
     return public.api_error('invalid', 'Lot harus lebih dari 0.');
   end if;
   if (p_direction = 'BUY'
