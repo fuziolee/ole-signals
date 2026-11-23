@@ -22,6 +22,20 @@
     <main>
       <!-- Beranda -->
       <section class="view" id="view-home" aria-label="Beranda">
+        <header class="hero">
+          <h1 data-i18n="heroH1"></h1>
+          <p data-i18n="heroP"></p>
+          <div class="flow" role="img" aria-label="PENDING → TERKUNCI → WIN / LOSS">
+            <span class="fstep"><b>PENDING</b><i data-i18n="flowPendingSub"></i></span><span class="farr" aria-hidden="true">→</span>
+            <span class="fstep"><b data-i18n="flowLocked"></b><i data-i18n="flowLockedSub"></i></span><span class="farr" aria-hidden="true">→</span>
+            <span class="fstep win"><b>WIN / LOSS</b><i data-i18n="flowResultSub"></i></span>
+          </div>
+          <p class="lead-sm" data-i18n="heroLead"></p>
+          <div class="hero-cta">
+            <button class="btn primary" id="btn-hero-search" type="button"><span data-i18n="heroCtaSearch"></span></button>
+          </div>
+          <button class="guidelink" id="btn-hero-guide" type="button"><span data-i18n="guideCta"></span><span aria-hidden="true"> →</span></button>
+        </header>
         <div class="row">
           <div>
             <h1 data-i18n="feedTitle"></h1>
@@ -31,6 +45,19 @@
           <button class="btn ghost" id="btn-refresh-home" type="button">↻ <span data-i18n="refresh"></span></button>
         </div>
         <div id="home-list"></div>
+        <section class="roadmap">
+          <h2 data-i18n="roadTitle"></h2>
+          <p data-i18n="roadSub"></p>
+          <ul>
+            <li><span class="tick" aria-hidden="true">✓</span><div><b data-i18n="road1T"></b><span data-i18n="road1D"></span></div></li>
+            <li><span class="tick" aria-hidden="true">✓</span><div><b data-i18n="road2T"></b><span data-i18n="road2D"></span></div></li>
+            <li><span class="tick" aria-hidden="true">✓</span><div><b data-i18n="road3T"></b><span data-i18n="road3D"></span></div></li>
+            <li><span class="tick" aria-hidden="true">✓</span><div><b data-i18n="road4T"></b><span data-i18n="road4D"></span></div></li>
+            <li><span class="tick" aria-hidden="true">✓</span><div><b data-i18n="road5T"></b><span data-i18n="road5D"></span></div></li>
+            <li><span class="tick" aria-hidden="true">✓</span><div><b data-i18n="road6T"></b><span data-i18n="road6D"></span></div></li>
+          </ul>
+        </section>
+        <p class="foot" data-i18n="riskWarn"></p>
       </section>
 
       <!-- Cari -->
