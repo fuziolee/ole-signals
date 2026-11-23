@@ -245,12 +245,13 @@ function traderOf(sig) {
 }
 function progressOf(trader) { return one(trader?.trader_progress) || null; }
 // Aturan ronde 5: di permukaan PUBLIK hanya tampil @username, bukan nama
-// profil/display name. Username diambil dari embed profiles(username)
-// (lihat api.js) atau dari S.traders; fallback ke display name hanya bila
-// data benar-benar tanpa username (tidak boleh terjadi — setup identitas
-// mewajibkan username).
+// profil/display name. Username TRADER diambil dari tr.username
+// (kolom traders.username, ronde 6b) — BUKAN dari profiles.username
+// (itu username follower). Fallback ke display name hanya bila data
+// benar-benar tanpa username (tidak boleh terjadi — migrasi 12 membuat
+// traders.username NOT NULL).
 function traderHandle(tr) {
-  const un = one(tr?.profiles)?.username;
+  const un = tr?.username;
   if (un) return '@' + un;
   return tr?.trader_display_name || t('noName');
 }
@@ -434,7 +435,7 @@ function rpcErrorMessage(res) {
   const map = {
     pairlimit: 'errPairlimit', notpending: 'errNotpending', conflict: 'errConflict',
     needusername: 'errNeedusername', rr: 'errRr', risk: 'errRisk', invalid: 'errInvalid',
-    pair: 'errPair',
+    pair: 'errPair', taken: 'errTaken',
   };
   if (res.code && map[res.code]) return t(map[res.code]);
   return res.message || t('errInvalid');
@@ -1429,7 +1430,7 @@ function renderSearchList() {
     const level = p ? Number(p.level) || 1 : 1;
     if (q) {
       const name = (tr.trader_display_name || '').toLowerCase();
-      const username = (one(tr.profiles)?.username || '').toLowerCase();
+      const username = (tr.username || '').toLowerCase();
       if (!(name.includes(q) || username.includes(q) || ('@' + username).includes(q))) return false;
     }
     if (f.pair !== 'ALL' && !signalsOfTrader(tr.profile_id).some((s) => s.pair === f.pair)) return false;
@@ -2134,7 +2135,7 @@ function traderIdentityCardHtml() {
   const p = progressOf(tr);
   const level = p ? Number(p.level) || 1 : 1;
   const name = tr.trader_display_name || t('noName');
-  const username = S.profile?.username ? '@' + S.profile.username : '—';
+  const username = tr.username ? '@' + tr.username : '—';
   return `<div class="card">
     <div class="board-top">
       ${avatarImg(name, tr.profile_id, tr.trader_avatar_url, 'avatar-md')}
@@ -2219,7 +2220,7 @@ function renderOfficeTraderTab(editing = null) {
     const accPanel = hasIdentity
       ? `<div class="kv-rows">
           <div class="kv-row"><div class="k">${esc(t('profileName'))}</div><div class="v">${esc(tr.trader_display_name || t('noName'))}</div></div>
-          <div class="kv-row"><div class="k">${esc(t('username'))}</div><div class="v">${S.profile?.username ? '@' + esc(S.profile.username) : '—'}</div></div>
+          <div class="kv-row"><div class="k">${esc(t('username'))}</div><div class="v">${tr.username ? '@' + esc(tr.username) : '—'}</div></div>
         </div>
         <p class="note">${esc(t('officeIdentityNote'))}</p>`
       : `<p class="note">${esc(t('traderAccountNeed'))}</p>`;

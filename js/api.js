@@ -59,7 +59,7 @@ export async function getMyProfile(userId) {
 export async function getMyTrader(userId) {
   const { data, error } = await supabase
     .from('traders')
-    .select('profile_id, trader_display_name, trader_avatar_url, trader_progress(level, balance_usd, level_ref_balance, r_since_level, trades_since_level, max_drawdown_usd, max_drawdown_pct, updated_at)')
+    .select('profile_id, username, trader_display_name, trader_avatar_url, trader_progress(level, balance_usd, level_ref_balance, r_since_level, trades_since_level, max_drawdown_usd, max_drawdown_pct, updated_at)')
     .eq('profile_id', userId)
     .maybeSingle();
   if (error) throw error;
@@ -80,9 +80,11 @@ export async function setupTraderIdentity(username, displayName) {
 
 // ---------------------------------------------------------------- sinyal ---
 function signalSelect() {
-  // Embed username (profiles) supaya kartu sinyal publik bisa tampil
-  // @username tanpa menunggu S.traders dimuat (ronde 5).
-  return '*, traders(trader_display_name, trader_progress(level, balance_usd), profiles!traders_profile_id_fkey(username))';
+  // Embed username TRADER (traders.username, ronde 6b) supaya kartu sinyal
+  // publik bisa tampil @username tanpa menunggu S.traders dimuat (ronde 5).
+  // Username follower (profiles.username) TIDAK diambil di sini — tidak
+  // dipakai permukaan trader mana pun.
+  return '*, traders(username, trader_display_name, trader_progress(level, balance_usd))';
 }
 
 export async function listPublicSignals(limit = 50) {
@@ -157,7 +159,7 @@ export async function cancelSignal(id) {
 export async function listTraders() {
   const { data, error } = await supabase
     .from('traders')
-    .select('profile_id, trader_display_name, trader_avatar_url, subscription_price_usd, created_at, trader_progress(level, balance_usd, r_since_level, trades_since_level), profiles!traders_profile_id_fkey(username)')
+    .select('profile_id, username, trader_display_name, trader_avatar_url, subscription_price_usd, created_at, trader_progress(level, balance_usd, r_since_level, trades_since_level)')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data || [];
@@ -208,7 +210,7 @@ export async function listAllSignals(limit = 500) {
 export async function listMyFollows(userId) {
   const { data, error } = await supabase
     .from('follows')
-    .select('trader_id, created_at, traders!follows_trader_id_fkey(trader_display_name, trader_avatar_url, trader_progress(level, balance_usd), profiles!traders_profile_id_fkey(username))')
+    .select('trader_id, created_at, traders!follows_trader_id_fkey(username, trader_display_name, trader_avatar_url, trader_progress(level, balance_usd))')
     .eq('follower_id', userId)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -218,7 +220,7 @@ export async function listMyFollows(userId) {
 export async function listMyCopies(userId) {
   const { data, error } = await supabase
     .from('copies')
-    .select('id, signal_id, lot_size, status, created_at, signals!copies_signal_id_fkey(id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, status, created_at, closed_at, close_price, profit_usd, profit_pips, r_value, traders(trader_display_name, profiles!traders_profile_id_fkey(username)))')
+    .select('id, signal_id, lot_size, status, created_at, signals!copies_signal_id_fkey(id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, status, created_at, closed_at, close_price, profit_usd, profit_pips, r_value, traders(username, trader_display_name))')
     .eq('follower_id', userId)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -228,7 +230,7 @@ export async function listMyCopies(userId) {
 export async function listMySubscriptions(userId) {
   const { data, error } = await supabase
     .from('subscriptions')
-    .select('id, trader_id, price_usd, status, started_at, ends_at, traders!subscriptions_trader_id_fkey(trader_display_name, profiles!traders_profile_id_fkey(username))')
+    .select('id, trader_id, price_usd, status, started_at, ends_at, traders!subscriptions_trader_id_fkey(username, trader_display_name)')
     .eq('follower_id', userId)
     .order('created_at', { ascending: false });
   if (error) throw error;
