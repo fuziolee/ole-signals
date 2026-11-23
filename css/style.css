@@ -279,9 +279,174 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
 @media (max-width: 760px) {
   .roadmap ul { grid-template-columns: 1fr; }
   .gloss-grid { grid-template-columns: 1fr; }
+  .pstats { grid-template-columns: repeat(2, 1fr); }
+  .search-grid { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 560px) {
   .sig-levels { grid-template-columns: repeat(3, 1fr); }
   .overlay { padding: 24px 10px; }
+  .search-grid { grid-template-columns: 1fr; }
+  .board-stats { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ---- ronde penyelarasan struktur (port prototipe; hanya var yang ada) ---- */
+
+/* Lonceng notifikasi di header */
+.app-header { position: relative; }
+.notif-wrap { margin-left: auto; position: relative; display: flex; align-items: center; }
+.bellbtn {
+  appearance: none; background: var(--panel); border: 1px solid var(--line);
+  color: var(--ink); border-radius: 999px; width: 40px; height: 40px;
+  display: grid; place-items: center; cursor: pointer; position: relative; font-size: 17px;
+}
+.bellbadge {
+  position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px;
+  border-radius: 999px; background: var(--sell); color: #fff;
+  font-size: 11px; font-weight: 800; display: grid; place-items: center; padding: 0 4px;
+}
+.notif-panel {
+  position: absolute; right: 0; top: 48px; z-index: 50; width: min(92vw, 360px);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 12px; max-height: 70vh; overflow-y: auto;
+}
+.notif-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.notif-head h3 { margin: 0; font-size: 15px; }
+.notif-item { border-top: 1px solid var(--line); padding: 10px 2px; cursor: pointer; }
+.notif-item:first-of-type { border-top: 0; }
+.notif-item.unread { font-weight: 600; }
+.notif-item .nt { font-size: 13.5px; }
+.notif-item .nm { font-size: 12.5px; color: var(--muted); }
+.notif-item .ntime { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.notif-foot { font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+/* Filter feed Beranda */
+.feed-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 14px; align-items: center; }
+.fchip {
+  appearance: none; border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink); border-radius: 999px; padding: 7px 13px;
+  font-weight: 600; font-size: 13px; cursor: pointer; min-height: 36px;
+}
+.fchip[aria-pressed="true"] { background: var(--teal); color: var(--teal-ink); border-color: var(--teal); }
+
+/* Avatar (warna deterministik dari id — palet prototipe) */
+.avatar { border-radius: 50%; display: inline-grid; place-items: center; font-weight: 800; color: #fff; flex: none; }
+.avatar-sm { width: 28px; height: 28px; font-size: 13px; }
+.avatar-md { width: 44px; height: 44px; font-size: 19px; }
+
+/* Kartu sinyal: baris avatar + fakta + progres AKTIF */
+.sig-top { display: flex; gap: 9px; align-items: center; margin-top: 8px; }
+.sig-top .who { min-width: 0; }
+.sig-top .who .nm { font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sig-top .who .mt { font-size: 12px; color: var(--muted); }
+.sig-facts { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+.sig-facts b { color: var(--ink); font-weight: 700; }
+.sig-prog { margin-top: 12px; }
+.sig-prog .ends { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.pips-pos { color: var(--buy); }
+.pips-neg { color: var(--sell); }
+.note { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+
+/* Statistik: grid + grafik + tabel */
+.pstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 4px 0 12px; }
+.stat-cell { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.stat-cell .num { font-size: 16px; font-weight: 800; }
+.stat-cell .lbl { font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+.chart-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 12px; }
+.chart-card h3 { font-size: 15.5px; margin: 0 0 4px; }
+.chart-card .sub { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+.board-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.board { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.board th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 7px 9px; border-bottom: 1px solid var(--line); font-weight: 600; white-space: nowrap; }
+table.board td { padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+table.board tbody tr:last-child td { border-bottom: none; }
+table.board td.num, table.board th.num { text-align: right; }
+.estbadge { display: inline-block; font-size: 10.5px; font-weight: 700; background: var(--panel-2); color: var(--muted); border-radius: 999px; padding: 2px 8px; margin-left: 6px; vertical-align: middle; }
+
+/* Jurnal (baris riwayat ringkas) */
+.journal-scroll { max-height: 420px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.journal-scroll.tall { max-height: 560px; }
+.hist-row {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 12px; margin-bottom: 8px; font-size: 13px;
+}
+.hist-row .p { font-weight: 800; }
+.hist-row .res { margin-left: auto; font-weight: 700; }
+
+/* Subcard + baris menu (Profil / Pengaturan) */
+.subcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 6px 16px; margin-bottom: 12px; }
+.subcard h3 { font-size: 15.5px; margin: 10px 0 6px; }
+.subcard p { color: var(--muted); font-size: 13.5px; margin: 0 0 10px; }
+.menurow {
+  appearance: none; background: none; border: 0; width: 100%;
+  display: flex; align-items: center; gap: 10px; padding: 13px 0;
+  cursor: pointer; color: var(--ink); text-align: left; font-size: 14.5px; font-weight: 600;
+}
+.menurow + .menurow { border-top: 1px solid var(--line); }
+.menurow .grow { flex: 1; min-width: 0; }
+.menurow .t { display: block; }
+.menurow .d { display: block; font-size: 12.5px; color: var(--muted); font-weight: 400; margin-top: 1px; }
+.menurow .marrow { color: var(--muted); font-weight: 700; }
+.menurow.danger { color: var(--sell); }
+.menurow.danger .d { color: var(--sell); opacity: .75; }
+
+/* Ganti peran di Ruang Kerja + subtab */
+.role-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 14px; }
+.role-toggle button {
+  border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+  border-radius: 12px; padding: 10px; font-weight: 700; cursor: pointer; min-height: 48px;
+}
+.role-toggle button[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--teal-ink); }
+.subtabs { display: flex; gap: 8px; margin: 4px 0 14px; flex-wrap: wrap; }
+.subtab {
+  appearance: none; border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink); border-radius: 999px; padding: 7px 14px;
+  font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 38px;
+}
+.subtab[aria-selected="true"] { background: var(--teal); color: var(--teal-ink); border-color: var(--teal); }
+
+/* Chip status (KYC, syarat level) */
+.stchip { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--panel-2); color: var(--muted); }
+.stchip.ok { background: var(--buy-bg); color: var(--buy); }
+.stchip.no { background: var(--sell-bg); color: var(--sell); }
+.kyc-card { margin-bottom: 12px; }
+.kyc-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+
+/* Lencana Demo + Terverifikasi di kartu */
+.pill.demo { background: var(--panel-2); color: var(--muted); }
+
+/* Kartu peringkat (tab Peringkat) */
+.board-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 12px; cursor: pointer; }
+.board-top { display: flex; gap: 10px; align-items: center; }
+.board-rank { font-size: 22px; font-weight: 800; color: var(--muted); min-width: 34px; text-align: center; }
+.board-rank.top { color: var(--gold); }
+.board-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.board-stats .bs { background: var(--panel-2); border-radius: 10px; padding: 8px 10px; }
+.board-stats .bs b { display: block; font-size: 14px; }
+.board-stats .bs small { font-size: 11px; color: var(--muted); }
+
+/* Grid filter Cari */
+.search-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 4px 0 12px; }
+.search-grid .field { margin-bottom: 0; }
+.search-actions { display: flex; gap: 8px; margin: 0 0 14px; flex-wrap: wrap; }
+.search-actions .btn.primary { width: auto; min-width: 140px; }
+
+/* Kartu bagikan (detail sinyal) */
+.share-card { background: var(--panel-2); border-radius: 12px; padding: 12px; margin-top: 14px; }
+.share-card h3 { font-size: 14px; margin: 0 0 8px; }
+.share-id { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; font-weight: 700; }
+
+/* Segmented control (Tampilan / Bahasa) */
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg button {
+  appearance: none; border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink); border-radius: 999px; padding: 8px 14px;
+  font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 40px;
+}
+.seg button[aria-pressed="true"] { background: var(--teal); color: var(--teal-ink); border-color: var(--teal); }
+.settings-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--teal); cursor: pointer; }
+.avatar-edit { margin-top: 8px; }
+.faq-item { margin-bottom: 12px; }
+.faq-item b { display: block; font-size: 14.5px; margin-bottom: 2px; }
+.faq-item span { color: var(--muted); font-size: 13.5px; }
