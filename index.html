@@ -17,6 +17,10 @@
     <header class="app-header">
       <div class="logo">OLE <em>Signals</em></div>
       <div class="tagline" data-i18n="appTagline"></div>
+      <div class="notif-wrap">
+        <button class="bellbtn" id="notif-bell" type="button" aria-label="Notifikasi">🔔<span class="bellbadge" id="notif-badge" hidden>0</span></button>
+        <div class="notif-panel" id="notif-panel" hidden></div>
+      </div>
     </header>
 
     <main>
@@ -44,6 +48,7 @@
           <div class="spacer"></div>
           <button class="btn ghost" id="btn-refresh-home" type="button">↻ <span data-i18n="refresh"></span></button>
         </div>
+        <div id="home-filters"></div>
         <div id="home-list"></div>
         <section class="roadmap">
           <h2 data-i18n="roadTitle"></h2>
@@ -82,6 +87,25 @@
       <section class="view" id="view-profile" aria-label="Profil">
         <h1 data-i18n="profileTitle"></h1>
         <div id="profile-body"></div>
+      </section>
+
+      <!-- Pengaturan (sub-halaman Profil) -->
+      <section class="view" id="view-settings" aria-label="Pengaturan">
+        <div class="row">
+          <button class="btn ghost" id="btn-settings-back" type="button">← <span data-i18n="back"></span></button>
+        </div>
+        <h1 data-i18n="settings"></h1>
+        <div id="settings-body"></div>
+      </section>
+
+      <!-- Pusat Bantuan & Keamanan (sub-halaman Profil) -->
+      <section class="view" id="view-help" aria-label="Bantuan">
+        <div class="row">
+          <button class="btn ghost" id="btn-help-back" type="button">← <span data-i18n="back"></span></button>
+        </div>
+        <h1 data-i18n="menuHelp"></h1>
+        <p class="sub" data-i18n="helpSub"></p>
+        <div id="help-body"></div>
       </section>
 
       <!-- Panduan -->
