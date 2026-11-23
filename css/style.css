@@ -63,12 +63,12 @@ button, [role="button"], select, input:not([type="checkbox"], [type="radio"]) { 
 .tagline { font-size: 12.5px; color: var(--muted); }
 .view { display: none; padding-top: 16px; }
 .view.active { display: block; }
-h1 { font-size: 19px; margin: 2px 0 4px; }
+h1 { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
 .sub { color: var(--muted); font-size: 13.5px; margin: 0 0 14px; }
 
 /* ---- hero Beranda (port prototipe) ---- */
 .hero { padding: 20px 0 4px; }
-.hero h1 { font-size: clamp(22px, 4vw, 32px); line-height: 1.15; margin: 0 0 8px; font-weight: 800; letter-spacing: -.01em; max-width: 24ch; }
+.hero h1 { font-size: 23px; line-height: 1.15; margin: 0 0 8px; font-weight: 800; letter-spacing: -.01em; max-width: 24ch; }
 .hero p { margin: 0; color: var(--muted); font-size: 15px; max-width: 62ch; }
 .lead-sm { font-size: 14.5px; color: var(--muted); margin: 12px 0 0; max-width: 66ch; }
 .flow { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
@@ -167,7 +167,7 @@ h1 { font-size: 19px; margin: 2px 0 4px; }
 .pill.green { background: var(--buy-bg); color: var(--buy); }
 .pill.red { background: var(--sell-bg); color: var(--sell); }
 .sig-trader { font-size: 13px; color: var(--muted); margin-top: 6px; }
-.sig-levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.sig-levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
 .sig-levels .lv { background: var(--panel-2); border-radius: 12px; padding: 8px 10px; }
 .sig-levels .lv small { display: block; font-size: 11.5px; color: var(--muted); }
 .sig-levels .lv b { font-size: 14.5px; }
@@ -193,10 +193,10 @@ h1 { font-size: 19px; margin: 2px 0 4px; }
   background: var(--panel); border-top: 1px solid var(--line);
   display: flex; justify-content: center; padding-bottom: env(safe-area-inset-bottom);
 }
-.bottom-nav nav { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; max-width: 1060px; }
+.bottom-nav nav { display: grid; grid-template-columns: repeat(6, 1fr); width: 100%; }
 .bottom-nav button {
   appearance: none; background: none; border: 0; color: var(--muted);
-  font-size: 11.5px; font-weight: 600; padding: 10px 4px 12px; cursor: pointer;
+  font-size: 11.5px; font-weight: 600; padding: 8px 4px 9px; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
 }
 .bottom-nav button .ic { font-size: 19px; line-height: 1; }
@@ -280,11 +280,12 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
   .roadmap ul { grid-template-columns: 1fr; }
   .gloss-grid { grid-template-columns: 1fr; }
   .pstats { grid-template-columns: repeat(2, 1fr); }
+  .traders { grid-template-columns: 1fr; }
   .search-grid { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 560px) {
-  .sig-levels { grid-template-columns: repeat(3, 1fr); }
+  .sig-levels { grid-template-columns: repeat(2, 1fr); }
   .overlay { padding: 24px 10px; }
   .search-grid { grid-template-columns: 1fr; }
   .board-stats { grid-template-columns: repeat(2, 1fr); }
@@ -351,7 +352,7 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
 .pstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 4px 0 12px; }
 .stat-cell { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .stat-cell .num { font-size: 16px; font-weight: 800; }
-.stat-cell .lbl { font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+.stat-cell .lbl { font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.35; text-transform: uppercase; letter-spacing: .06em; }
 .chart-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 12px; }
 .chart-card h3 { font-size: 15.5px; margin: 0 0 4px; }
 .chart-card .sub { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
@@ -424,7 +425,7 @@ table.board td.num, table.board th.num { text-align: right; }
 .board-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
 .board-stats .bs { background: var(--panel-2); border-radius: 10px; padding: 8px 10px; }
 .board-stats .bs b { display: block; font-size: 14px; }
-.board-stats .bs small { font-size: 11px; color: var(--muted); }
+.board-stats .bs small { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 
 /* Grid filter Cari */
 .search-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 4px 0 12px; }
@@ -463,3 +464,112 @@ table.board td.num, table.board th.num { text-align: right; }
 /* Daftar aturan Peringkat (seperti prototipe): tiga butir di bawah pengantar. */
 .board-rules { margin: 10px 0 0; padding-left: 20px; font-size: 13.5px; color: var(--muted); }
 .board-rules li { margin: 4px 0; }
+
+/* ---- ronde 2: penyelarasan struktur (port prototipe; :root tidak diubah) ---- */
+
+/* Tombol kembali di atas judul (Pengaturan, sub-halaman, profil trader, Panduan) */
+.backbtn { margin: 18px 0 4px; }
+
+/* Strip pink peringatan risiko (profil trader, form posting, detail sinyal) */
+.risk-note { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.5; color: var(--ink); background: var(--sell-bg); border-radius: 14px; padding: 9px 12px; margin-top: 10px; }
+.risk-note b { color: var(--sell); }
+
+/* Kotak kuning kunci PENDING di form posting */
+.locknote { display: flex; gap: 8px; align-items: flex-start; background: var(--gold-bg); color: var(--ink); border-radius: 14px; padding: 10px 12px; font-size: 13.5px; margin: 12px 0; }
+.locknote .mini-list { margin: 6px 0 0; padding-left: 18px; }
+.locknote .mini-list li { margin: 2px 0; }
+.locknote .guidelink { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; margin-top: 2px; padding: 0; }
+
+/* Kotak hitung risiko di bawah form posting */
+.calc { background: var(--panel-2); border-radius: 12px; padding: 10px 12px; font-size: 13px; margin: 12px 0; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.calc .sep { color: var(--muted); }
+
+/* Kartu trader di Cari (grid 3 kolom) */
+.traders { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.tcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; }
+.tcard .head { display: flex; gap: 10px; align-items: center; }
+.tcard .avatar { width: 40px; height: 40px; font-size: 14px; }
+.tcard .n { font-weight: 700; font-size: 15px; }
+.tcard .rank-num { font-size: 18px; font-weight: 800; color: var(--muted); min-width: 22px; text-align: center; flex: none; }
+.tcard .rank-num.top { color: var(--teal); }
+.tcard .mini { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.tcard .mini div { background: var(--panel-2); border-radius: 12px; padding: 8px 4px; }
+.tcard .mini .v { font-weight: 700; font-size: 14px; }
+.tcard .mini .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.tcard .meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tcard .meta .fol { font-size: 12.5px; color: var(--muted); margin-left: auto; white-space: nowrap; }
+.tcard .actions { display: flex; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+.tcard .actions .btn { flex: 1; justify-content: center; }
+
+/* Chip filter profil / Ruang Kerja (Semua / Pending / Aktif + Riwayat di kanan) */
+.pfilters { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
+.chip { appearance: none; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; min-height: 36px; }
+.chip[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--teal-ink); }
+.chip.hist-tab { margin-left: auto; }
+
+/* Baris pair di detail + angka hasil di kartu tertutup */
+.sig-main { display: flex; align-items: baseline; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.sig-result { margin-left: auto; font-size: 15px; font-weight: 800; }
+.sig-result span { font-size: 13px; font-weight: 600; }
+.sig-result.win { color: var(--buy); }
+.sig-result.loss { color: var(--sell); }
+.pend-note { margin-top: 12px; font-size: 13px; color: var(--muted); }
+
+/* Grid kotak detail sinyal (2 kolom) */
+.detail-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.detail-rows .lv { background: var(--panel-2); border-radius: 12px; padding: 8px 10px; }
+.detail-rows .lv .k { display: block; font-size: 11.5px; color: var(--muted); }
+.detail-rows .lv .v { display: block; font-size: 14.5px; font-weight: 700; }
+.det-lock-note { font-size: 12.5px; color: var(--muted); }
+.page-head h2 { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
+.page-head .sub { margin: 0 0 14px; }
+.detail-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.detail-actions .btn { flex: 1 1 140px; justify-content: center; }
+
+/* Tombol ikon bulat (bagikan, kamera) */
+.iconbtn { appearance: none; background: var(--panel); border: 1px solid var(--line); color: var(--ink); border-radius: 999px; width: 40px; height: 40px; display: inline-grid; place-items: center; cursor: pointer; font-size: 16px; flex: none; }
+
+/* Kepala profil (akun + trader): avatar kiri, nama kanan, aksi di kanan */
+.profile-head { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 10px 0 12px; text-align: left; }
+.profile-head .avatar-lg { width: 64px; height: 64px; font-size: 22px; margin: 0; flex: none; }
+.profile-head h2 { margin: 0; font-size: 24px; font-weight: 800; }
+.profile-head .sub { color: var(--muted); font-size: 14px; }
+.profile-head .followbox { margin-left: auto; text-align: right; }
+.profile-head .followers { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.profile-head .profile-id { flex: 1; min-width: 0; }
+.profile-name { font-size: 20px; font-weight: 800; }
+.prof-info { display: flex; gap: 4px 20px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); margin: 0 0 12px; }
+.prof-info b { color: var(--ink); }
+
+/* Pengantar Peringkat (lebar seperti prototipe) */
+.board-intro { margin: 18px 0 12px; }
+.board-intro .lead-sm { margin-top: 0; max-width: 620px; }
+
+/* Baris kedua jurnal (timeline Diposting / Entry / TP-SL) */
+.hist-row .hist-detail { flex-basis: 100%; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.hist-row .hist-detail b { color: var(--ink); font-weight: 600; }
+
+/* Detail akun: label di atas nilai */
+.kv-rows .kv-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.kv-rows .kv-row:last-child { border-bottom: 0; }
+.kv-rows .k { font-size: 13px; font-weight: 700; }
+.kv-rows .v { font-size: 13.5px; color: var(--muted); margin-top: 1px; }
+.detail-menu { border-top: 1px solid var(--line); margin-top: 6px; }
+
+/* Tombol Cari (bar teal full-width) + Reset */
+.search-actions .btn-go { flex: 1 1 220px; justify-content: center; min-height: 48px; font-size: 15.5px; }
+.search-actions .btn-reset { justify-content: center; min-height: 48px; }
+
+/* Filter tanggal (Riwayat): tombol + popup preset + rentang */
+.df-wrap { position: relative; }
+.df-label { font-size: 12.5px; color: var(--muted); }
+.date-filter-btn { appearance: none; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 7px 14px; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 38px; }
+.df-popup { position: absolute; left: 0; top: calc(100% + 6px); z-index: 50; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 12px; width: min(92vw, 340px); }
+.df-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.df-preset { appearance: none; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: 12.5px; cursor: pointer; min-height: 34px; }
+.df-preset.on { background: var(--teal); color: var(--teal-ink); border-color: var(--teal); }
+.df-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.df-dates label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.df-dates input { width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); padding: 8px 10px; font-size: 13px; }
+.df-foot { display: flex; gap: 8px; }
+.df-foot .btn { flex: 1; justify-content: center; min-height: 40px; }
