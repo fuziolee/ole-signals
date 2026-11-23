@@ -1,7 +1,9 @@
 -- ============================================================================
 -- OLE Signals — 04_verify_tests.sql
--- Tes verifikasi T-01..T-07, T-09, T-10 + RLS terhadap database live.
+-- Tes verifikasi T-01..T-07, T-09..T-12 + RLS terhadap database live.
 -- Jalankan di Supabase SQL Editor (project ole-signals) SETELAH 03_functions.
+-- T-11/T-12 (23 Nov 2026): validasi lot (§12 bug #4) dan kode 'pair'
+-- untuk pair tidak dikenal (§12 bug #5).
 --
 -- User uji A/B dibuat langsung di auth.users (akun uji, dihapus di
 -- 05_verify_cleanup.sql). Autentikasi ditiru lewat request.jwt.claims
@@ -273,6 +275,63 @@ begin
     'audit create='||n1||' update='||n2||' cancel='||n3);
 exception when others then
   perform pg_temp.check('T-10', false, 'exception: ' || sqlerrm);
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- T-11 (§12 bug #4): lot 0, negatif, dan NaN ditolak create DAN update;
+-- tidak ada sinyal yang tersimpan dari percobaan itu.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  r0 jsonb; rn jsonb; rneg jsonb; rnan jsonb; ru jsonb;
+  v_id uuid; n_before int; n_after int;
+begin
+  perform set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated","aud":"authenticated"}', false);
+  select count(*) into n_before from public.signals where trader_id='11111111-1111-1111-1111-111111111111';
+  r0   := public.create_signal('XAUUSD','BUY',3000,2990,3020,0,'t11-lot0');
+  rneg := public.create_signal('XAUUSD','BUY',3000,2990,3020,-0.5,'t11-lotneg');
+  rnan := public.create_signal('XAUUSD','BUY',3000,2990,3020,'NaN'::numeric,'t11-lotnan');
+  -- Update: buat satu PENDING GBPUSD dulu, lalu coba ubah lot-nya jadi 0.
+  ru := public.create_signal('GBPUSD','BUY',1.2700,1.2680,1.2740,0.05,'t11-base');
+  select id into v_id from public.signals where trader_id='11111111-1111-1111-1111-111111111111' and idempotency_key='t11-base';
+  if v_id is not null then
+    ru := public.update_signal(v_id,'GBPUSD','BUY',1.2700,1.2680,1.2740,0,1);
+    perform public.cancel_signal(v_id);
+  end if;
+  select count(*) into n_after from public.signals where trader_id='11111111-1111-1111-1111-111111111111';
+  -- n_after = n_before + 1 (sinyal dasar, kini CANCELLED) — tiga create
+  -- yang ditolak tidak menambah baris.
+  perform pg_temp.check('T-11',
+    (r0->>'code')='invalid' and (rneg->>'code')='invalid' and (rnan->>'code')='invalid'
+    and (ru->>'code')='invalid' and n_after = n_before + 1,
+    'lot0='||coalesce(r0->>'code','?')||' lotneg='||coalesce(rneg->>'code','?')
+    ||' lotNaN='||coalesce(rnan->>'code','?')||' updLot0='||coalesce(ru->>'code','?')
+    ||' rows '||n_before||'->'||n_after);
+exception when others then
+  perform pg_temp.check('T-11', false, 'exception: ' || sqlerrm);
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- T-12 (§12 bug #5): pair tidak dikenal mengembalikan kode 'pair'
+-- (bukan 'invalid') pada create DAN update.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  rc jsonb; ru jsonb; v_id uuid;
+begin
+  perform set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated","aud":"authenticated"}', false);
+  rc := public.create_signal('XXXYYY','BUY',3000,2990,3020,0.01,'t12-badpair');
+  perform public.create_signal('GBPUSD','BUY',1.2700,1.2680,1.2740,0.05,'t12-base');
+  select id into v_id from public.signals where trader_id='11111111-1111-1111-1111-111111111111' and idempotency_key='t12-base';
+  if v_id is not null then
+    ru := public.update_signal(v_id,'XXXYYY','BUY',1.2700,1.2680,1.2740,0.05,1);
+    perform public.cancel_signal(v_id);
+  end if;
+  perform pg_temp.check('T-12',
+    (rc->>'code')='pair' and (ru->>'code')='pair',
+    'create='||coalesce(rc->>'code','?')||' update='||coalesce(ru->>'code','?'));
+exception when others then
+  perform pg_temp.check('T-12', false, 'exception: ' || sqlerrm);
 end $$;
 
 -- ---------------------------------------------------------------------------

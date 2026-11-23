@@ -366,19 +366,28 @@ begin
   end if;
 
   -- 4. Validasi field (urutan mengikuti prototipe).
+  --    §12 bug #5: pair tidak dikenal mengembalikan kode 'pair' (bukan
+  --    'invalid' generik) supaya UI bisa menampilkan pesan yang tepat.
   if not public.is_allowed_pair(p_pair) then
-    return public.api_error('invalid', 'Pair tidak dikenal: ' || p_pair || '.');
+    return public.api_error('pair', 'Pair tidak dikenal: ' || p_pair || '.');
   end if;
   if p_direction not in ('BUY', 'SELL') then
     return public.api_error('invalid', 'Arah harus BUY atau SELL.');
   end if;
-  if p_entry is null or p_stop_loss is null or p_take_profit is null
+  --    §12 bug #4: NaN lolos dari perbandingan `<= 0` di Postgres (NaN
+  --    diurutkan di atas semua angka), jadi uji juga `x <> x` — hanya
+  --    NaN yang tidak sama dengan dirinya sendiri. (Lewat API REST JSON
+  --    NaN tidak bisa sampai ke sini — JSON mengubahnya jadi null —
+  --    tapi pertahanan ini menutup jalur SQL langsung.)
+  if p_entry is null or p_entry <> p_entry
+     or p_stop_loss is null or p_stop_loss <> p_stop_loss
+     or p_take_profit is null or p_take_profit <> p_take_profit
      or p_entry <= 0 or p_stop_loss <= 0 or p_take_profit <= 0 then
     return public.api_error(
       'invalid', 'Entry, stop loss, dan take profit harus lebih dari 0.'
     );
   end if;
-  if p_lot is null or p_lot <= 0 then
+  if p_lot is null or p_lot <> p_lot or p_lot <= 0 then
     return public.api_error('invalid', 'Lot harus lebih dari 0.');
   end if;
   if (p_direction = 'BUY'
@@ -556,19 +565,23 @@ begin
   end if;
 
   -- Validasi field (sama seperti saat membuat).
+  -- §12 bug #5: pair tidak dikenal -> kode 'pair'.
   if not public.is_allowed_pair(p_pair) then
-    return public.api_error('invalid', 'Pair tidak dikenal: ' || p_pair || '.');
+    return public.api_error('pair', 'Pair tidak dikenal: ' || p_pair || '.');
   end if;
   if p_direction not in ('BUY', 'SELL') then
     return public.api_error('invalid', 'Arah harus BUY atau SELL.');
   end if;
-  if p_entry is null or p_stop_loss is null or p_take_profit is null
+  -- §12 bug #4: tolak NaN (uji `x <> x`) — lihat create_signal.
+  if p_entry is null or p_entry <> p_entry
+     or p_stop_loss is null or p_stop_loss <> p_stop_loss
+     or p_take_profit is null or p_take_profit <> p_take_profit
      or p_entry <= 0 or p_stop_loss <= 0 or p_take_profit <= 0 then
     return public.api_error(
       'invalid', 'Entry, stop loss, dan take profit harus lebih dari 0.'
     );
   end if;
-  if p_lot is null or p_lot <= 0 then
+  if p_lot is null or p_lot <> p_lot or p_lot <= 0 then
     return public.api_error('invalid', 'Lot harus lebih dari 0.');
   end if;
   if (p_direction = 'BUY'

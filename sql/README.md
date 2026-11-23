@@ -15,6 +15,14 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
 | `01_schema.sql` | Semua tabel (§4) + `audit_log` + `copies` (§12 bug #1) + kolom KYC di `profiles` (§13). Tanpa seed. |
 | `02_rls.sql` | RLS aktif di SEMUA tabel + kebijakan + GRANT. |
 | `03_functions.sql` | Fungsi RPC `SECURITY DEFINER`: `create_signal`, `update_signal`, `cancel_signal`, `setup_trader_identity`, `get_my_kyc_status` + trigger (`handle_new_user`, `ensure_trader_progress`). |
+| `04_verify_tests.sql` | Tes T-01..T-12 + RLS (dijalankan di SQL Editor; T-08 dari dua tab). |
+| `05_verify_cleanup.sql` | Hapus akun uji A/B + datanya setelah tes verifikasi. |
+| `06_diagnosa_R5.sql` | Diagnosa ronde 5 (arsip). |
+| `07_smoke_cleanup.sql` | Hapus akun smoke test + datanya. |
+| `08_storage_avatars.sql` | Bucket Storage `avatars` + policy (baca publik, tulis hanya folder sendiri). |
+| `09_demo_traders_migration.sql` | Kolom `traders.is_demo` (penanda trader demo berlabel). |
+| `10_demo_traders_insert.sql` | 3 trader demo (Alpha/Beta/Gamma) + 21 sinyal demo. Cari akun demo BERDASARKAN EMAIL — buat dulu 3 akun auth via dashboard (lihat header file). |
+| `11_demo_traders_delete.sql` | Hapus SEMUA data demo (trader, progress, sinyal, follows/subs/copies/notifikasi, profil, auth) tanpa menyentuh data lain. |
 
 ## Cara pakai (Supabase SQL Editor)
 
@@ -39,7 +47,7 @@ supabase.rpc('cancel_signal', { p_signal_id })
 
 Jawaban selalu JSON: `{ok, code, message, signal?}`. Kode galat:
 `pairlimit` / `notpending` / `conflict` → HTTP 409;
-`rr` / `risk` / `invalid` / `needusername` → HTTP 422.
+`rr` / `risk` / `invalid` / `needusername` / `pair` → HTTP 422.
 (`cooldown` dicadangkan untuk fase pembayaran.)
 
 ## Cara verifikasi (cek manual — petakan ke tes kriteria penerimaan)
