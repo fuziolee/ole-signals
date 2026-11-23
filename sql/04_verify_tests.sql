@@ -506,6 +506,97 @@ exception when others then
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- RONDE 7 (D05): username follower + nama profil + cooldown 1×/bulan.
+-- T-13: check_username — format/banned/reserved/ok.
+-- T-14: taken follower (per-jenis: username trader orang lain BOLEH
+--        dipakai sebagai username follower, dan sebaliknya).
+-- T-15: set_follower_username ok, lalu perubahan kedua -> cooldown.
+-- T-16: set_profile_name ok -> cooldown; akun demo dibebaskan.
+-- T-17: setup_trader_identity (redefinisi file 13) -> cooldown perubahan
+--        kedua; akun demo dibebaskan.
+-- CATATAN: blok ini memakai user uji A (1111...) yang setelah R6B punya
+-- username follower 'pengikut_a' dan username trader 'trader_a'.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_r jsonb;
+  v_code text;
+begin
+  perform set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated","aud":"authenticated"}', false);
+
+  -- T-13a: terlalu pendek -> format.
+  v_r := public.check_username('follower', 'ab');
+  perform pg_temp.check('T-13a', (v_r->>'code')='format', 'check ab -> '||coalesce(v_r->>'code','?'));
+  -- T-13b: kata terlarang -> banned.
+  v_r := public.check_username('follower', 'kontol99');
+  perform pg_temp.check('T-13b', (v_r->>'code')='banned', 'check kontol99 -> '||coalesce(v_r->>'code','?'));
+  -- T-13c: leet admin -> reserved.
+  v_r := public.check_username('follower', '4dm1n_fx');
+  perform pg_temp.check('T-13c', (v_r->>'code')='reserved', 'check 4dm1n_fx -> '||coalesce(v_r->>'code','?'));
+  -- T-13d: nama dilindungi 01 ('olesignals') -> reserved.
+  v_r := public.check_username('follower', 'olesignals');
+  perform pg_temp.check('T-13d', (v_r->>'code')='reserved', 'check olesignals -> '||coalesce(v_r->>'code','?'));
+  -- T-13e: bersih -> ok.
+  v_r := public.check_username('follower', 'pengikut_x');
+  perform pg_temp.check('T-13e', (v_r->>'ok')='true' and (v_r->>'value')='pengikut_x', 'check pengikut_x -> '||v_r::text);
+
+  -- T-14a: B tetapkan username follower 'pengikut_b'.
+  perform set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated","aud":"authenticated"}', false);
+  v_r := public.set_follower_username('pengikut_b');
+  perform pg_temp.check('T-14a', (v_r->>'ok')='true', 'B set pengikut_b -> '||v_r::text);
+  -- T-14b: A cek 'pengikut_b' -> taken.
+  perform set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated","aud":"authenticated"}', false);
+  v_r := public.check_username('follower', 'pengikut_b');
+  perform pg_temp.check('T-14b', (v_r->>'code')='taken', 'A check pengikut_b -> '||coalesce(v_r->>'code','?'));
+  -- T-14c: A set 'pengikut_b' -> taken (dan username A tetap 'pengikut_a').
+  v_r := public.set_follower_username('pengikut_b');
+  perform pg_temp.check('T-14c', (v_r->>'code')='taken', 'A set pengikut_b -> '||coalesce(v_r->>'code','?'));
+  -- T-14d: keunikan per-jenis — string username TRADER B ('pengikut_a',
+  -- R6B-6) BOLEH dipakai sebagai username follower A (A sudah memilikinya).
+  v_r := public.check_username('follower', 'pengikut_a');
+  perform pg_temp.check('T-14d', (v_r->>'ok')='true', 'A check pengikut_a (milik sendiri) -> '||v_r::text);
+
+  -- T-15a: A ubah follower 'pengikut_a' -> 'pengikut_x' (perubahan pertama) -> ok.
+  v_r := public.set_follower_username('pengikut_x');
+  perform pg_temp.check('T-15a', (v_r->>'ok')='true', 'A set pengikut_x -> '||v_r::text);
+  -- T-15b: perubahan kedua langsung -> cooldown.
+  v_r := public.set_follower_username('pengikut_y');
+  perform pg_temp.check('T-15b', (v_r->>'code')='cooldown', 'A set pengikut_y -> '||coalesce(v_r->>'code','?'));
+  -- T-15c: check_username juga melaporkan cooldown.
+  v_r := public.check_username('follower', 'pengikut_y');
+  perform pg_temp.check('T-15c', (v_r->>'code')='cooldown', 'A check pengikut_y -> '||coalesce(v_r->>'code','?'));
+
+  -- T-16a: A ubah nama profil pertama kali -> ok.
+  v_r := public.set_profile_name('Nama Baru A');
+  perform pg_temp.check('T-16a', (v_r->>'ok')='true', 'A set nama -> '||v_r::text);
+  -- T-16b: ubah lagi langsung -> cooldown.
+  v_r := public.set_profile_name('Nama Lain A');
+  perform pg_temp.check('T-16b', (v_r->>'code')='cooldown', 'A set nama lagi -> '||coalesce(v_r->>'code','?'));
+  -- T-16c: akun demo dibebaskan dari cooldown nama.
+  update public.traders set is_demo = true where profile_id = '11111111-1111-1111-1111-111111111111';
+  v_r := public.set_profile_name('Nama Demo A');
+  perform pg_temp.check('T-16c', (v_r->>'ok')='true', 'A (demo) set nama -> '||v_r::text);
+  -- T-16d: demo juga dibebaskan dari cooldown username follower.
+  v_r := public.set_follower_username('pengikut_y');
+  perform pg_temp.check('T-16d', (v_r->>'ok')='true', 'A (demo) set pengikut_y -> '||v_r::text);
+  update public.traders set is_demo = false where profile_id = '11111111-1111-1111-1111-111111111111';
+
+  -- T-17a: A ubah username trader 'trader_a' -> 'trader_a2' (pertama) -> ok.
+  v_r := public.setup_trader_identity('trader_a2', 'Trader A');
+  perform pg_temp.check('T-17a', (v_r->>'ok')='true', 'A trader_a2 -> '||v_r::text);
+  -- T-17b: ubah lagi langsung -> cooldown.
+  v_r := public.setup_trader_identity('trader_a3', 'Trader A');
+  perform pg_temp.check('T-17b', (v_r->>'code')='cooldown', 'A trader_a3 -> '||coalesce(v_r->>'code','?'));
+  -- T-17c: akun demo dibebaskan dari cooldown username trader.
+  update public.traders set is_demo = true where profile_id = '11111111-1111-1111-1111-111111111111';
+  v_r := public.setup_trader_identity('trader_a3', 'Trader A');
+  perform pg_temp.check('T-17c', (v_r->>'ok')='true', 'A (demo) trader_a3 -> '||v_r::text);
+  update public.traders set is_demo = false where profile_id = '11111111-1111-1111-1111-111111111111';
+exception when others then
+  perform pg_temp.check('R7-USERNAME', false, 'exception: ' || sqlerrm);
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- HASIL — baca panel Results: semua baris harus PASS kecuali T-08-SETUP
 -- yang hanya menyiapkan (T-08 sendiri jalan dari dua tab terpisah)
 -- ---------------------------------------------------------------------------

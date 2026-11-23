@@ -15,7 +15,7 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
 | `01_schema.sql` | Semua tabel (§4) + `audit_log` + `copies` (§12 bug #1) + kolom KYC di `profiles` (§13). Tanpa seed. |
 | `02_rls.sql` | RLS aktif di SEMUA tabel + kebijakan + GRANT. |
 | `03_functions.sql` | Fungsi RPC `SECURITY DEFINER`: `create_signal`, `update_signal`, `cancel_signal`, `setup_trader_identity`, `get_my_kyc_status` + trigger (`handle_new_user`, `ensure_trader_progress`). |
-| `04_verify_tests.sql` | Tes T-01..T-12 + RLS (dijalankan di SQL Editor; T-08 dari dua tab). |
+| `04_verify_tests.sql` | Tes T-01..T-12 + RLS (dijalankan di SQL Editor; T-08 dari dua tab) + T-13..T-17 (Ronde 7: username follower/nama/cooldown). |
 | `05_verify_cleanup.sql` | Hapus akun uji A/B + datanya setelah tes verifikasi. |
 | `06_diagnosa_R5.sql` | Diagnosa ronde 5 (arsip). |
 | `07_smoke_cleanup.sql` | Hapus akun smoke test + datanya. |
@@ -24,6 +24,7 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
 | `10_demo_traders_insert.sql` | 3 trader demo (Alpha/Beta/Gamma) + 21 sinyal demo. Cari akun demo BERDASARKAN EMAIL — buat dulu 3 akun auth via dashboard (lihat header file). |
 | `11_demo_traders_delete.sql` | Hapus SEMUA data demo (trader, progress, sinyal, follows/subs/copies/notifikasi, profil, auth) tanpa menyentuh data lain. |
 | `12_traders_username_split.sql` | Ronde 6b: kolom `traders.username` (username trader terpisah dari username follower) + backfill dari `profiles.username` + NOT NULL + format CHECK + unique index + trigger nama dilindungi. **TERAPKAN DULU, baru terapkan ulang `03_functions.sql`, baru deploy frontend baru** (lihat urutan di bawah). |
+| `13_follower_username.sql` | Ronde 7 (D05): kolom cooldown (`profiles.username_changed_at`, `profiles.display_name_changed_at`, `traders.username_changed_at`) + `check_username` / `set_follower_username` / `set_profile_name` (validasi format/banned/reserved/taken + cooldown 1×/bulan server-side, kecuali akun demo) + **redefinisi `setup_trader_identity` dengan cooldown username trader**. Daftar kata terlarang di-port dari prototipe. **TERAPKAN SETELAH 12 (dan setelah 03); bila 03 diterapkan ulang sesudahnya, terapkan ulang 13** — kalau tidak, cooldown trader hilang. |
 
 ## Cara pakai (Supabase SQL Editor)
 
@@ -37,6 +38,14 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
    `03_functions.sql` (versi baru `setup_trader_identity` menulis
    `traders.username`), **baru** deploy frontend baru. Frontend baru yang
    jalan sebelum migrasi 12 akan gagal (kolom `traders.username` belum ada).
+5. **Ronde 7 (migrasi 13):** setelah langkah 4, terapkan
+   `13_follower_username.sql` (kolom cooldown + RPC username follower /
+   nama profil + `setup_trader_identity` ber-cooldown), **baru** deploy
+   frontend Ronde 7. Frontend Ronde 7 yang jalan sebelum migrasi 13 akan
+   gagal di form username (`check_username` / `set_follower_username` /
+   `set_profile_name` belum ada). Perhatian: bila `03_functions.sql`
+   diterapkan ulang kapan pun SETELAH 13, terapkan ulang 13 sesudahnya —
+   03 menimpa `setup_trader_identity` versi ber-cooldown dengan versi lama.
 5. Aktifkan **Email** provider di **Authentication → Providers**
    (email+password saja; Google OAuth TIDAK diaktifkan).
 
@@ -54,7 +63,8 @@ supabase.rpc('cancel_signal', { p_signal_id })
 Jawaban selalu JSON: `{ok, code, message, signal?}`. Kode galat:
 `pairlimit` / `notpending` / `conflict` / `taken` → HTTP 409;
 `rr` / `risk` / `invalid` / `needusername` / `pair` → HTTP 422.
-(`cooldown` dicadangkan untuk fase pembayaran.)
+(`cooldown` dipakai Ronde 7 untuk username/nama 1×/bulan; untuk fase
+pembayaran dicadangkan terpisah.)
 
 ## Cara verifikasi (cek manual — petakan ke tes kriteria penerimaan)
 
