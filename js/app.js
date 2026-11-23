@@ -826,14 +826,41 @@ async function renderProfile() {
   const body = $('#profile-body');
   const p = S.profile || {};
   const username = p.username ? '@' + esc(p.username) : '—';
+  const displayName = p.display_name || p.username || S.user?.email || '—';
+  const initial = (displayName || '?').trim().charAt(0).toUpperCase();
   body.innerHTML = `
+    <div class="profile-head">
+      <div class="avatar-lg" aria-hidden="true">${esc(initial)}</div>
+      <div class="profile-name">${esc(displayName)}</div>
+      <div class="profile-user">${username}</div>
+    </div>
     <div class="card">
-      <h2>${esc(t('accountInfo'))}</h2>
+      <h2>${esc(t('accountDetail'))}</h2>
+      <dl class="kv">
+        <dt>${esc(t('profileName'))}</dt><dd>${esc(p.display_name || '—')}</dd>
+        <dt>${esc(t('username'))}</dt><dd>${username}</dd>
+        <dt>${esc(t('region'))}</dt><dd>Indonesia</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h2>${esc(t('securityTitle'))}</h2>
       <dl class="kv">
         <dt>${esc(t('email'))}</dt><dd>${esc(S.user?.email || '—')}</dd>
-        <dt>${esc(t('username'))}</dt><dd>${username}</dd>
-        <dt>${esc(t('displayName'))}</dt><dd>${esc(p.display_name || '—')}</dd>
       </dl>
+      <form id="pw-form">
+        <div class="field">
+          <label for="pw-new">${esc(t('newPassword'))}</label>
+          <input id="pw-new" type="password" required autocomplete="new-password" minlength="8" />
+          <div class="hint">${esc(t('passwordHint'))}</div>
+        </div>
+        <div class="field">
+          <label for="pw-confirm">${esc(t('passwordConfirm'))}</label>
+          <input id="pw-confirm" type="password" required autocomplete="new-password" />
+          <div class="hint" id="pw-match-hint"></div>
+        </div>
+        <div class="notice err" id="pw-err" hidden></div>
+        <button class="btn primary" type="submit" id="pw-submit">${esc(t('save'))}</button>
+      </form>
     </div>
     <div class="card">
       <h2>${esc(t('settings'))}</h2>
@@ -876,14 +903,101 @@ async function renderProfile() {
     try { await api.signOut(); } catch (e) { /* tetap lanjut */ }
     toast(t('toastSignedOut'));
   });
+  // Ubah kata sandi: aturan sama seperti saat daftar (min 8, angka, kapital).
+  const pwNew = $('#pw-new');
+  const pwCf = $('#pw-confirm');
+  const pwMatchHint = $('#pw-match-hint');
+  const refreshPwHint = () => {
+    pwMatchHint.classList.remove('ok', 'bad');
+    if (!pwCf.value) { pwMatchHint.textContent = ''; return; }
+    if (pwNew.value === pwCf.value) {
+      pwMatchHint.textContent = t('passwordMatch');
+      pwMatchHint.classList.add('ok');
+    } else {
+      pwMatchHint.textContent = t('passwordMismatch');
+      pwMatchHint.classList.add('bad');
+    }
+  };
+  pwNew.addEventListener('input', refreshPwHint);
+  pwCf.addEventListener('input', refreshPwHint);
+  $('#pw-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errBox = $('#pw-err');
+    errBox.hidden = true;
+    const pw = pwNew.value;
+    if (!passwordValid(pw)) { errBox.textContent = t('authErrWeak'); errBox.hidden = false; return; }
+    if (pw !== pwCf.value) { errBox.textContent = t('passwordMismatch'); errBox.hidden = false; return; }
+    const btn = $('#pw-submit');
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = t('loading') + '…';
+    try {
+      await api.updatePassword(pw);
+      toast(t('passwordChanged'));
+      pwNew.value = '';
+      pwCf.value = '';
+      refreshPwHint();
+    } catch (err) {
+      errBox.textContent = authErrorMessage(err);
+      errBox.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  });
 }
 
 // -------------------------------------------------------------- Panduan ---
+// Struktur mengikuti prototipe: 7 aturan singkat tetap jadi seksi pertama,
+// lalu seksi-seksi lengkap yang bisa dibuka-tutup (details/summary).
+// Isi yang mengandung HTML (<p>, <strong>) dirender via innerHTML dari
+// kamus tepercaya (BUKAN esc()) — pola yang sama seperti prototipe.
+const GUIDE_GLOSS = [['Entry', 'entry'], ['Stop Loss (SL)', 'sl'], ['Take Profit (TP)', 'tp'], ['Status sinyal', 'status'], ['Level', 'level'], ['Risiko', 'risk'], ['Saldo simulasi', 'balance'], ['Ikuti vs Langganan', 'sub'], ['Terverifikasi', 'verified'], ['Peringkat', 'board'], ['R-multiple (R)', 'r'], ['Recovery Factor', 'rf'], ['Drawdown', 'dd'], ['Compounding', 'comp'], ['Profit Factor', 'pf'], ['Win rate', 'wr'], ['R:R (risk : reward)', 'rr'], ['Pips', 'pips'], ['Streak', 'streak'], ['Holding period', 'hold'], ['Lot', 'lot'], ['Floating', 'floating']];
+
+function guideSectionHtml(id, title, bodyHtml) {
+  return `<details class="card guide-sec" id="guide-${id}"><summary class="guide-sec-sum"><h3>${esc(title)}</h3><span class="guide-sec-chev" aria-hidden="true">▾</span></summary><div class="more-body">${bodyHtml}</div></details>`;
+}
+
 function renderGuide() {
   const list = $('#guide-list');
-  list.innerHTML = ['guideR1', 'guideR2', 'guideR3', 'guideR4', 'guideR5', 'guideR6', 'guideR7']
-    .map((k) => `<li>${esc(t(k))}</li>`)
-    .join('');
+  if (list) {
+    list.innerHTML = ['guideR1', 'guideR2', 'guideR3', 'guideR4', 'guideR5', 'guideR6', 'guideR7']
+      .map((k) => `<li>${esc(t(k))}</li>`)
+      .join('');
+  }
+  const secs = $('#guide-sections');
+  if (!secs) return;
+  const flow = `<div class="flow" role="img" aria-label="PENDING → ${esc(t('flowLocked'))} → WIN / LOSS">`
+    + `<span class="fstep"><b>PENDING</b><i>${esc(t('flowPendingSub'))}</i></span><span class="farr" aria-hidden="true">→</span>`
+    + `<span class="fstep"><b>${esc(t('flowLocked'))}</b><i>${esc(t('flowLockedSub'))}</i></span><span class="farr" aria-hidden="true">→</span>`
+    + `<span class="fstep win"><b>WIN / LOSS</b><i>${esc(t('flowResultSub'))}</i></span></div>`;
+  // Tangga pangkat lengkap (dihitung dari rumus tangga tetap $10.000).
+  let ladderRows = '';
+  for (let ln = 1; ln <= 24; ln++) {
+    const refLn = levelRef(ln);
+    ladderRows += `<tr><td class="lvlcell mono">L${ln}</td><td class="rankname">${esc(levelName(ln, getLang()))}</td>`
+      + `<td class="num mono">${esc(fmtUsd(refLn))}</td><td class="num mono">${esc(fmtUsd(refLn - START_BALANCE_USD))}</td>`
+      + `<td>${ln === 1 ? esc(t('ladStart')) : esc(t('ladRStep'))}</td></tr>`;
+  }
+  const ladder = `<p>${t('ladIntro')}</p>`
+    + `<div class="lvltable-wrap"><table class="lvltable"><thead><tr><th>${esc(t('ladColLevel'))}</th><th>${esc(t('ladColRank'))}</th><th class="num">${esc(t('ladColRef'))}</th><th class="num">${esc(t('ladColProfit'))}</th><th>${esc(t('ladColR'))}</th></tr></thead><tbody>${ladderRows}</tbody></table></div>`
+    + `<p>${t('ladBeyond', { a: levelName(25, getLang()), b: levelName(26, getLang()) })}</p>`;
+  const glossGrid = `<p style="margin:0 0 10px;">${esc(t('guideGlossSub'))}</p><div class="gloss-grid">`
+    + GUIDE_GLOSS.map(([label, g]) => `<div class="gloss-item"><b>${esc(label)}</b><span>${esc(t('gloss_' + g))}</span></div>`).join('') + '</div>';
+  secs.innerHTML =
+    guideSectionHtml('signal', t('guideSecSignal'),
+      flow + `<p>${t('heroDetail1')}</p><p>${t('heroDetail2')}</p><p>${t('formLockDetail')}</p><p>${t('guideRRRule')}</p><p>${t('guideExpiry')}</p><p>${t('guideDupRule')}</p>`)
+    + guideSectionHtml('level', t('guideSecLevel'),
+      ladder + `<p>${t('boardD2')}</p><p>${t('boardD3')}</p><p>${t('boardD4')}</p>` + t('lvlRulesDetail') + t('lvlRulesDetail2') + `<p>${t('guideOverRiskRule')}</p><p>${t('boardD7')}</p><p>${t('guideRefFixed')}</p><p>${t('guideMinTrades')}</p>`)
+    + guideSectionHtml('board', t('guideSecBoard'), `<p>${t('boardD1')}</p>`)
+    + guideSectionHtml('risk', t('guideSecRisk'), t('guideRisk1') + t('guideRisk2') + t('guideRisk3'))
+    + guideSectionHtml('subs', t('guideSecSubs'),
+      `<p>${t('boardD6')}</p><p>${t('boardD5')}</p>` + t('guideVerified') + t('guideShareSplit')
+      + `<p>${esc(t('guidePriceChange'))}</p><p>${esc(t('guideWithdrawName'))}</p>` + t('guideWithdraw') + `<p>${esc(t('guideKycWithdraw'))}</p>`)
+    + guideSectionHtml('share', t('guideSecShare'), t('guideShareBody'))
+    + guideSectionHtml('reset', t('guideSecReset'), `<p>${esc(t('guideResetBody'))}</p><p>${esc(t('guideInactivity'))}</p>`)
+    + guideSectionHtml('acct', t('guideSecAcct'), `<p>${esc(t('acctFoot'))}</p><p>${esc(t('guideAcctRules'))}</p><p>${esc(t('guideKycRules'))}</p>`)
+    + guideSectionHtml('gloss', t('guideSecGloss'), glossGrid);
 }
 
 // ------------------------------------------------------------------ init ---

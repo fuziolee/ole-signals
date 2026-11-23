@@ -39,6 +39,12 @@ export async function signOut() {
   if (error) throw error;
 }
 
+export async function updatePassword(password) {
+  const { data, error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+  return data;
+}
+
 // ---------------------------------------------------------------- profil ---
 export async function getMyProfile(userId) {
   const { data, error } = await supabase
