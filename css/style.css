@@ -129,6 +129,15 @@ h1 { font-size: 19px; margin: 2px 0 4px; }
 
 /* ---- tab & chip ---- */
 .tabs { display: flex; gap: 8px; margin: 4px 0 14px; flex-wrap: wrap; }
+.search-controls { display: flex; gap: 8px; margin: 4px 0 14px; flex-wrap: wrap; }
+.search-controls input {
+  flex: 1; min-width: 160px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); color: var(--ink); padding: 10px 12px;
+}
+.search-controls select {
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); color: var(--ink); padding: 10px 12px;
+}
 .tab {
   appearance: none; border: 1px solid var(--line); background: var(--panel);
   color: var(--ink); border-radius: 999px; padding: 8px 16px;
@@ -249,7 +258,11 @@ h1 { font-size: 19px; margin: 2px 0 4px; }
 .guide-sec .more-body p { margin: 0 0 10px; font-size: 14px; }
 .guide-sec .more-body p:last-child { margin-bottom: 0; }
 .guide-sec .flow { margin: 2px 0 12px; }
-.lvltable-wrap { overflow-x: auto; margin: 2px 0 10px; }
+.lvltable-wrap { overflow-x: auto; margin: 2px 0 10px; -webkit-overflow-scrolling: touch; }
+.lvltable-wrap.scrollable {
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+}
 table.lvltable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 table.lvltable th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 7px 9px; border-bottom: 1px solid var(--line); font-weight: 600; }
 table.lvltable td { padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: middle; }
