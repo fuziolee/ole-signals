@@ -18,6 +18,10 @@ const S = {
   prices: new Map(),
   view: 'home',
   officeTab: 'PENDING',
+  searchQuery: '',
+  searchSort: 'level',
+  searchTab: 'traders',
+  guideOpen: [],
   editingId: null,
   editingVersion: null,
   homeSignals: [],
@@ -202,6 +206,12 @@ function showView(name) {
 $$('.bottom-nav [data-nav]').forEach((b) => {
   b.addEventListener('click', () => showView(b.dataset.nav));
 });
+$$('#search-tabs [data-stab]').forEach((b) => {
+  b.addEventListener('click', () => {
+    S.searchTab = b.dataset.stab;
+    renderSearch();
+  });
+});
 $('#btn-guide-back').addEventListener('click', () => showView('profile'));
 $('#btn-refresh-home').addEventListener('click', () => renderHome(true));
 $('#btn-hero-search').addEventListener('click', () => showView('search'));
@@ -326,8 +336,9 @@ function signalCardHtml(sig) {
   const profitHtml = (sig.status === 'WIN' || sig.status === 'LOSS') && sig.profit_usd !== null && sig.profit_usd !== undefined
     ? `<div class="sig-meta">${esc(fmtUsd(sig.profit_usd))}${sig.r_value !== null && sig.r_value !== undefined ? ` · ${esc(fmtR(sig.r_value))}` : ''}</div>`
     : '';
-  const expiryHtml = sig.status === 'PENDING'
-    ? `<div class="sig-meta">${esc(fmtExpiry(sig.expires_at))}</div>` : '';
+  const createdHtml = sig.status === 'PENDING'
+    ? `<div class="sig-meta">${esc(t('createdAt'))} ${esc(fmtDate(sig.created_at))} · ${esc(fmtExpiry(sig.expires_at))}</div>`
+    : `<div class="sig-meta">${esc(t('createdAt'))} ${esc(fmtDate(sig.created_at))}</div>`;
   return `<article class="sig ${dirCls}" data-sig="${esc(sig.id)}" tabindex="0" role="button">
     <div class="sig-head">
       <span class="sig-pair sig-pair-lg">${esc(sig.pair)}</span>
@@ -339,8 +350,7 @@ function signalCardHtml(sig) {
     <div class="sig-trader">${mine ? esc(t('you')) + ' · ' : ''}${esc(name)} · Lv.${level} ${esc(levelName(level, getLang()))}${verified}</div>
     ${levelsHtml}
     ${profitHtml}
-    ${expiryHtml}
-    <div class="sig-meta">${esc(fmtDate(sig.created_at))}</div>
+    ${createdHtml}
   </article>`;
 }
 
@@ -402,7 +412,7 @@ function openSignalDetail(id) {
     <dl class="kv" style="margin-top:12px;">
       <dt>${esc(t('lot'))}</dt><dd>${esc(fmtNum(sig.lot_size, 2))}</dd>
       <dt>${esc(t('createdAt'))}</dt><dd>${esc(fmtDate(sig.created_at))}</dd>
-      ${sig.status === 'PENDING' ? `<dt></dt><dd>${esc(fmtExpiry(sig.expires_at))}</dd>` : ''}
+      ${sig.status === 'PENDING' ? `<dt>${esc(t('expires'))}</dt><dd>${esc(fmtExpiry(sig.expires_at))}</dd>` : ''}
     </dl>
     ${profitHtml}
     ${actions.length ? `<div class="sig-actions">${actions.join('')}</div>` : ''}`);
@@ -460,8 +470,84 @@ async function renderHome(force = false) {
 }
 
 // ------------------------------------------------------------------ Cari ---
+function traderCardHtml(tr) {
+  const p = progressOf(tr);
+  const level = p ? Number(p.level) || 1 : 1;
+  const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
+  const username = one(tr.profiles)?.username;
+  return `<article class="sig" data-trader="${esc(tr.profile_id)}" tabindex="0" role="button">
+    <div class="sig-head">
+      <span class="sig-pair">${esc(tr.trader_display_name || t('noName'))}</span>
+      ${verified}
+    </div>
+    <div class="sig-trader">${username ? '@' + esc(username) + ' · ' : ''}Lv.${level} ${esc(levelName(level, getLang()))}</div>
+    <div class="sig-meta">${esc(t('balance'))}: ${esc(fmtUsd(p ? p.balance_usd : START_BALANCE_USD))}${p ? ` · ${esc(fmtR(p.r_since_level))}` : ''}</div>
+  </article>`;
+}
+
+function renderSearchList() {
+  const list = $('#search-list');
+  if (!list) return;
+  if (S.searchTab === 'board') {
+    list.innerHTML = `<div class="empty"><strong>${esc(t('boardEmptyTitle'))}</strong>${esc(t('boardEmptyBody'))}</div>`;
+    return;
+  }
+  if (S.traders.length === 0) {
+    list.innerHTML = `<div class="empty"><strong>${esc(t('searchEmpty'))}</strong>${esc(t('searchHint'))}</div>`;
+    return;
+  }
+  const q = S.searchQuery.trim().toLowerCase();
+  let rows = S.traders.filter((tr) => {
+    if (!q) return true;
+    const name = (tr.trader_display_name || '').toLowerCase();
+    const username = (one(tr.profiles)?.username || '').toLowerCase();
+    return name.includes(q) || username.includes(q) || ('@' + username).includes(q);
+  });
+  const sortVal = (tr) => {
+    const p = progressOf(tr);
+    if (S.searchSort === 'balance') return p ? Number(p.balance_usd) || START_BALANCE_USD : START_BALANCE_USD;
+    if (S.searchSort === 'r') return p ? Number(p.r_since_level) || 0 : 0;
+    return p ? Number(p.level) || 1 : 1;
+  };
+  rows = [...rows].sort((a, b) => sortVal(b) - sortVal(a));
+  if (rows.length === 0) {
+    list.innerHTML = `<div class="empty"><strong>${esc(t('searchNoMatch'))}</strong></div>`;
+    return;
+  }
+  list.innerHTML = rows.map(traderCardHtml).join('');
+  $$('[data-trader]', list).forEach((el) => {
+    const open = () => openTraderProfile(el.dataset.trader);
+    el.addEventListener('click', open);
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
+  });
+}
+
 async function renderSearch() {
   const list = $('#search-list');
+  const controls = $('#search-controls');
+  // Tab Peringkat tidak memakai kotak pencarian/urutan — sembunyikan kontrolnya.
+  if (controls) {
+    controls.style.display = S.searchTab === 'traders' ? '' : 'none';
+    controls.innerHTML = `<div class="search-controls">
+      <input id="search-q" type="search" placeholder="${esc(t('searchPh'))}" value="${esc(S.searchQuery)}" aria-label="${esc(t('searchPh'))}" />
+      <select id="search-sort" aria-label="${esc(t('sortBy'))}">
+        <option value="level"${S.searchSort === 'level' ? ' selected' : ''}>${esc(t('sortLevel'))}</option>
+        <option value="balance"${S.searchSort === 'balance' ? ' selected' : ''}>${esc(t('sortBalance'))}</option>
+        <option value="r"${S.searchSort === 'r' ? ' selected' : ''}>${esc(t('sortR'))}</option>
+      </select>
+    </div>`;
+    $('#search-q').addEventListener('input', (e) => {
+      S.searchQuery = e.target.value;
+      renderSearchList();
+    });
+    $('#search-sort').addEventListener('change', (e) => {
+      S.searchSort = e.target.value;
+      renderSearchList();
+    });
+  }
+  $$('#search-tabs [data-stab]').forEach((b) => {
+    b.setAttribute('aria-selected', String(b.dataset.stab === S.searchTab));
+  });
   list.innerHTML = `<p class="sub">${esc(t('loading'))}</p>`;
   try {
     S.traders = await api.listTraders();
@@ -469,29 +555,7 @@ async function renderSearch() {
     list.innerHTML = `<div class="empty"><strong>${esc(t('errNetwork'))}</strong></div>`;
     return;
   }
-  if (S.traders.length === 0) {
-    list.innerHTML = `<div class="empty"><strong>${esc(t('searchEmpty'))}</strong>${esc(t('searchHint'))}</div>`;
-    return;
-  }
-  list.innerHTML = S.traders.map((tr) => {
-    const p = progressOf(tr);
-    const level = p ? Number(p.level) || 1 : 1;
-    const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
-    const username = one(tr.profiles)?.username;
-    return `<article class="sig" data-trader="${esc(tr.profile_id)}" tabindex="0" role="button">
-      <div class="sig-head">
-        <span class="sig-pair">${esc(tr.trader_display_name || t('noName'))}</span>
-        ${verified}
-      </div>
-      <div class="sig-trader">${username ? '@' + esc(username) + ' · ' : ''}Lv.${level} ${esc(levelName(level, getLang()))}</div>
-      <div class="sig-meta">${esc(t('balance'))}: ${esc(fmtUsd(p ? p.balance_usd : START_BALANCE_USD))}${p ? ` · ${esc(fmtR(p.r_since_level))}` : ''}</div>
-    </article>`;
-  }).join('');
-  $$('[data-trader]', list).forEach((el) => {
-    const open = () => openTraderProfile(el.dataset.trader);
-    el.addEventListener('click', open);
-    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
-  });
+  renderSearchList();
 }
 
 async function openTraderProfile(traderId) {
@@ -589,7 +653,7 @@ function signalFormHtml(editing) {
       <div class="row">
         <div class="field" style="flex:1; min-width:120px;">
           <label for="sf-entry">${esc(t('entry'))}</label>
-          <input id="sf-entry" type="number" step="any" min="0" required value="${sig ? esc(sig.entry) : ''}" placeholder="3000" />
+          <input id="sf-entry" type="number" step="any" min="0" required value="${sig ? esc(sig.entry) : ''}" placeholder="${esc(t('phEntry'))}" />
         </div>
         <div class="field" style="flex:1; min-width:120px;">
           <label for="sf-lot">${esc(t('lot'))}</label>
@@ -599,11 +663,11 @@ function signalFormHtml(editing) {
       <div class="row">
         <div class="field" style="flex:1; min-width:120px;">
           <label for="sf-sl">${esc(t('stopLoss'))}</label>
-          <input id="sf-sl" type="number" step="any" min="0" required value="${sig ? esc(sig.stop_loss) : ''}" placeholder="2990" />
+          <input id="sf-sl" type="number" step="any" min="0" required value="${sig ? esc(sig.stop_loss) : ''}" placeholder="${esc(t('phSl'))}" />
         </div>
         <div class="field" style="flex:1; min-width:120px;">
           <label for="sf-tp">${esc(t('takeProfit'))}</label>
-          <input id="sf-tp" type="number" step="any" min="0" required value="${sig ? esc(sig.take_profit) : ''}" placeholder="3020" />
+          <input id="sf-tp" type="number" step="any" min="0" required value="${sig ? esc(sig.take_profit) : ''}" placeholder="${esc(t('phTp'))}" />
         </div>
       </div>
       <div class="notice" id="sf-risk"></div>
@@ -814,7 +878,10 @@ async function renderOfficeList() {
     return ['WIN', 'LOSS', 'CANCELLED', 'EXPIRED'].includes(s.status);
   });
   if (filtered.length === 0) {
-    list.innerHTML = `<div class="empty"><strong>${esc(t('feedEmpty'))}</strong>${esc(t('feedEmptyHint'))}</div>`;
+    const emptyKey = S.officeTab === 'PENDING' ? 'officeEmptyPending'
+      : S.officeTab === 'AKTIF' ? 'officeEmptyActive' : 'officeEmptyHistory';
+    const hint = S.officeTab === 'PENDING' ? esc(t('feedEmptyHint')) : '';
+    list.innerHTML = `<div class="empty"><strong>${esc(t(emptyKey))}</strong>${hint}</div>`;
     return;
   }
   list.innerHTML = filtered.map(signalCardHtml).join('');
@@ -955,8 +1022,21 @@ async function renderProfile() {
 const GUIDE_GLOSS = [['Entry', 'entry'], ['Stop Loss (SL)', 'sl'], ['Take Profit (TP)', 'tp'], ['Status sinyal', 'status'], ['Level', 'level'], ['Risiko', 'risk'], ['Saldo simulasi', 'balance'], ['Ikuti vs Langganan', 'sub'], ['Terverifikasi', 'verified'], ['Peringkat', 'board'], ['R-multiple (R)', 'r'], ['Recovery Factor', 'rf'], ['Drawdown', 'dd'], ['Compounding', 'comp'], ['Profit Factor', 'pf'], ['Win rate', 'wr'], ['R:R (risk : reward)', 'rr'], ['Pips', 'pips'], ['Streak', 'streak'], ['Holding period', 'hold'], ['Lot', 'lot'], ['Floating', 'floating']];
 
 function guideSectionHtml(id, title, bodyHtml) {
-  return `<details class="card guide-sec" id="guide-${id}"><summary class="guide-sec-sum"><h3>${esc(title)}</h3><span class="guide-sec-chev" aria-hidden="true">▾</span></summary><div class="more-body">${bodyHtml}</div></details>`;
+  const open = S.guideOpen.includes(id) ? ' open' : '';
+  return `<details class="card guide-sec" id="guide-${id}"${open}><summary class="guide-sec-sum"><h3>${esc(title)}</h3><span class="guide-sec-chev" aria-hidden="true">▾</span></summary><div class="more-body">${bodyHtml}</div></details>`;
 }
+
+// Petunjuk scroll tabel pangkat di layar kecil: bayangan tepi kanan hanya
+// bila tabel benar-benar lebih lebar dari wadahnya (di layar lebar tidak muncul).
+function updateLvlTableScrollHint() {
+  const wrap = document.querySelector('#guide-level .lvltable-wrap');
+  if (!wrap) return;
+  wrap.classList.toggle('scrollable', wrap.scrollWidth > wrap.clientWidth + 1);
+}
+window.addEventListener('resize', () => {
+  const lvlSec = $('#guide-level');
+  if (lvlSec && lvlSec.open) updateLvlTableScrollHint();
+});
 
 function renderGuide() {
   const list = $('#guide-list');
@@ -988,7 +1068,7 @@ function renderGuide() {
     guideSectionHtml('signal', t('guideSecSignal'),
       flow + `<p>${t('heroDetail1')}</p><p>${t('heroDetail2')}</p><p>${t('formLockDetail')}</p><p>${t('guideRRRule')}</p><p>${t('guideExpiry')}</p><p>${t('guideDupRule')}</p>`)
     + guideSectionHtml('level', t('guideSecLevel'),
-      ladder + `<p>${t('boardD2')}</p><p>${t('boardD3')}</p><p>${t('boardD4')}</p>` + t('lvlRulesDetail') + t('lvlRulesDetail2') + `<p>${t('guideOverRiskRule')}</p><p>${t('boardD7')}</p><p>${t('guideRefFixed')}</p><p>${t('guideMinTrades')}</p>`)
+      ladder + `<p>${t('boardD2')}</p><p>${t('guideRefFixed')}</p>` + t('lvlRulesDetail') + t('lvlRulesDetail2') + `<p>${t('guideMinTrades')}</p><p>${t('guideOverRiskRule')}</p>`)
     + guideSectionHtml('board', t('guideSecBoard'), `<p>${t('boardD1')}</p>`)
     + guideSectionHtml('risk', t('guideSecRisk'), t('guideRisk1') + t('guideRisk2') + t('guideRisk3'))
     + guideSectionHtml('subs', t('guideSecSubs'),
@@ -998,6 +1078,16 @@ function renderGuide() {
     + guideSectionHtml('reset', t('guideSecReset'), `<p>${esc(t('guideResetBody'))}</p><p>${esc(t('guideInactivity'))}</p>`)
     + guideSectionHtml('acct', t('guideSecAcct'), `<p>${esc(t('acctFoot'))}</p><p>${esc(t('guideAcctRules'))}</p><p>${esc(t('guideKycRules'))}</p>`)
     + guideSectionHtml('gloss', t('guideSecGloss'), glossGrid);
+  // Ingat seksi yang terbuka supaya tetap terbuka saat kembali ke Panduan.
+  $$('#guide-sections details').forEach((d) => {
+    d.addEventListener('toggle', () => {
+      const id = d.id.replace('guide-', '');
+      S.guideOpen = S.guideOpen.filter((x) => x !== id);
+      if (d.open) S.guideOpen.push(id);
+      updateLvlTableScrollHint();
+    });
+  });
+  updateLvlTableScrollHint();
 }
 
 // ------------------------------------------------------------------ init ---
