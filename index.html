@@ -36,7 +36,8 @@
           </div>
           <p class="lead-sm" data-i18n-html="heroLead"></p>
           <div class="hero-cta">
-            <button class="btn primary" id="btn-hero-search" type="button"><span data-i18n="heroCtaSearch"></span></button>
+            <button class="btn primary" id="btn-hero-top" type="button"><span data-i18n="heroCtaBoard"></span></button>
+            <button class="btn" id="btn-hero-follow" type="button"><span data-i18n="heroCtaFollow"></span></button>
           </div>
           <button class="guidelink" id="btn-hero-guide" type="button"><span data-i18n="guideCta"></span><span aria-hidden="true"> →</span></button>
         </header>
@@ -62,36 +63,56 @@
             <li><span class="tick" aria-hidden="true">✓</span><div><b data-i18n="road6T"></b><span data-i18n="road6D"></span></div></li>
           </ul>
         </section>
-        <p class="foot" data-i18n="riskWarn"></p>
+        <p class="foot" data-i18n-html="riskWarn"></p>
       </section>
 
       <!-- Cari -->
       <section class="view" id="view-search" aria-label="Cari">
         <h1 data-i18n="searchTitle"></h1>
         <p class="sub" data-i18n="searchSub"></p>
-        <div id="search-controls"></div>
         <div class="tabs" role="tablist" id="search-tabs">
           <button class="tab" role="tab" data-stab="traders" aria-selected="true"><span data-i18n="searchTabTraders"></span></button>
           <button class="tab" role="tab" data-stab="board" aria-selected="false"><span data-i18n="searchTabBoard"></span></button>
         </div>
+        <div id="search-controls"></div>
         <div id="search-list"></div>
+      </section>
+
+      <!-- Profil trader (halaman penuh) -->
+      <section class="view" id="view-trader" aria-label="Profil trader">
+        <div id="trader-profile"></div>
+      </section>
+
+      <!-- Simulasi Harga (menyusul di Fase 3) -->
+      <section class="view" id="view-prices" aria-label="Simulasi Harga">
+        <h1 data-i18n="pricesTitle"></h1>
+        <p class="sub" data-i18n="pricesSub"></p>
+        <div class="empty"><strong data-i18n="pricesSoon"></strong><span data-i18n="pricesSoonHint"></span></div>
+      </section>
+
+      <!-- Dompet (menyusul di fase pembayaran terakhir) -->
+      <section class="view" id="view-wallet" aria-label="Dompet">
+        <h1 data-i18n="walletTitle"></h1>
+        <p class="sub" data-i18n="walletSub"></p>
+        <div class="empty"><strong data-i18n="walletSoon"></strong><span data-i18n="walletSoonHint"></span></div>
       </section>
 
       <!-- Ruang Kerja -->
       <section class="view" id="view-office" aria-label="Ruang Kerja">
         <h1 data-i18n="officeTitle"></h1>
+        <p class="sub" data-i18n-html="officeSub"></p>
         <div id="office-body"></div>
       </section>
 
       <!-- Profil -->
       <section class="view" id="view-profile" aria-label="Profil">
         <h1 data-i18n="profileTitle"></h1>
+        <p class="sub" data-i18n="profileSub"></p>
         <div id="profile-body"></div>
       </section>
 
-      <!-- Pengaturan (sub-halaman Profil) -->
+      <!-- Pengaturan (sub-halaman Profil; judul dirender sendiri) -->
       <section class="view" id="view-settings" aria-label="Pengaturan">
-        <h1 data-i18n="settings"></h1>
         <div id="settings-body"></div>
       </section>
 
@@ -108,24 +129,21 @@
       <!-- Panduan -->
       <section class="view" id="view-guide" aria-label="Panduan">
         <div class="row">
-          <button class="btn ghost" id="btn-guide-back" type="button">← <span data-i18n="back"></span></button>
+          <button class="btn ghost" id="btn-guide-back" type="button"><span data-i18n="backProfile"></span></button>
         </div>
         <h1 data-i18n="guideTitle"></h1>
         <p class="sub" data-i18n="guideSub"></p>
-        <div class="card">
-          <h2 data-i18n="guideRules"></h2>
-          <ol class="guide-list" id="guide-list"></ol>
-        </div>
         <div id="guide-sections"></div>
-        <p class="foot" data-i18n="riskWarn"></p>
       </section>
     </main>
 
     <div class="bottom-nav">
       <nav aria-label="Navigasi utama">
         <button type="button" data-nav="home" aria-selected="true"><span class="ic">⌂</span><span data-i18n="navHome"></span></button>
+        <button type="button" data-nav="prices" aria-selected="false"><span class="ic">↗</span><span data-i18n="navPrices"></span></button>
         <button type="button" data-nav="search" aria-selected="false"><span class="ic">⌕</span><span data-i18n="navSearch"></span></button>
         <button type="button" data-nav="office" aria-selected="false"><span class="ic">▣</span><span data-i18n="navOffice"></span></button>
+        <button type="button" data-nav="wallet" aria-selected="false"><span class="ic">▤</span><span data-i18n="navWallet"></span></button>
         <button type="button" data-nav="profile" aria-selected="false"><span class="ic">◉</span><span data-i18n="navProfile"></span></button>
       </nav>
     </div>
@@ -159,7 +177,7 @@
         <button class="btn ghost" type="button" id="auth-toggle"></button>
       </div>
     </div>
-    <p class="foot" data-i18n="riskWarn"></p>
+    <p class="foot" data-i18n-html="riskWarn"></p>
   </div>
 
   <!-- Overlay detail / konfirmasi -->
