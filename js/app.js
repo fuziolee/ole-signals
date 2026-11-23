@@ -332,6 +332,7 @@ function setThemePref(pref) {
 
 function applyI18n() {
   $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  $$('[data-i18n-html]').forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); });
   document.documentElement.lang = getLang();
   $('#auth-submit').textContent = S.authMode === 'login' ? t('login') : t('signup');
   $('#auth-toggle').textContent = S.authMode === 'login' ? t('noAccount') : t('haveAccount');
@@ -393,7 +394,6 @@ $$('#search-tabs [data-stab]').forEach((b) => {
   });
 });
 $('#btn-guide-back').addEventListener('click', () => showView('profile'));
-$('#btn-settings-back').addEventListener('click', () => showView('profile'));
 $('#btn-help-back').addEventListener('click', () => showView('profile'));
 $('#btn-refresh-home').addEventListener('click', () => renderHome(true));
 $('#btn-hero-search').addEventListener('click', () => showView('search'));
@@ -655,7 +655,7 @@ async function copySignalText(id) {
   if (!sig) return;
   const text = `${sig.pair} ${sig.direction} @ ${sig.entry} | SL ${sig.stop_loss} | TP ${sig.take_profit} | ${sig.lot_size} lot — OLE Signals`;
   try { await navigator.clipboard.writeText(text); } catch (e) { /* abaikan */ }
-  toast(t('toastCopied'));
+  toast(t('toastCopied', { pair: sig.pair }));
 }
 
 function findSignal(id) {
@@ -1105,8 +1105,9 @@ function traderCardHtml(tr) {
   const username = one(tr.profiles)?.username;
   return `<article class="sig" data-trader="${esc(tr.profile_id)}" tabindex="0" role="button">
     <div class="sig-head">
+      ${avatarImg(tr.trader_display_name, tr.profile_id, tr.trader_avatar_url, 'avatar-sm')}
       <span class="sig-pair">${esc(tr.trader_display_name || t('noName'))}</span>
-      ${verified}
+      ${verified}${demoBadge(tr.profile_id)}
     </div>
     <div class="sig-trader">${username ? '@' + esc(username) + ' · ' : ''}Lv.${level} ${esc(levelName(level, getLang()))}</div>
     <div class="sig-meta">${esc(t('balance'))}: ${esc(fmtUsd(p ? p.balance_usd : START_BALANCE_USD))}${p ? ` · ${esc(fmtR(p.r_since_level))}` : ''}</div>
@@ -1158,16 +1159,27 @@ function renderSearchList() {
     if (Number(f.rfMin) > 0 && !(st.recovery !== null && st.recovery !== undefined && st.recovery >= Number(f.rfMin))) return false;
     return true;
   });
-  const sortVal = (tr) => {
+  // Urutan deterministik: kriteria pilihan, lalu total R, lalu profit,
+  // lalu nama — tidak bergantung pada urutan baris dari database.
+  const sortKey = (tr) => {
     const st = stats[tr.profile_id];
     const p = progressOf(tr);
-    if (S.searchFilters.sort === 'profit') return st.totalUSD;
-    if (S.searchFilters.sort === 'totalr') return st.totalR;
-    if (S.searchFilters.sort === 'wr') return st.wr === null ? -1 : st.wr;
-    if (S.searchFilters.sort === 'rf') return st.recovery === null || st.recovery === undefined ? -1 : (st.recovery === Infinity ? 999 : st.recovery);
-    return p ? Number(p.level) || 1 : 1;
+    let primary;
+    if (S.searchFilters.sort === 'profit') primary = st.totalUSD;
+    else if (S.searchFilters.sort === 'totalr') primary = st.totalR;
+    else if (S.searchFilters.sort === 'wr') primary = st.wr === null ? -1 : st.wr;
+    else if (S.searchFilters.sort === 'rf') primary = st.recovery === null || st.recovery === undefined ? -1 : (st.recovery === Infinity ? 999 : st.recovery);
+    else primary = p ? Number(p.level) || 1 : 1;
+    return [primary, st.totalR, st.totalUSD, (tr.trader_display_name || '').toLowerCase()];
   };
-  rows = [...rows].sort((a, b) => sortVal(b) - sortVal(a));
+  rows = [...rows].sort((a, b) => {
+    const ka = sortKey(a);
+    const kb = sortKey(b);
+    for (let i = 0; i < 3; i++) {
+      if (kb[i] !== ka[i]) return kb[i] - ka[i];
+    }
+    return ka[3] < kb[3] ? -1 : ka[3] > kb[3] ? 1 : 0;
+  });
   S.searchPfHidden = pfHidden;
   let html = `<p class="sub">${esc(t('searchCount', { n: rows.length, total: S.traders.length }))}</p>`;
   if (pfHidden > 0) html += `<p class="note">${esc(t('searchPfNote', { n: pfHidden }))}</p>`;
@@ -1199,9 +1211,9 @@ function renderSearchControls() {
   const pairOpts = `<option value="ALL">${esc(t('feedFilterAll'))}</option>` + pairs.map((p) => `<option value="${p}"${d.pair === p ? ' selected' : ''}>${p}</option>`).join('');
   const topPairOpts = `<option value="ALL">${esc(t('feedFilterAll'))}</option>` + pairs.map((p) => `<option value="${p}"${d.topPair === p ? ' selected' : ''}>${p}</option>`).join('');
   controls.innerHTML = `<div class="search-grid">
-    <div class="field"><label>${esc(t('searchPh'))}</label><input id="search-q" type="search" placeholder="${esc(t('searchPh'))}" value="${esc(d.q)}" aria-label="${esc(t('searchPh'))}" /></div>
+    <div class="field"><label>${esc(t('searchNameLabel'))}</label><input id="search-q" type="search" placeholder="${esc(t('searchPh'))}" value="${esc(d.q)}" aria-label="${esc(t('searchPh'))}" /></div>
     <div class="field"><label>${esc(t('pair'))}</label><select id="search-pair">${pairOpts}</select></div>
-    <div class="field"><label>${esc(t('searchFilterTopPair'))}</label><select id="search-top-pair">${topPairOpts}</select></div>
+    <div class="field"><label>${esc(t('searchFilterTopPair'))}</label><select id="search-top-pair">${topPairOpts}</select><span class="hint">${esc(t('searchFilterTopPairHint'))}</span></div>
     <div class="field"><label>${esc(t('sortBy'))}</label><select id="search-sort">${searchFilterOptions([
       ['level', t('sortLevel')], ['profit', t('sortProfit')], ['totalr', t('sortTotalR')],
       ['wr', t('sortWr')], ['rf', t('sortRf')],
@@ -1210,7 +1222,7 @@ function renderSearchControls() {
     <div class="field"><label>${esc(t('searchFilterRrMin'))}</label><select id="search-rr-min">${searchFilterOptions([[0, t('feedFilterAll')], [1, '≥ 1:1'], [1.5, '≥ 1:1,5'], [2, '≥ 1:2'], [3, '≥ 1:3']], d.rrMin)}</select></div>
     <div class="field"><label>${esc(t('searchFilterPfMin'))}</label><select id="search-pf-min">${searchFilterOptions([[0, t('feedFilterAll')], [1, '≥ 1,0'], [1.5, '≥ 1,5'], [2, '≥ 2,0'], [3, '≥ 3,0']], d.pfMin)}</select></div>
     <div class="field"><label>${esc(t('searchFilterLevelMin'))}</label><select id="search-level-min">${searchFilterOptions([[0, t('feedFilterAll')], [2, '≥ Lv.2'], [3, '≥ Lv.3'], [5, '≥ Lv.5'], [10, '≥ Lv.10']], d.levelMin)}</select></div>
-    <div class="field"><label>${esc(t('searchFilterPrice'))}</label><select id="search-price">${searchFilterOptions([['all', t('feedFilterAll')], ['free', t('profFree')], ['paid', t('searchPricePaid')]], d.price)}</select></div>
+    <div class="field"><label>${esc(t('searchFilterPrice'))}</label><select id="search-price">${searchFilterOptions([['all', t('feedFilterAll')], ['free', t('searchPriceFree')], ['paid', t('searchPricePaid')]], d.price)}</select></div>
     <div class="field"><label>${esc(t('searchFilterRfMin'))}</label><select id="search-rf-min">${searchFilterOptions([[0, t('feedFilterAll')], [1, '≥ 1,0x'], [1.5, '≥ 1,5x'], [2, '≥ 2,0x'], [3, '≥ 3,0x']], d.rfMin)}</select></div>
   </div>
   <div class="search-actions">
@@ -1289,12 +1301,12 @@ function boardCardHtml(row, rank) {
       </div>
     </div>
     <div class="board-stats">
-      <div class="bs"><b class="${s.totalUSD >= 0 ? 'pips-pos' : 'pips-neg'}">${s.closed ? esc(fmtUsd(s.totalUSD, true)) : '—'}</b><small>${esc(t('stTotalProfit'))}</small></div>
-      <div class="bs"><b>${s.closed ? esc(fmtR(s.totalR)) : '—'}</b><small>${esc(t('stTotalR'))}</small></div>
-      <div class="bs"><b>${s.closed && s.drawdown.usd > 0 ? '-' + esc(fmtUsd(s.drawdown.usd)) : '—'}</b><small>${esc(t('stMaxDD'))}</small></div>
-      <div class="bs"><b>${s.closed ? fmtPf(s.pf) : '—'}</b><small>${esc(t('stProfitFactor'))}</small></div>
-      <div class="bs"><b>${s.closed ? fmtRf(s.recovery) : '—'}</b><small>${esc(t('stRecovery'))}</small></div>
-      <div class="bs"><b>${esc(t('boardSignals', { n: s.totalSignals }))}</b><small>${esc(t('stTotalSignals'))}</small></div>
+      <div class="bs"><b class="${s.totalUSD >= 0 ? 'pips-pos' : 'pips-neg'}">${s.closed ? esc(fmtUsd(s.totalUSD, true)) : '—'}</b><small>${esc(t('thProfit'))}</small></div>
+      <div class="bs"><b>${s.closed ? esc(fmtR(s.totalR)) : '—'}</b><small>${esc(t('stTotalRNet'))}</small></div>
+      <div class="bs"><b>${s.closed && s.drawdown.usd > 0 ? '-' + esc(fmtUsd(s.drawdown.usd)) : '—'}</b><small>${esc(t('thMaxDD'))}</small></div>
+      <div class="bs"><b>${s.closed ? fmtPf(s.pf) : '—'}</b><small>${esc(t('thPF'))}</small></div>
+      <div class="bs"><b>${s.closed ? fmtRf(s.recovery) : '—'}</b><small>${esc(t('thRecovery'))}</small></div>
+      <div class="bs"><b>${s.totalSignals}</b><small>${esc(t('thSignals'))}</small></div>
     </div>
   </article>`;
 }
@@ -1305,6 +1317,7 @@ function renderBoardList() {
   const ranked = rankedTraders(S.traders, stats);
   const hasClosed = ranked.some((r) => r.stats.closed > 0);
   let html = `<p class="lead-sm">${t('boardLead')}</p>`
+    + `<ul class="board-rules"><li>${t('boardRule1')}</li><li>${t('boardRule2')}</li><li>${t('boardRule3')}</li></ul>`
     + `<p class="note">${esc(t('boardRules'))}</p>`
     + `<button class="guidelink" id="board-guide-link" type="button">${esc(t('guideCta'))}<span aria-hidden="true"> →</span></button>`;
   if (!hasClosed) {
@@ -1415,13 +1428,16 @@ function renderTraderProfileBody(traderId) {
       + chartCardHtml(st)
       + monthTableHtml(st.months)
       + pairTableHtml(st);
+    updateBoardScrollHints(box);
     return;
   }
   const open = sigs.filter((s) => s.status === 'PENDING' || s.status === 'AKTIF');
   const done = sigs.filter((s) => ['WIN', 'LOSS', 'CANCELLED', 'EXPIRED'].includes(s.status));
   const f = S.traderProfileFilter;
   const chip = (val, label, n) => `<button class="fchip" type="button" data-pfilter="${val}" aria-pressed="${f === val}">${esc(label)}${n !== undefined ? ` (${n})` : ''}</button>`;
+  const traderName = (S.traders.find((x) => x.profile_id === traderId) || {}).trader_display_name || t('noName');
   let html = `<h2 style="font-size:16px; margin: 6px 0 10px;">${esc(t('profSignalsAll'))}</h2>`
+    + `<p class="sub">${esc(t('profSignalsAllSub', { name: traderName }))}</p>`
     + `<div class="feed-filters">${chip('ALL', t('feedFilterAll'), open.length)}${chip('PENDING', t('tabPending'), open.filter((s) => s.status === 'PENDING').length)}${chip('AKTIF', t('tabActive'), open.filter((s) => s.status === 'AKTIF').length)}${chip('HISTORY', t('tabHistory'), done.length)}</div>`;
   if (f === 'HISTORY') {
     html += done.length
@@ -1431,7 +1447,7 @@ function renderTraderProfileBody(traderId) {
     const shown = f === 'ALL' ? open : open.filter((s) => s.status === f);
     html += shown.length
       ? shown.map(signalCardHtml).join('')
-      : `<div class="empty"><strong>${esc(t('feedEmpty'))}</strong></div>`;
+      : `<div class="empty"><strong>${esc(t('profNoFilter'))}</strong></div>`;
   }
   box.innerHTML = html;
   $$('[data-pfilter]', box).forEach((b) => {
@@ -1830,6 +1846,7 @@ function renderOfficeTraderTab(editing = null) {
   if (S.officeTraderTab === 'profil') {
     const st = statsForTrader(S.user.id);
     box.innerHTML = `<p class="sub">${esc(t('officeStatsSub'))}</p>` + statsSectionHtml(st, 'officeStatsTitle');
+    updateBoardScrollHints(box);
     return;
   }
   if (S.officeTraderTab === 'langganan') {
@@ -1967,6 +1984,7 @@ function renderOfficeFollowerTab() {
       : `<div class="empty"><strong>${esc(t('officeCopyHistoryEmpty'))}</strong></div>`;
     box.innerHTML = html;
     bindJournalRows(box);
+    updateBoardScrollHints(box);
     return;
   }
   if (S.officeFollowerTab === 'diikuti') {
@@ -2124,9 +2142,11 @@ function renderSettings() {
     ['notifications', t('setNotif'), t('setNotifSub')],
     ['language', t('language'), getLang() === 'en' ? 'English' : 'Bahasa Indonesia'],
   ];
-  body.innerHTML = `<div class="subcard">` + rows.map(([key, title, desc]) =>
+  body.innerHTML = `<div class="row" style="margin-bottom:12px;"><button class="btn ghost" id="set-back-profile" type="button">${esc(t('backProfile'))}</button></div>`
+    + `<div class="subcard">` + rows.map(([key, title, desc]) =>
     `<button type="button" class="menurow" data-setsub="${key}"><span class="grow"><span class="t">${esc(title)}</span><span class="d">${esc(desc)}</span></span><span class="marrow">→</span></button>`
   ).join('') + `</div>`;
+  $('#set-back-profile').addEventListener('click', () => showView('profile'));
   $$('[data-setsub]', body).forEach((b) => {
     b.addEventListener('click', () => { S.settingsSub = b.dataset.setsub; renderSettings(); });
   });
@@ -2279,7 +2299,8 @@ function renderHelp() {
   const body = $('#help-body');
   if (!body) return;
   const faqs = [1, 2, 3, 4, 5].map((n) => `<div class="faq-item"><b>${esc(t('helpFaq' + n + 'Q'))}</b><span>${esc(t('helpFaq' + n + 'A'))}</span></div>`).join('');
-  body.innerHTML = `<div class="card">${faqs}</div>`
+  body.innerHTML = `<p class="note"><b>${esc(t('helpScamTitle'))}</b> ${esc(t('helpScamBody'))}</p>`
+    + `<div class="card">${faqs}</div>`
     + `<div class="card"><h2>${esc(t('helpRulesTitle'))}</h2><p>${esc(t('helpRulesBody'))}</p>`
     + `<button class="guidelink" id="help-guide-link" type="button">${esc(t('guideCta'))}<span aria-hidden="true"> →</span></button></div>`
     + `<p class="foot">${esc(t('riskWarn'))}</p>`;
@@ -2316,9 +2337,17 @@ function updateLvlTableScrollHint() {
   if (!wrap) return;
   wrap.classList.toggle('scrollable', wrap.scrollWidth > wrap.clientWidth + 1);
 }
+// Pola yang sama untuk tabel statistik (bulan + per pair): bayangan tepi
+// kanan hanya bila tabel lebih lebar dari wadahnya.
+function updateBoardScrollHints(root = document) {
+  root.querySelectorAll('.board-wrap').forEach((wrap) => {
+    wrap.classList.toggle('scrollable', wrap.scrollWidth > wrap.clientWidth + 1);
+  });
+}
 window.addEventListener('resize', () => {
   const lvlSec = $('#guide-level');
   if (lvlSec && lvlSec.open) updateLvlTableScrollHint();
+  updateBoardScrollHints();
 });
 
 function renderGuide() {
