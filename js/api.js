@@ -17,7 +17,13 @@ export function onAuthChange(cb) {
 }
 
 export async function signUp(email, password) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  // Arahkan link konfirmasi kembali ke asal pendaftaran (produksi maupun
+  // localhost) — tanpa ini Supabase selalu memakai Site URL.
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: window.location.origin },
+  });
   if (error) throw error;
   return data; // data.session null bila konfirmasi email diwajibkan
 }
