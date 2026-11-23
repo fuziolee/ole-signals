@@ -31,6 +31,11 @@ const S = {
   traderProfileCustom: { from: '', to: '' },
   officeRange: 'ALL',
   officeCustom: { from: '', to: '' },
+  walletTab: 'tx',
+  walletRange: 'ALL',
+  walletCustom: { from: '', to: '' },
+  secPage: null, // sub-halaman Kata sandi: null | 'pw' | 'email'
+  wdAdd: false, // form tambah Akun Penarikan sedang dibuka
   followFilter: 'ALL',
   dateFilterOpen: '',
   dateFilterDraft: null,
@@ -117,6 +122,15 @@ function fmtUsd0(n) {
   const s = '$' + Math.abs(Math.round(v)).toLocaleString('en-US');
   return (v > 0 ? '+' : v < 0 ? '-' : '') + s;
 }
+// USD tabel pangkat seperti prototipe: tanpa desimal, pemisah ribuan
+// mengikuti bahasa — "$10.000" (ID) / "$10,000" (EN).
+function fmtUsdTable(n) {
+  return '$' + Math.round(Number(n) || 0).toLocaleString(getLang() === 'en' ? 'en-US' : 'id-ID');
+}
+// Rupiah bulat seperti prototipe: "Rp844.000" (ID) / "Rp844,000" (EN).
+function fmtIdr(n) {
+  return 'Rp' + Math.round(Number(n) || 0).toLocaleString(getLang() === 'en' ? 'en-US' : 'id-ID');
+}
 // Pips bertanda seperti prototipe: +428 pips, -31 pips.
 function fmtPipsSigned(n) {
   const v = Math.round(Number(n) || 0);
@@ -147,21 +161,21 @@ function withinHistRange(ts, key, custom) {
 function rangeLabel(range, key) {
   const map = { TODAY: 'dfPresetToday', YESTERDAY: 'dfPresetYesterday', LAST7: 'dfPresetLast7', LAST30: 'dfPresetLast30', THISMONTH: 'dfPresetThisMonth', LASTMONTH: 'dfPresetLastMonth', CUSTOM: 'dfPresetCustom' };
   if (range === 'CUSTOM') {
-    const c = key === 'office' ? S.officeCustom : S.traderProfileCustom;
+    const c = key === 'office' ? S.officeCustom : key === 'wallet' ? S.walletCustom : S.traderProfileCustom;
     return `${c.from || '…'} – ${c.to || '…'}`;
   }
   return t(map[range] || 'dfPresetAll');
 }
 function dateFilterBarHtml(key) {
-  const range = key === 'office' ? S.officeRange : S.traderProfileRange;
+  const range = key === 'office' ? S.officeRange : key === 'wallet' ? S.walletRange : S.traderProfileRange;
   const open = S.dateFilterOpen === key;
   const label = range === 'ALL' ? t('dateFilterBtn') : rangeLabel(range, key);
   return `<span class="df-wrap"><button class="date-filter-btn" type="button" data-df="${key}">${esc(label)} ▾</button>`
     + (open ? dateFilterPopupHtml(key) : '') + `</span>`;
 }
 function dateFilterPopupHtml(key) {
-  const range = key === 'office' ? S.officeRange : S.traderProfileRange;
-  const custom = key === 'office' ? S.officeCustom : S.traderProfileCustom;
+  const range = key === 'office' ? S.officeRange : key === 'wallet' ? S.walletRange : S.traderProfileRange;
+  const custom = key === 'office' ? S.officeCustom : key === 'wallet' ? S.walletCustom : S.traderProfileCustom;
   const draft = S.dateFilterDraft || { range, from: custom.from || '', to: custom.to || '' };
   const presets = ['ALL', 'TODAY', 'YESTERDAY', 'LAST7', 'LAST30', 'THISMONTH', 'LASTMONTH', 'CUSTOM'];
   const presetKey = { ALL: 'dfPresetAll', TODAY: 'dfPresetToday', YESTERDAY: 'dfPresetYesterday', LAST7: 'dfPresetLast7', LAST30: 'dfPresetLast30', THISMONTH: 'dfPresetThisMonth', LASTMONTH: 'dfPresetLastMonth', CUSTOM: 'dfPresetCustom' };
@@ -179,8 +193,8 @@ function bindDateFilter(root, key, onChange) {
       if (S.dateFilterOpen === key) { S.dateFilterOpen = ''; S.dateFilterDraft = null; }
       else {
         S.dateFilterOpen = key;
-        const range = key === 'office' ? S.officeRange : S.traderProfileRange;
-        const custom = key === 'office' ? S.officeCustom : S.traderProfileCustom;
+        const range = key === 'office' ? S.officeRange : key === 'wallet' ? S.walletRange : S.traderProfileRange;
+        const custom = key === 'office' ? S.officeCustom : key === 'wallet' ? S.walletCustom : S.traderProfileCustom;
         S.dateFilterDraft = { range, from: custom.from || '', to: custom.to || '' };
       }
       onChange();
@@ -203,6 +217,7 @@ function bindDateFilter(root, key, onChange) {
       const d = S.dateFilterDraft;
       if (d) {
         if (key === 'office') { S.officeRange = d.range; if (d.range === 'CUSTOM') S.officeCustom = { from: d.from, to: d.to }; }
+        else if (key === 'wallet') { S.walletRange = d.range; if (d.range === 'CUSTOM') S.walletCustom = { from: d.from, to: d.to }; }
         else { S.traderProfileRange = d.range; if (d.range === 'CUSTOM') S.traderProfileCustom = { from: d.from, to: d.to }; }
       }
       S.dateFilterOpen = ''; S.dateFilterDraft = null;
@@ -507,6 +522,7 @@ function showView(name) {
   if (name === 'search') renderSearch();
   if (name === 'trader') renderTraderProfile();
   if (name === 'office') renderOffice();
+  if (name === 'wallet') renderWallet();
   if (name === 'profile') renderProfile();
   if (name === 'guide') renderGuide();
   if (name === 'settings') renderSettings();
@@ -2465,7 +2481,7 @@ async function renderProfile() {
       <h3>${esc(t('kycTitle'))}</h3>
       <div class="kyc-row">${kycVerified
         ? `<span class="stchip ok">${esc(t('kycVerified'))}</span>${p.kyc_full_name ? `<span>${esc(p.kyc_full_name)}</span>` : ''}`
-        : `<span style="color:var(--muted);">${esc(t('kycNotVerified'))}</span>`}</div>
+        : `<span style="color:var(--muted);">${esc(t('kycNotVerified'))}</span><button class="btn" type="button" disabled>${esc(t('kycVerifyBtn'))}</button>`}</div>
       <p>${esc(t('kycHint'))}</p>
       ${kycVerified ? `<p>${esc(t('kycNameLocked'))}</p>` : ''}
     </div>
@@ -2478,9 +2494,9 @@ async function renderProfile() {
         <div class="kv-row"><div class="k">${esc(t('region'))}</div><div class="v">Indonesia</div></div>
       </div>
       <div class="detail-menu">
-        <button type="button" class="menurow" id="menu-settings"><span class="grow"><span class="t">${esc(t('settings'))}</span><span class="d">${esc(t('setAccountSub'))}</span></span><span class="marrow">→</span></button>
-        <button type="button" class="menurow" id="menu-help"><span class="grow"><span class="t">${esc(t('menuHelp'))}</span><span class="d">${esc(t('helpSub'))}</span></span><span class="marrow">→</span></button>
-        <button type="button" class="menurow" id="menu-guide"><span class="grow"><span class="t">${esc(t('guide'))}</span><span class="d">${esc(t('guideSub'))}</span></span><span class="marrow">→</span></button>
+        <button type="button" class="menurow" id="menu-settings"><span class="grow"><span class="t">${esc(t('settings'))}</span></span><span class="marrow">→</span></button>
+        <button type="button" class="menurow" id="menu-help"><span class="grow"><span class="t">${esc(t('menuHelp'))}</span><span class="d">${esc(t('menuHelpDesc'))}</span></span><span class="marrow">→</span></button>
+        <button type="button" class="menurow" id="menu-guide"><span class="grow"><span class="t">${esc(t('guide'))}</span><span class="d">${esc(t('menuGuideDesc'))}</span></span><span class="marrow">→</span></button>
       </div>
     </div>`;
   bindPhotoInput('profile-photo-input', 'profile');
@@ -2519,7 +2535,7 @@ function renderSettings() {
     + `<div class="subcard"><button type="button" class="menurow danger" id="set-logout"><span class="grow"><span class="t">${esc(t('logout'))}</span></span><span class="marrow">→</span></button></div>`;
   $('#set-back-profile').addEventListener('click', () => showView('profile'));
   $$('[data-setsub]', body).forEach((b) => {
-    b.addEventListener('click', () => { S.settingsSub = b.dataset.setsub; renderSettings(); });
+    b.addEventListener('click', () => { S.settingsSub = b.dataset.setsub; S.secPage = null; S.wdAdd = false; renderSettings(); });
   });
   $('#set-logout').addEventListener('click', async () => {
     const yes = await confirmDialog(t('confirmLogoutTitle'), '', t('yesLogout'));
@@ -2529,39 +2545,60 @@ function renderSettings() {
   });
 }
 function settingsBackButton() {
-  return `<button class="btn backbtn" id="set-sub-back" type="button">${esc(t('backProfile'))}</button>`;
+  return `<button class="btn backbtn" id="set-sub-back" type="button">${esc(t('backShort'))}</button>`;
 }
 function bindSettingsBack() {
   const b = $('#set-sub-back');
-  if (b) b.addEventListener('click', () => { S.settingsSub = null; renderSettings(); });
+  if (!b) return;
+  // Di sub-halaman Kata sandi, tombol kembali menutup halaman Ubah
+  // (Kata Sandi / Email) dulu; di sub-halaman lain kembali ke daftar.
+  b.addEventListener('click', () => {
+    if (S.settingsSub === 'security' && S.secPage) { S.secPage = null; renderSettings(); return; }
+    S.settingsSub = null; renderSettings();
+  });
 }
 function renderSettingsAccount(body) {
   const p = S.profile || {};
   body.innerHTML = settingsBackButton()
-    + `<div class="page-head"><h2>${esc(t('setAccount'))}</h2></div>`
+    + `<div class="page-head"><h2>${esc(t('setAccount'))}</h2><p class="sub">${esc(t('setAccountSubhead'))}</p></div>`
     + `<div class="subcard"><div class="field"><label for="set-name">${esc(t('profileName'))}</label><input id="set-name" type="text" value="${esc(p.display_name || '')}" readonly /><div class="hint">${esc(t('setNameHint'))}</div></div></div>`
-    + `<div class="subcard"><div class="field"><label for="set-username">${esc(t('username'))}</label><input id="set-username" type="text" value="${p.username ? '@' + esc(p.username) : ''}" readonly /><div class="hint">${esc(t('setUsernameHint'))}</div></div>`
+    + `<div class="subcard"><div class="risk-note"><span>${esc(t('setUsernameStrip'))}</span></div><div class="field"><label for="set-username">${esc(t('username'))}</label><input id="set-username" type="text" value="${p.username ? '@' + esc(p.username) : ''}" readonly /><div class="hint">${esc(t('setUsernameHint'))}</div></div>`
     + `<div class="field"><label>${esc(t('region'))}</label><input type="text" value="Indonesia" readonly /></div></div>`;
   bindSettingsBack();
 }
 function renderSettingsSecurity(body) {
+  // Sub-halaman "Ubah Kata Sandi" / "Ubah Email" — judul halaman berubah.
+  if (S.secPage === 'pw') { renderSettingsPwForm(body); return; }
+  if (S.secPage === 'email') { renderSettingsEmailForm(body); return; }
   body.innerHTML = settingsBackButton()
     + `<div class="page-head"><h2>${esc(t('securityTitle'))}</h2></div>`
     + `<div class="subcard">
-      <dl class="kv"><dt>${esc(t('email'))}</dt><dd>${esc(S.user?.email || '—')}</dd></dl>
+      <div class="menurow" style="cursor:default;"><span class="grow"><span class="t">${esc(t('email'))}</span><span class="d">${esc(S.user?.email || '—')}</span></span><button type="button" class="iconbtn" id="sec-open-email" aria-label="${esc(t('secChangeEmail'))}">✎</button></div>
+      <div class="menurow" style="cursor:default;"><span class="grow"><span class="t">${esc(t('password'))}</span><span class="d">••••••••</span></span><button type="button" class="iconbtn" id="sec-open-pw" aria-label="${esc(t('secChangePw'))}">✎</button></div>
+    </div>`;
+  bindSettingsBack();
+  $('#sec-open-pw').addEventListener('click', () => { S.secPage = 'pw'; renderSettings(); });
+  $('#sec-open-email').addEventListener('click', () => { S.secPage = 'email'; renderSettings(); });
+}
+function renderSettingsPwForm(body) {
+  body.innerHTML = settingsBackButton()
+    + `<div class="page-head"><h2>${esc(t('secChangePw'))}</h2></div>`
+    + `<div class="subcard">
       <form id="pw-form">
-        <div class="field">
-          <label for="pw-new">${esc(t('newPassword'))}</label>
-          <input id="pw-new" type="password" required autocomplete="new-password" minlength="8" />
-          <div class="hint">${esc(t('passwordHint'))}</div>
+        <div class="wal-grid">
+          <div class="field">
+            <label for="pw-new">${esc(t('newPassword'))}</label>
+            <input id="pw-new" type="password" required autocomplete="new-password" minlength="8" />
+          </div>
+          <div class="field">
+            <label for="pw-confirm">${esc(t('passwordConfirm'))}</label>
+            <input id="pw-confirm" type="password" required autocomplete="new-password" />
+          </div>
         </div>
-        <div class="field">
-          <label for="pw-confirm">${esc(t('passwordConfirm'))}</label>
-          <input id="pw-confirm" type="password" required autocomplete="new-password" />
-          <div class="hint" id="pw-match-hint"></div>
-        </div>
+        <p class="lead-sm" style="margin-top:0">${esc(t('secPwHint'))}</p>
+        <div class="hint" id="pw-match-hint"></div>
         <div class="notice err" id="pw-err" hidden></div>
-        <button class="btn primary" type="submit" id="pw-submit">${esc(t('save'))}</button>
+        <div class="detail-actions"><button class="btn primary" type="submit" id="pw-submit">${esc(t('save'))}</button><button class="btn" type="button" id="pw-cancel">${esc(t('cancel'))}</button></div>
       </form></div>`;
   bindSettingsBack();
   const pwNew = $('#pw-new');
@@ -2580,6 +2617,7 @@ function renderSettingsSecurity(body) {
   };
   pwNew.addEventListener('input', refreshPwHint);
   pwCf.addEventListener('input', refreshPwHint);
+  $('#pw-cancel').addEventListener('click', () => { S.secPage = null; renderSettings(); });
   $('#pw-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const errBox = $('#pw-err');
@@ -2606,11 +2644,35 @@ function renderSettingsSecurity(body) {
     }
   });
 }
+function renderSettingsEmailForm(body) {
+  // Ubah email NONAKTIF: butuh alur konfirmasi email (Supabase) — belum dibangun.
+  body.innerHTML = settingsBackButton()
+    + `<div class="page-head"><h2>${esc(t('secChangeEmail'))}</h2></div>`
+    + `<div class="subcard">
+      <form id="email-form" novalidate>
+        <div class="wal-grid">
+          <div class="field">
+            <label for="em-new">${esc(t('secEmailNew'))}</label>
+            <input id="em-new" type="email" maxlength="80" autocomplete="email" disabled />
+          </div>
+          <div class="field">
+            <label for="em-pw">${esc(t('passwordConfirm'))}</label>
+            <input id="em-pw" type="password" autocomplete="current-password" disabled />
+          </div>
+        </div>
+        <p class="lead-sm" style="margin-top:0">${esc(t('secEmailHint'))}</p>
+        <p class="note">${esc(t('secEmailSoon'))}</p>
+        <div class="detail-actions"><button class="btn primary" type="submit" disabled>${esc(t('save'))}</button><button class="btn" type="button" id="em-cancel">${esc(t('cancel'))}</button></div>
+      </form></div>`;
+  bindSettingsBack();
+  $('#email-form').addEventListener('submit', (e) => e.preventDefault());
+  $('#em-cancel').addEventListener('click', () => { S.secPage = null; renderSettings(); });
+}
 function renderSettingsAppearance(body) {
   const pref = getThemePref();
   body.innerHTML = settingsBackButton()
     + `<div class="page-head"><h2>${esc(t('theme'))}</h2></div>`
-    + `<div class="subcard">
+    + `<div class="subcard"><p>${esc(t('setAppearanceSub'))}</p>
       <div class="seg" role="group">
         <button type="button" data-theme-opt="auto" aria-pressed="${pref === 'auto'}">${esc(t('themeAuto'))}</button>
         <button type="button" data-theme-opt="light" aria-pressed="${pref === 'light'}">${esc(t('themeLight'))}</button>
@@ -2627,19 +2689,30 @@ function renderSettingsAppearance(body) {
 function renderSettingsNotifications(body) {
   const prefs = getNotifPrefs();
   const items = [
-    ['newSignal', t('notifToggleNew')],
-    ['tpSl', t('notifToggleTpSl')],
-    ['edited', t('notifToggleEdited')],
-    ['expired', t('notifToggleExpired')],
-    ['dup', t('notifToggleDup')],
-    ['sub', t('notifToggleSub')],
+    ['newSignal', t('notifToggleNew'), t('notifDescNew')],
+    ['tpSl', t('notifToggleTpSl'), t('notifDescTpSl')],
+    ['sub', t('notifToggleSub'), t('notifDescSub')],
+    ['edited', t('notifToggleEdited'), t('notifDescEdited')],
+    ['expired', t('notifToggleExpired'), t('notifDescExpired')],
+    ['dup', t('notifToggleDup'), t('notifDescDup')],
   ];
+  // Baris izin sistem: mengikuti izin browser (default / granted / denied).
+  const sysPerm = ('Notification' in window) ? Notification.permission : 'unsupported';
+  const sysDesc = sysPerm === 'granted' ? t('notifSysAllowed')
+    : sysPerm === 'denied' ? t('notifSysDenied')
+    : sysPerm === 'unsupported' ? t('notifSysUnsupported') : t('notifSysDesc');
   body.innerHTML = settingsBackButton()
     + `<div class="page-head"><h2>${esc(t('setNotif'))}</h2></div>`
-    + `<div class="subcard">`
-    + items.map(([key, label]) => `<div class="settings-row"><span>${esc(label)}</span><input type="checkbox" data-notif-pref="${key}" ${prefs[key] ? 'checked' : ''} /></div>`).join('')
+    + `<div class="subcard"><p>${esc(t('setNotifSub'))}</p>`
+    + `<div class="setrow"><span class="grow"><span class="t">${esc(t('notifSysTitle'))}</span><span class="d">${esc(sysDesc)}</span></span><input type="checkbox" id="sys-notif-cb" ${sysPerm === 'granted' ? 'checked' : ''} ${sysPerm === 'granted' || sysPerm === 'unsupported' ? 'disabled' : ''} aria-label="${esc(t('notifSysTitle'))}" /></div>`
+    + items.map(([key, label, desc]) => `<div class="setrow"><span class="grow"><span class="t">${esc(label)}</span><span class="d">${esc(desc)}</span></span><input type="checkbox" data-notif-pref="${key}" ${prefs[key] ? 'checked' : ''} aria-label="${esc(label)}" /></div>`).join('')
     + `<p>${esc(t('notifSavedNote'))}</p></div>`;
   bindSettingsBack();
+  const sysCb = $('#sys-notif-cb');
+  if (sysCb) sysCb.addEventListener('change', async () => {
+    try { await Notification.requestPermission(); } catch (e) { /* abaikan */ }
+    renderSettings();
+  });
   $$('[data-notif-pref]', body).forEach((cb) => {
     cb.addEventListener('change', () => {
       const next = getNotifPrefs();
@@ -2648,12 +2721,13 @@ function renderSettingsNotifications(body) {
     });
   });
 }
+
 function renderSettingsLanguage(body) {
   body.innerHTML = settingsBackButton()
     + `<div class="page-head"><h2>${esc(t('language'))}</h2></div>`
-    + `<div class="subcard">
+    + `<div class="subcard"><p>${esc(t('setLangSub'))}</p>
       <div class="seg" role="group">
-        <button type="button" data-lang-opt="id" aria-pressed="${getLang() === 'id'}">Bahasa Indonesia</button>
+        <button type="button" data-lang-opt="id" aria-pressed="${getLang() === 'id'}">Indonesia</button>
         <button type="button" data-lang-opt="en" aria-pressed="${getLang() === 'en'}">English</button>
       </div></div>`;
   bindSettingsBack();
@@ -2666,22 +2740,105 @@ function renderSettingsLanguage(body) {
   });
 }
 function renderSettingsWithdraw(body) {
-  body.innerHTML = settingsBackButton()
+  const p = S.profile || {};
+  const holder = p.display_name || p.username || S.user?.email || '';
+  let html = settingsBackButton()
     + `<div class="page-head"><h2>${esc(t('setWithdraw'))}</h2></div>`
-    + `<div class="subcard">
-      <div class="empty"><strong>${esc(t('setWithdrawEmpty'))}</strong>${esc(t('setWithdrawNote'))}</div></div>`;
+    + `<div class="subcard"><h3>${esc(t('setWithdraw'))}</h3><p>${esc(t('setWithdrawDesc'))}</p>`
+    + `<div class="empty" style="margin-top:10px">${esc(t('setWithdrawEmpty'))}</div>`;
+  if (!S.wdAdd) {
+    html += `<button type="button" class="menurow" id="wd-add"><span class="grow"><span class="t">${esc(t('setWithdrawAdd'))}</span></span><span class="marrow" aria-hidden="true">→</span></button>`;
+  } else {
+    html += `<form id="wd-form" novalidate>
+      <div class="wal-grid">
+        <div class="field"><label for="wd-bank">${esc(t('wdBank'))}</label><input id="wd-bank" maxlength="30" autocomplete="off" placeholder="${esc(t('wdBankPh'))}" /></div>
+        <div class="field"><label for="wd-no">${esc(t('wdAccNo'))}</label><input id="wd-no" inputmode="numeric" maxlength="24" autocomplete="off" /></div>
+      </div>
+      <div class="field"><label for="wd-name">${esc(t('wdHolder'))} <span class="stchip ok">${esc(t('locked'))}</span></label><input id="wd-name" maxlength="60" autocomplete="off" disabled value="${esc(holder)}" /><span class="hint">${esc(t('wdLockedHint'))}</span></div>
+      <p class="note">${esc(t('wdSaveSoon'))}</p>
+      <div class="detail-actions"><button type="submit" class="btn primary" disabled>${esc(t('save'))}</button><button type="button" class="btn" id="wd-cancel">${esc(t('cancel'))}</button></div>
+    </form>`;
+  }
+  html += `</div>`;
+  body.innerHTML = html;
   bindSettingsBack();
+  const addBtn = $('#wd-add');
+  if (addBtn) addBtn.addEventListener('click', () => { S.wdAdd = true; renderSettings(); });
+  const form = $('#wd-form');
+  if (form) {
+    // Tombol Simpan nonaktif — cegah submit implisit (Enter di input).
+    form.addEventListener('submit', (e) => e.preventDefault());
+    $('#wd-cancel').addEventListener('click', () => { S.wdAdd = false; renderSettings(); });
+  }
 }
 
-// ------------------------------------------------- Pusat Bantuan & Keamanan ---
+// ------------------------------------------------------------- Dompet ---
+// Struktur mengikuti prototipe: hero saldo, strip akun penarikan, lead,
+// teks kunci KYC, tab riwayat penarikan/langganan. Semua aksi pembayaran
+// NONAKTIF (fase pembayaran terakhir) — saldo nyata akun = Rp0 karena
+// belum ada penghasilan langganan di database; riwayat selalu kosong.
+function renderWallet() {
+  const body = $('#wallet-body');
+  if (!body) return;
+  const tab = S.walletTab === 'subs' ? 'subs' : 'tx';
+  const range = S.walletRange;
+  const kycVerified = (S.profile?.kyc_status) === 'verified';
+  const emptyKey = tab === 'tx' ? 'walletTxEmpty' : 'walletSubsEmpty';
+  body.innerHTML = `<div class="wal-hero"><span class="demo-badge">${esc(t('walletHeroBadge'))}</span>`
+    + `<div class="wal-bal-label">${esc(t('walletBalLabel'))}</div><div class="wal-bal-value mono">${esc(fmtIdr(0))}</div>`
+    + `<div class="wal-actions"><button type="button" class="btn" disabled>${esc(t('walletWithdraw'))}</button></div></div>`
+    + `<div class="risk-note"><span><b>${esc(t('walletNoAcc'))}</b> <button type="button" class="linkbtn" id="wallet-add-acc">${esc(t('walletAddAcc'))}</button> ${esc(t('walletNoAccSuffix'))}</span></div>`
+    + `<p class="lead-sm">${esc(t('walletLead'))}</p>`
+    + (kycVerified ? '' : `<p class="lead-sm kyc-note">${esc(t('walletKycLock'))}</p>`)
+    + `<div class="subtabs" role="tablist" aria-label="${esc(t('walletTitle'))}">`
+    + `<button type="button" class="subtab" role="tab" data-waltab="tx" aria-selected="${tab === 'tx'}">${esc(t('walletHistTx'))}</button>`
+    + `<button type="button" class="subtab" role="tab" data-waltab="subs" aria-selected="${tab === 'subs'}">${esc(t('walletHistSubs'))}</button></div>`
+    + `<h3 class="section">${esc(tab === 'tx' ? t('walletHistTx') : t('walletHistSubs'))}</h3>`
+    + `<div class="row" style="margin-bottom:12px;"><button type="button" class="chip" aria-pressed="true">${esc(t('rangeAll'))}</button>${dateFilterBarHtml('wallet')}</div>`
+    + `<div class="empty"><strong>${esc(range === 'ALL' ? t(emptyKey) : t('histEmptyRange'))}</strong></div>`;
+  $('#wallet-add-acc').addEventListener('click', () => { S.settingsSub = 'withdraw'; S.secPage = null; S.wdAdd = false; showView('settings'); });
+  $$('[data-waltab]', body).forEach((b) => {
+    b.addEventListener('click', () => { S.walletTab = b.dataset.waltab; renderWallet(); });
+  });
+  bindDateFilter(body, 'wallet', () => renderWallet());
+}
+
 function renderHelp() {
   const body = $('#help-body');
   if (!body) return;
-  const faqs = [1, 2, 3, 4, 5].map((n) => `<div class="faq-item"><b>${esc(t('helpFaq' + n + 'Q'))}</b><span>${esc(t('helpFaq' + n + 'A'))}</span></div>`).join('');
+  // Daftar trader untuk select laporan: muat bila belum ada (pola yang
+  // sama seperti Office Follower) lalu render ulang saat sudah dimuat.
+  if (!(S.traders || []).length) {
+    api.listTraders().then((rows) => {
+      S.traders = rows || [];
+      if (S.view === 'help') renderHelp();
+    }).catch(() => {});
+  }
+  const faqs = [1, 2, 3, 4, 5].map((n) => `<details class="more"><summary>${esc(t('helpFaq' + n + 'Q'))}<span aria-hidden="true">▾</span></summary><div class="more-body"><p>${esc(t('helpFaq' + n + 'A'))}</p></div></details>`).join('');
+  const traders = (S.traders || []).map((tr) => {
+    const un = one(tr.profiles)?.username;
+    const label = tr.trader_display_name || (un ? '@' + un : t('noName'));
+    return `<option value="${esc(tr.profile_id)}">${esc(label)}${un && tr.trader_display_name ? ' (@' + esc(un) + ')' : ''}</option>`;
+  }).join('');
+  const reasons = [1, 2, 3, 4].map((n) => `<option>${esc(t('helpReportReason' + n))}</option>`).join('');
   body.innerHTML = `<div class="risk-note"><span><b>${esc(t('helpScamTitle'))}</b> ${esc(t('helpScamBody'))}</span></div>`
-    + `<div class="card">${faqs}</div>`
-    + `<button class="guidelink" id="help-guide-link" type="button">${esc(t('guideCta'))}<span aria-hidden="true"> →</span></button>`;
-  $('#help-guide-link').addEventListener('click', () => showView('guide'));
+    + `<h3 class="section">${esc(t('helpFaqTitle'))}</h3>${faqs}`
+    + `<h3 class="section">${esc(t('helpReportTitle'))}</h3>`
+    + `<form class="subcard" id="help-report-form" novalidate><div class="wal-grid">
+        <div class="field"><label for="rp-trader">${esc(t('helpReportTrader'))}</label><select id="rp-trader">${traders || `<option disabled>${esc(t('helpReportPick'))}</option>`}</select></div>
+        <div class="field"><label for="rp-reason">${esc(t('helpReportReason'))}</label><select id="rp-reason">${reasons}</select></div>
+      </div>
+      <div class="field"><label for="rp-desc">${esc(t('helpReportDesc'))}</label><textarea id="rp-desc" maxlength="500" rows="3"></textarea></div>
+      <p class="note">${esc(t('helpReportSoon'))}</p>
+      <div class="detail-actions"><button type="submit" class="btn primary" disabled>${esc(t('helpReportSubmit'))}</button></div>
+    </form>`
+    + `<h3 class="section">${esc(t('helpRulesTitle'))}</h3>`
+    + `<details class="more"><summary>${esc(t('helpRuleTos'))}<span aria-hidden="true">▾</span></summary><div class="more-body"><p>${esc(t('helpRuleTosBody'))}</p></div></details>`
+    + `<details class="more"><summary>${esc(t('helpRulePrivacy'))}<span aria-hidden="true">▾</span></summary><div class="more-body"><p>${esc(t('helpRulePrivacyBody'))}</p></div></details>`
+    + `<details class="more"><summary>${esc(t('helpRuleRefund'))}<span aria-hidden="true">▾</span></summary><div class="more-body"><p>${esc(t('helpRuleRefundBody'))}</p></div></details>`;
+  const form = $('#help-report-form');
+  // Tombol kirim nonaktif (Fase 5) — cegah submit implisit apa pun.
+  if (form) form.addEventListener('submit', (e) => e.preventDefault());
 }
 
 // -------------------------------------------------------------- Panduan ---
@@ -2740,7 +2897,7 @@ function renderGuide() {
   for (let ln = 1; ln <= 24; ln++) {
     const refLn = levelRef(ln);
     ladderRows += `<tr><td class="lvlcell mono">L${ln}</td><td class="rankname">${esc(levelName(ln, getLang()))}</td>`
-      + `<td class="num mono">${esc(fmtUsd(refLn))}</td><td class="num mono">${esc(fmtUsd(refLn - START_BALANCE_USD))}</td>`
+      + `<td class="num mono">${esc(fmtUsdTable(refLn))}</td><td class="num mono">${esc(fmtUsdTable(refLn - START_BALANCE_USD))}</td>`
       + `<td>${ln === 1 ? esc(t('ladStart')) : esc(t('ladRStep'))}</td></tr>`;
   }
   const ladder = `<p>${t('ladIntro')}</p>`
