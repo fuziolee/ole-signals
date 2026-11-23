@@ -276,22 +276,6 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
 .gloss-item span { color: var(--muted); font-size: 13px; line-height: 1.5; display: block; }
 .foot { margin-top: 26px; font-size: 12px; color: var(--muted); text-align: center; }
 
-@media (max-width: 760px) {
-  .roadmap ul { grid-template-columns: 1fr; }
-  .gloss-grid { grid-template-columns: 1fr; }
-  .pstats { grid-template-columns: repeat(2, 1fr); }
-  .traders { grid-template-columns: 1fr; }
-  .search-grid { grid-template-columns: 1fr 1fr; }
-}
-
-@media (max-width: 560px) {
-  .sig-levels { grid-template-columns: repeat(2, 1fr); }
-  .conds { grid-template-columns: 1fr; }
-  .overlay { padding: 24px 10px; }
-  .search-grid { grid-template-columns: 1fr; }
-  .board-stats { grid-template-columns: repeat(2, 1fr); }
-}
-
 /* ---- ronde penyelarasan struktur (port prototipe; hanya var yang ada) ---- */
 
 /* Lonceng notifikasi di header */
@@ -364,7 +348,7 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
 
 /* Statistik: grid + grafik + tabel */
 .pstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 4px 0 12px; }
-.stat-cell { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.stat-cell { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--teal); border-radius: 12px; padding: 10px 12px; }
 .stat-cell .num { font-size: 16px; font-weight: 800; }
 .stat-cell .lbl { font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.35; text-transform: uppercase; letter-spacing: .06em; }
 .chart-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 12px; }
@@ -514,6 +498,24 @@ table.board td.num, table.board th.num { text-align: right; }
 .tcard .meta .fol { font-size: 12.5px; color: var(--muted); margin-left: auto; white-space: nowrap; }
 .tcard .actions { display: flex; gap: 8px; margin-top: auto; flex-wrap: wrap; }
 .tcard .actions .btn { flex: 1; justify-content: center; }
+
+/* ---- ronde 6: media query HP HARUS setelah aturan dasar grid (sebelumnya
+   aturan dasar ditulis setelah blok ini sehingga menang di semua lebar) ---- */
+@media (max-width: 760px) {
+  .roadmap ul { grid-template-columns: 1fr; }
+  .gloss-grid { grid-template-columns: 1fr; }
+  .pstats { grid-template-columns: repeat(2, 1fr); }
+  .traders { grid-template-columns: 1fr; }
+  .search-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 560px) {
+  .sig-levels { grid-template-columns: repeat(2, 1fr); }
+  .conds { grid-template-columns: 1fr; }
+  .overlay { padding: 24px 10px; }
+  .search-grid { grid-template-columns: 1fr; }
+  .board-stats { grid-template-columns: repeat(2, 1fr); }
+}
 
 /* Chip filter profil / Ruang Kerja (Semua / Pending / Aktif + Riwayat di kanan) */
 .pfilters { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
