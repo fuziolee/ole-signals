@@ -204,6 +204,8 @@ $$('.bottom-nav [data-nav]').forEach((b) => {
 });
 $('#btn-guide-back').addEventListener('click', () => showView('profile'));
 $('#btn-refresh-home').addEventListener('click', () => renderHome(true));
+$('#btn-hero-search').addEventListener('click', () => showView('search'));
+$('#btn-hero-guide').addEventListener('click', () => showView('guide'));
 
 // ----------------------------------------------------------------- auth ---
 function showAuth() {
@@ -328,7 +330,7 @@ function signalCardHtml(sig) {
     ? `<div class="sig-meta">${esc(fmtExpiry(sig.expires_at))}</div>` : '';
   return `<article class="sig ${dirCls}" data-sig="${esc(sig.id)}" tabindex="0" role="button">
     <div class="sig-head">
-      <span class="sig-pair">${esc(sig.pair)}</span>
+      <span class="sig-pair sig-pair-lg">${esc(sig.pair)}</span>
       <span class="dir ${dirCls}">${esc(sig.direction)}</span>
       ${statusPill(sig.status)}
       <span class="spacer"></span>
@@ -391,7 +393,7 @@ function openSignalDetail(id) {
   openOverlay(`
     <button class="btn ghost close-x" id="ov-close" type="button">✕</button>
     <div class="sig-head">
-      <span class="sig-pair">${esc(sig.pair)}</span>
+      <span class="sig-pair sig-pair-lg">${esc(sig.pair)}</span>
       <span class="dir ${dirCls}">${esc(sig.direction)}</span>
       ${statusPill(sig.status)}
     </div>
