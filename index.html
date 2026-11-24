@@ -35,7 +35,6 @@
   <div class="app" id="app" hidden>
     <header class="app-header">
       <div class="logo">OLE <em>Signals</em></div>
-      <div class="tagline" data-i18n="appTagline"></div>
       <div class="notif-wrap">
         <button class="bellbtn" id="notif-bell" type="button" aria-label="Notifikasi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="bellbadge" id="notif-badge" hidden>0</span></button>
         <div class="notif-panel" id="notif-panel" hidden></div>
@@ -47,13 +46,11 @@
       <section class="view" id="view-home" aria-label="Beranda">
         <header class="hero">
           <h1 data-i18n="heroH1"></h1>
-          <p data-i18n="heroP"></p>
           <div class="flow" role="img" aria-label="PENDING → TERKUNCI → WIN / LOSS">
             <span class="fstep"><b>PENDING</b><i data-i18n="flowPendingSub"></i></span><span class="farr" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
             <span class="fstep"><b data-i18n="flowLocked"></b><i data-i18n="flowLockedSub"></i></span><span class="farr" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
             <span class="fstep win"><b>WIN / LOSS</b><i data-i18n="flowResultSub"></i></span>
           </div>
-          <p class="lead-sm" data-i18n-html="heroLead"></p>
           <div class="hero-cta">
             <button class="btn primary" id="btn-hero-top" type="button"><span data-i18n="heroCtaBoard"></span></button>
             <button class="btn" id="btn-hero-follow" type="button"><span data-i18n="heroCtaFollow"></span></button>
@@ -61,17 +58,17 @@
           <button class="guidelink" id="btn-hero-guide" type="button"><span data-i18n="guideCta"></span><span aria-hidden="true"> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span></button>
         </header>
         <div id="home-filters"></div>
+        <p class="risk-note" data-i18n="riskNote"></p>
         <div id="home-list"></div>
         <section class="roadmap">
           <h2 data-i18n="roadTitle"></h2>
-          <p data-i18n="roadSub"></p>
           <ul>
-            <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><b data-i18n="road1T"></b><span data-i18n="road1D"></span></div></li>
-            <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><b data-i18n="road2T"></b><span data-i18n="road2D"></span></div></li>
-            <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><b data-i18n="road3T"></b><span data-i18n="road3D"></span></div></li>
-            <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><b data-i18n="road4T"></b><span data-i18n="road4D"></span></div></li>
-            <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><b data-i18n="road5T"></b><span data-i18n="road5D"></span></div></li>
-            <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><b data-i18n="road6T"></b><span data-i18n="road6D"></span></div></li>
+            <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><b data-i18n="road1T"></b></div></li>
+            <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><b data-i18n="road2T"></b></div></li>
+            <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><b data-i18n="road3T"></b></div></li>
+            <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><b data-i18n="road4T"></b></div></li>
+            <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><b data-i18n="road5T"></b></div></li>
+            <li><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><div><b data-i18n="road6T"></b></div></li>
           </ul>
         </section>
         <p class="foot" data-i18n-html="riskWarn"></p>
@@ -104,21 +101,18 @@
       <!-- Dompet (struktur lengkap; fitur pembayaran nonaktif) -->
       <section class="view" id="view-wallet" aria-label="Dompet">
         <h1 data-i18n="walletTitle"></h1>
-        <p class="sub" data-i18n="walletSub"></p>
         <div id="wallet-body"></div>
       </section>
 
       <!-- Ruang Kerja -->
       <section class="view" id="view-office" aria-label="Ruang Kerja">
         <h1 data-i18n="officeTitle"></h1>
-        <p class="sub" data-i18n-html="officeSub"></p>
         <div id="office-body"></div>
       </section>
 
       <!-- Profil -->
       <section class="view" id="view-profile" aria-label="Profil">
         <h1 data-i18n="profileTitle"></h1>
-        <p class="sub" data-i18n="profileSub"></p>
         <div id="profile-body"></div>
       </section>
 
