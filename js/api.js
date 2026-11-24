@@ -13,7 +13,9 @@ export async function getSession() {
 }
 
 export function onAuthChange(cb) {
-  return supabase.auth.onAuthStateChange((_event, session) => cb(session));
+  // Teruskan jenis event ke pemanggil: TOKEN_REFRESHED (refresh token
+  // otomatis) tidak boleh memindahkan tampilan pengguna (C-01).
+  return supabase.auth.onAuthStateChange((event, session) => cb(event, session));
 }
 
 export async function signUp(email, password) {
@@ -49,7 +51,7 @@ export async function updatePassword(password) {
 export async function getMyProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, display_name, avatar_url, region, kyc_status, kyc_full_name, kyc_reference, created_at')
+    .select('id, username, display_name, avatar_url, region, kyc_status, kyc_full_name, kyc_reference, kyc_reject_reason, display_name_changed_at, created_at')
     .eq('id', userId)
     .maybeSingle();
   if (error) throw error;
@@ -196,7 +198,9 @@ export async function countFollowers(traderId) {
 export async function listAllSignals(limit = 500) {
   const { data, error } = await supabase
     .from('signals')
-    .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, status, version, created_at, expires_at, activated_at, closed_at, close_price, profit_usd, profit_pips, r_value, holding_minutes')
+    // B4-01: join traders agar halaman verifikasi /v/ bisa menampilkan
+    // @username + level trader (sebelumnya S.traders kosong di jalur /v/).
+    .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, status, version, created_at, expires_at, activated_at, closed_at, close_price, profit_usd, profit_pips, r_value, holding_minutes, traders(username, trader_display_name, trader_avatar_url, trader_progress(level, balance_usd))')
     .neq('status', 'CANCELLED')
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -215,6 +219,25 @@ export async function listMyFollows(userId) {
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data || [];
+}
+
+// Ikuti / berhenti mengikuti trader (B2-05). RLS follows_insert_own /
+// follows_delete_own mengizinkan pemilik; follows_not_self melarang
+// mengikuti diri sendiri.
+export async function followTrader(userId, traderId) {
+  const { error } = await supabase
+    .from('follows')
+    .insert({ follower_id: userId, trader_id: traderId });
+  if (error) throw error;
+}
+
+export async function unfollowTrader(userId, traderId) {
+  const { error } = await supabase
+    .from('follows')
+    .delete()
+    .eq('follower_id', userId)
+    .eq('trader_id', traderId);
+  if (error) throw error;
 }
 
 export async function listMyCopies(userId) {
@@ -260,11 +283,27 @@ export async function markAllNotificationsRead(userId) {
   return data || [];
 }
 
+// B4-05: tandai SATU notifikasi sebagai dibaca saat diklik.
+export async function markNotificationRead(notifId) {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('id', notifId);
+  if (error) throw error;
+}
+
 // ----------------------------------------------------------------- foto ---
 // Upload avatar ke bucket Storage 'avatars' (migrasi 08_storage_avatars).
 // target 'profile' -> profiles.avatar_url; 'trader' -> traders.trader_avatar_url.
 // Gagal dengan pesan jelas bila bucket belum diterapkan di dashboard.
-export async function uploadAvatar(file, userId, { target = 'profile' } = {}) {
+// Jalur file Storage dari URL publik avatar
+// (.../storage/v1/object/public/avatars/<userId>/avatar-<ts>.<ext>).
+function avatarPathFromUrl(url) {
+  const m = String(url || '').match(/\/avatars\/(.+)$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+export async function uploadAvatar(file, userId, { target = 'profile', oldUrl = null } = {}) {
   if (!file || !userId) throw new Error('avatar-missing');
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
   const path = `${userId}/avatar-${Date.now()}.${ext}`;
@@ -287,6 +326,13 @@ export async function uploadAvatar(file, userId, { target = 'profile' } = {}) {
       .update({ avatar_url: url })
       .eq('id', userId);
     if (profErr) throw profErr;
+  }
+  // A-05: hapus file avatar lama (best effort) agar tidak yatim di
+  // Storage — baru dihapus SETELAH unggahan + DB berhasil, supaya foto
+  // lama tetap ada bila unggahan gagal.
+  const oldPath = avatarPathFromUrl(oldUrl);
+  if (oldPath && oldPath !== path) {
+    try { await supabase.storage.from('avatars').remove([oldPath]); } catch (e) { /* abaikan */ }
   }
   return url;
 }
@@ -358,6 +404,18 @@ export async function deleteAvatar(userId, { target = 'profile' } = {}) {
 export async function uncopy(copyId) {
   const { error } = await supabase.from('copies').delete().eq('id', copyId);
   if (error) throw error;
+}
+
+// Catat salinan sinyal follower (B2-01). Lot = lot sinyal sumber (prototipe).
+// unique (follower_id, signal_id) mencegah salinan ganda di DB.
+export async function copySignal(userId, signalId, lotSize) {
+  const { data, error } = await supabase
+    .from('copies')
+    .insert({ follower_id: userId, signal_id: signalId, lot_size: lotSize })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 // ----------------------------------------------------------------- harga ---
