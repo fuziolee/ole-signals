@@ -22,7 +22,7 @@ const STR = {
     walletSubsEmpty: 'Belum ada langganan.',
     login: 'Masuk',
     signup: 'Daftar',
-    logout: 'Log out',
+    logout: 'Keluar',
     email: 'Email',
     password: 'Kata sandi',
     passwordHint: 'Minimal 8 karakter, harus ada angka dan huruf kapital.',
