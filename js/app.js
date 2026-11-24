@@ -2390,6 +2390,31 @@ function renderHomeFilters() {
         strip2.scrollLeft += ev.deltaY;
       }
     }, { passive: false });
+    // R20: seret mouse (drag) untuk menggeser strip. Roda saja tidak
+    // cukup — pengguna desktop yang mencoba menyeret strip sebelumnya
+    // tidak terjadi apa-apa (tidak ada handler drag). Hanya pointer mouse;
+    // sentuh tetap memakai scroll native (overflow-x: auto).
+    let dragX = null, dragScroll = 0, dragged = false;
+    strip2.addEventListener('pointerdown', (ev) => {
+      if (ev.pointerType !== 'mouse') return;
+      dragX = ev.clientX; dragScroll = strip2.scrollLeft; dragged = false;
+      strip2.classList.add('dragging');
+      try { strip2.setPointerCapture(ev.pointerId); } catch (e) { /* abaikan */ }
+    });
+    strip2.addEventListener('pointermove', (ev) => {
+      if (dragX === null || ev.pointerType !== 'mouse') return;
+      const dx = ev.clientX - dragX;
+      if (Math.abs(dx) > 5) dragged = true;
+      strip2.scrollLeft = dragScroll - dx;
+    });
+    const endDrag = () => { dragX = null; strip2.classList.remove('dragging'); };
+    strip2.addEventListener('pointerup', endDrag);
+    strip2.addEventListener('pointercancel', endDrag);
+    // Bila habis diseret, klik chip yang terpicu di bawah pointer harus
+    // dibatalkan (kalau tidak, seret malah memfilter pair).
+    strip2.addEventListener('click', (ev) => {
+      if (dragged) { ev.preventDefault(); ev.stopPropagation(); dragged = false; }
+    }, true);
   }
   $$('[data-fpair]', box).forEach((b) => {
     b.addEventListener('click', () => { S.feedFilter.pair = b.dataset.fpair; renderHomeList(); renderHomeFilters(); });
@@ -2930,8 +2955,10 @@ function renderTraderProfileBody(traderId) {
       : `<div class="empty"><strong>${esc(range === 'ALL' ? t('profJournalEmpty') : t('histEmptyRange'))}</strong></div>`;
   } else {
     const shown = f === 'ALL' ? open : open.filter((s) => s.status === f);
+    // R20: feed profil trader 2 kolom di web (seperti Beranda) — bungkus
+    // .feed-grid; Riwayat (jurnal) tidak disentuh.
     html += shown.length
-      ? shown.map(signalCardHtml).join('')
+      ? `<div class="feed-grid">` + shown.map(signalCardHtml).join('') + `</div>`
       : `<div class="empty"><strong>${esc(sigs.length === 0 ? t('profNoSignals') : t('profNoFilter'))}</strong></div>`;
   }
   box.innerHTML = html;
@@ -3666,7 +3693,9 @@ async function renderOfficeList() {
     list.innerHTML = `<div class="empty"><strong>${t(emptyKey)}</strong></div>`;
     return;
   }
-  list.innerHTML = filtered.map(signalCardHtml).join('');
+  // R20: feed Ruang Kerja Trader 2 kolom di web (seperti Beranda) — bungkus
+  // .feed-grid; Riwayat (jurnal) tidak disentuh.
+  list.innerHTML = `<div class="feed-grid">` + filtered.map(signalCardHtml).join('') + `</div>`;
   bindSignalCards(list);
 }
 
@@ -3714,8 +3743,8 @@ function renderOfficeFollowerTab() {
     const aktif = copiedSignals.filter((s) => s.status === 'AKTIF');
     const pend = copiedSignals.filter((s) => s.status === 'PENDING');
     // Catatan floating di bawah grid statistik (nilai nyata; "—" bila
-    // belum ada harga live). Bila belum ada salinan, teks kosong hanya
-    // tampil sekali (di .empty) — floatNote dibiarkan kosong (D-02/B2-04).
+    // belum ada harga live). Bila belum ada salinan, floatNote dibiarkan
+    // kosong (D-02/B2-04).
     let floatNote = '';
     if (copiedSignals.length) {
       const vals = aktif.map((s) => floatingUsd(s));
@@ -3724,8 +3753,14 @@ function renderOfficeFollowerTab() {
       const pendPart = pend.length ? t('jrnlPendPart', { n: pend.length }) : '';
       floatNote = `<p class="journal-note">${t('jrnlNote', { amt, n: aktif.length, pend: pendPart })}</p>`;
     }
-    box.innerHTML = (copiedSignals.length ? '' : `<div class="empty">${t('jrnlEmpty')}</div>`)
-      + statsSectionHtml(st, 'officeJournalStatsTitle', null, floatNote);
+    // R20-6: Jurnal adalah jurnal KINERJA (statistik + riwayat trade
+    // tertutup dari sinyal yang disalin), BUKAN daftar salinan — daftar
+    // salinan sudah ada di "Salinan aktif" (tab Sinyal). Kotak kosong
+    // jrnlEmpty di sini duplikat dan membingungkan, jadi dihapus; bila
+    // 0 trade tertutup, statsSectionHtml sudah menampilkan "Belum ada
+    // trade tertutup." sendiri. Isi Jurnal (statistik, chart, tabel
+    // bulanan, tabel per-pair) tidak berubah.
+    box.innerHTML = statsSectionHtml(st, 'officeJournalStatsTitle', null, floatNote);
     updateBoardScrollHints(box);
     return;
   }
