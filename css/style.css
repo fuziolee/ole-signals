@@ -80,10 +80,6 @@ details.more summary span svg { width: 16px; height: 16px; display: block; }
 h1 { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
 .sub { color: var(--muted); font-size: 13.5px; margin: 0 0 14px; }
 
-/* ---- hero Beranda (port prototipe) ---- */
-.hero { padding: 20px 0 4px; }
-.hero h1 { font-size: 23px; line-height: 1.15; margin: 0 0 8px; font-weight: 800; letter-spacing: -.01em; max-width: 24ch; }
-.hero p { margin: 0; color: var(--muted); font-size: 15px; max-width: 62ch; }
 .lead-sm { font-size: 14.5px; color: var(--muted); margin: 12px 0 0; max-width: 66ch; }
 .flow { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
 .fstep { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 13px; box-shadow: var(--shadow); }
@@ -91,8 +87,6 @@ h1 { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
 .fstep i { font-style: normal; font-size: 12px; color: var(--muted); }
 .fstep.win b { color: var(--buy); }
 .farr { align-self: center; color: var(--muted); font-weight: 700; flex: none; }
-.hero-cta { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-.hero-cta .btn.primary { width: auto; min-width: 180px; }
 .guidelink { appearance: none; background: none; border: 0; color: var(--teal); font-weight: 700; font-size: 14px; cursor: pointer; padding: 12px 0 0; display: inline-flex; gap: 6px; align-items: center; }
 
 /* ---- roadmap ---- */
