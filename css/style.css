@@ -124,11 +124,22 @@ h1 { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
 .btn.ghost { background: transparent; }
 .field { margin-bottom: 12px; }
 .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; }
+/* R9-6: grid 2 kolom form posting seperti prototipe (.fgrid) — label/input
+   selalu sejajar dari atas, bukan terpusat vertikal seperti .row
+   (align-items:center membuat TP/SL miring bila pasangannya punya hint).
+   1 kolom di layar sempit (lihat @media 760px di bawah). */
+.fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; align-items: start; }
+.fgrid .field { min-width: 0; }
+/* R9-6: sembunyikan spinner number di form posting — keempat input sama
+   (sebelumnya spinner muncul hanya saat hover/fokus, terlihat tidak konsisten). */
+#sig-form input[type="number"]::-webkit-outer-spin-button,
+#sig-form input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+#sig-form input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .field input, .field select, .field textarea {
   width: 100%; border: 1px solid var(--line); border-radius: 10px;
   background: var(--panel); color: var(--ink); padding: 10px 12px;
 }
-.field .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.field .hint { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
 .field .hint.ok { color: var(--buy); }
 .field .hint.bad { color: var(--sell-text); }
 .field .err { font-size: 12.5px; color: var(--sell-text); margin-top: 4px; min-height: 1em; }
@@ -334,7 +345,7 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
 .feed-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 14px; align-items: center; }
 /* Strip pair Beranda: satu baris, scroll horizontal jari/roda mouse saja
    (tanpa tombol geser ‹ ›); baris status terpisah di bawahnya. */
-.pair-strip { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; flex: 1 1 auto; flex-basis: 100%; min-width: 0; scrollbar-width: none; -ms-overflow-style: none; padding: 2px 0; }
+.pair-strip { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; flex: 1 1 auto; flex-basis: 100%; min-width: 0; scrollbar-width: none; -ms-overflow-style: none; padding: 2px 0; -webkit-overflow-scrolling: touch; }
 .pair-strip::-webkit-scrollbar { display: none; }
 .pair-strip .fchip { flex: none; }
 .feed-filters .filter-break { flex-basis: 100%; height: 0; }
@@ -532,6 +543,7 @@ table.board td.num, table.board th.num { text-align: right; }
   .pstats { grid-template-columns: repeat(2, 1fr); }
   .traders { grid-template-columns: 1fr; }
   .search-grid { grid-template-columns: 1fr 1fr; }
+  .fgrid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {
