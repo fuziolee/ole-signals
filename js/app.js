@@ -508,6 +508,14 @@ async function ensureAllSignals() {
   }
   return S.allSignals;
 }
+// R12/F2: cache S.allSignals hanya dimuat sekali (ensureAllSignals).
+// Setelah sinyal dibuat/diubah/dibatalkan, daftar (S.mySignals) dimuat
+// ulang tapi cache ini TIDAK — statistik profil (statsForTrader) jadi
+// basi (pernah tampil "2 TERBUKA" padahal daftar tinggal 1). Panggil
+// helper ini di semua jalur mutasi sinyal agar muatan berikutnya segar.
+function invalidateAllSignals() {
+  S.allSignalsLoaded = false;
+}
 function signalsOfTrader(traderId) {
   return S.allSignals.filter((s) => s.trader_id === traderId);
 }
@@ -826,9 +834,6 @@ $$('#search-tabs [data-stab]').forEach((b) => {
 });
 $('#btn-guide-back').addEventListener('click', () => showView('profile'));
 $('#btn-help-back').addEventListener('click', () => showView('profile'));
-$('#btn-hero-top').addEventListener('click', () => { S.searchTab = 'board'; showView('search'); });
-$('#btn-hero-follow').addEventListener('click', () => { S.searchTab = 'traders'; showView('search'); });
-$('#btn-hero-guide').addEventListener('click', () => openGuideSection('signal'));
 $('#notif-bell').addEventListener('click', (e) => {
   e.stopPropagation();
   setNotifPanel(!S.notifOpen);
@@ -1191,6 +1196,7 @@ function bindSignalCards(root) {
           const res = await api.cancelSignal(sig.id);
           if (!res.ok) { toast(rpcErrorMessage(res), true); return; }
           toast(t('toastCancelled'));
+          invalidateAllSignals();
           await renderOffice();
           await renderHome();
         } catch (err) {
@@ -2097,7 +2103,9 @@ function openSignalDetail(id) {
     rowsHtml += drow(t('detFinal'), esc(fmtUsd0(sig.profit_usd)) + (finalParts.length ? ` · ${esc(finalParts.join(' · '))}` : ''));
   }
   rowsHtml += `</div>`;
-  // D37: SEMUA sinyal PENDING berlabel "Belum terkunci — menunggu entry".
+  // D37 (r12/F1): dialog Detail TIDAK lagi memakai kata "terkunci" — kata
+  // itu khusus untuk share lock ("Sudah dibagikan · terkunci"). PENDING =
+  // "Menunggu entry", AKTIF = "Entry tersentuh · dinilai sistem dari harga".
   const lockNote = sig.status === 'PENDING' ? esc(t('detUnlocked')) : esc(t('detLockedNote'));
   const actions = [];
   if (mine) {
@@ -3133,6 +3141,7 @@ function bindSignalForm(editing) {
       toast(editing ? t('toastUpdated') : t('toastPosted'));
       S.editingId = null;
       S.editingVersion = null;
+      invalidateAllSignals();
       await refreshIdentity();
       await renderOffice();
       await renderHome();
@@ -3177,6 +3186,17 @@ function usernameStatusMsg(res) {
   const map = { format: 'usernameCheckFormat', banned: 'usernameCheckBanned', reserved: 'usernameCheckReserved', taken: 'usernameCheckTaken', empty: 'usernameCheckEmpty' };
   return { txt: t(map[res.code] || 'usernameCheckEmpty'), cls: 'bad' };
 }
+// R12/F3: tombol submit username hanya aktif bila (a) cek ketersediaan
+// lolos DAN (b) draft BERBEDA dari username saat ini. Sebelumnya hanya
+// (a) — mengembalikan field ke username saat ini (yang lolos cek karena
+// bukan milik orang lain) tetap mengaktifkan tombol padahal tidak ada
+// perubahan untuk disubmit.
+function usernameCanSubmit(kind) {
+  const ui = S.usernameUI[kind];
+  if (!ui || !ui.res || !ui.res.ok) return false;
+  const cur = kind === 'trader' ? (S.trader?.username || '') : (S.profile?.username || '');
+  return (ui.draft || '') !== cur;
+}
 function usernameFormHtml(kind) {
   const ui = S.usernameUI[kind];
   const isTrader = kind === 'trader';
@@ -3191,7 +3211,7 @@ function usernameFormHtml(kind) {
   }
   const st = usernameStatusMsg(ui.res);
   return note + `<form class="wal-panel" data-username-form="${kind}" novalidate><div class="field"><label for="uname-${kind}">${esc(isTrader ? t('usernameTraderLbl') : t('usernameFollowerLbl'))}</label><input id="uname-${kind}" data-username-input="${kind}" maxlength="30" autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(ui.draft || '')}"><div class="hint${st.cls ? ' ' + st.cls : ''}" data-username-status="${kind}">${esc(st.txt)}</div></div>`
-    + `<div class="form-err" data-username-err="${kind}" role="alert"></div><div class="detail-actions"><button type="submit" class="btn primary" data-username-submit="${kind}"${ui.res && ui.res.ok ? '' : ' disabled'}>${esc(set ? t('usernameChangeBtn') : t('usernameCreateBtn'))}</button></div></form>`;
+    + `<div class="form-err" data-username-err="${kind}" role="alert"></div><div class="detail-actions"><button type="submit" class="btn primary" data-username-submit="${kind}"${usernameCanSubmit(kind) ? '' : ' disabled'}>${esc(set ? t('usernameChangeBtn') : t('usernameCreateBtn'))}</button></div></form>`;
 }
 function paintUsernameStatus(kind, root = document) {
   const ui = S.usernameUI[kind];
@@ -3203,7 +3223,7 @@ function paintUsernameStatus(kind, root = document) {
     if (st.cls) el.classList.add(st.cls);
   }
   const b = root.querySelector(`[data-username-submit="${kind}"]`);
-  if (b) b.disabled = !(ui.res && ui.res.ok);
+  if (b) b.disabled = !usernameCanSubmit(kind);
 }
 function bindUsernameForm(root, kind, onDone) {
   const ui = S.usernameUI[kind];
