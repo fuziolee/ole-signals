@@ -2421,6 +2421,7 @@ function traderCardHtml(tr, rank) {
   const level = p ? Number(p.level) || 1 : 1;
   const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : '';
   const st = statsForTrader(tr.profile_id);
+  const ddUsd = (st.drawdown && st.drawdown.usd) || 0; // R16: Max DD kartu Cari
   const price = tr.subscription_price_usd;
   // D34: lencana langganan dalam IDR (fmtIDR prototipe).
   const subBadge = price !== null && price !== undefined && Number(price) > 0
@@ -2438,9 +2439,15 @@ function traderCardHtml(tr, rank) {
       <span class="lvlbadge">Level ${level} · ${esc(levelName(level, getLang()))}</span>
     </div>
     <div class="mini">
-      <div><div class="v">${st.wr === null ? '—' : st.wr.toFixed(0) + '%'}</div><div class="k">${esc(t('stWinRate'))}</div></div>
-      <div><div class="v">${st.totalSignals}</div><div class="k">${esc(t('stSignals'))}</div></div>
-      <div><div class="v">${esc(fmtUsd(st.totalUSD, true))}</div><div class="k">${esc(t('stProfitUSD'))}</div></div>
+      <div class="mini-row r1">
+        <div class="cell hero"><div class="v">${esc(fmtUsd(st.totalUSD))}</div><div class="k">${esc(t('stTotalProfitUSD'))}</div></div>
+        <div class="cell"><div class="v">${st.totalSignals}</div><div class="k">${esc(t('stSignals'))}</div></div>
+        <div class="cell"><div class="v">${st.wr === null ? '—' : st.wr.toFixed(0) + '%'}</div><div class="k">${esc(t('stWinRate'))}</div></div>
+      </div>
+      <div class="mini-row r2">
+        <div class="cell"><div class="v ${st.totalR > 0 ? 'pips-pos' : st.totalR < 0 ? 'pips-neg' : ''}">${esc(fmtR(st.totalR))}</div><div class="k">${esc(t('stTotalRNet'))}</div></div>
+        <div class="cell"><div class="v ${ddUsd > 0 ? 'pips-neg' : ''}">${ddUsd > 0 ? '-' + esc(fmtUsd(ddUsd)) : '—'}</div><div class="k">${esc(t('stMaxDDShort'))}</div></div>
+      </div>
     </div>
     <div class="meta"><span class="pill">${subBadge}</span><span class="fol">${folN === undefined ? '—' : esc(t('followersCount', { n: folN }))}</span></div>
     <div class="actions"><button class="btn" type="button" data-act="view" data-trader="${esc(tr.profile_id)}">${esc(t('sigViewTrader'))}</button>${subscribeBtnHtml(tr.profile_id)}${followBtnHtml(tr.profile_id)}</div>
