@@ -3321,8 +3321,11 @@ async function renderOfficeRole() {
     // bisa dibuka lewat toggle di atas.
     box.innerHTML = `<div class="warnbar" role="alert">${esc(t('officeNeedUsernameBanner'))}</div>`
       + `<div class="subcard" style="margin-top:14px;"><h3>${esc(t('officeIdentityTitle'))}</h3>`
-      + `<form id="id-setup-form" novalidate><div class="field"><label for="id-display">${esc(t('traderNameLbl'))}</label><input id="id-display" maxlength="60" autocomplete="off" value=""></div>`
-      + `<div id="id-username-wrap">${usernameFormHtml('trader')}</div></form></div>`;
+      // R11/D3: pembungkus LUAR sengaja <div>, bukan <form> — usernameFormHtml
+      // me-render <form> sendiri; form bersarang dibuang parser HTML sehingga
+      // tombol "Buat username" dulu mati (submit native ke /?).
+      + `<div><div class="field"><label for="id-display">${esc(t('traderNameLbl'))}</label><input id="id-display" maxlength="60" autocomplete="off" value=""></div>`
+      + `<div id="id-username-wrap">${usernameFormHtml('trader')}</div></div></div>`;
     bindUsernameForm(box, 'trader', () => renderOffice());
     return;
   }
@@ -3434,8 +3437,7 @@ function renderOfficeTraderTab(editing = null) {
       ? `<div class="kv-rows">
           <div class="kv-row"><div class="k">${esc(t('profileName'))}</div><div class="v">${esc(tr.trader_display_name || t('noName'))}</div></div>
           <div class="kv-row"><div class="k">${esc(t('username'))}</div><div class="v">${tr.username ? '@' + esc(tr.username) : '—'}</div></div>
-        </div>
-        <div id="trader-username-wrap" style="margin-top:12px;">${usernameFormHtml('trader')}</div>`
+        </div>`
       : `<p class="note">${esc(t('traderAccountNeed'))}</p>`;
     const resetRow = (k, v) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="color:var(--muted);">${esc(k)}</span><b>${esc(v)}</b></div>`;
     box.innerHTML = `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeIdentityTitle'))}</h2>`
@@ -3459,7 +3461,8 @@ function renderOfficeTraderTab(editing = null) {
         </div>`
       + statsSectionHtml(st, 'officeStatsTitle');
     bindPhotoInput('trader-photo-input', 'trader');
-    bindUsernameForm(box, 'trader', () => renderOfficeTraderTab());
+    // R11: form ubah username trader PINDAH ke Pengaturan → Akun;
+    // panel ini tinggal info read-only (kv-rows di accPanel).
     const trShare = $('#trader-share-btn');
     if (trShare) {
       // R9-5 (B-05): bagikan kartu PNG portofolio (dulu hanya teks).
@@ -3902,7 +3905,7 @@ async function renderProfile() {
           ? `<span class="stchip bad">${esc(t('kycRejected'))}</span>${p.kyc_reject_reason ? `<span>${esc(t('kycRejectReason', { reason: p.kyc_reject_reason }))}</span>` : ''}<button class="btn" type="button" id="kyc-start-btn">${esc(t('kycRetry'))}</button>`
           : `<span style="color:var(--muted);">${esc(t('kycNotVerified'))}</span><button class="btn" type="button" id="kyc-start-btn">${esc(t('kycVerifyBtn'))}</button>`}</div>
       <p>${esc(t('kycHint'))}</p>
-      ${kycVerified ? `<p>${esc(t('kycNameLocked'))}</p><p class="note">${esc(t('kycDocsNote'))}</p>` : `<p class="note">${esc(t('kycVerifyHint'))}</p>`}
+      ${kycVerified ? `<p>${esc(t('kycNameLocked'))}</p><p class="note">${esc(t('kycDocsNote'))}</p>` : ''}
     </div>
     <div class="subcard">
       <h3>${esc(t('accountDetail'))}</h3>
@@ -4034,9 +4037,14 @@ function renderSettingsAccount(body) {
   body.innerHTML = settingsBackButton()
     + `<div class="page-head"><h2>${esc(t('setAccount'))}</h2></div>`
     + `<div class="subcard"><form id="set-name-form" novalidate><div class="field"><label for="set-name">${esc(t('profileName'))}</label><input id="set-name" type="text" maxlength="80" value="${esc(p.display_name || '')}"${kycVerified ? ' disabled' : ''} />${nameHint ? `<div class="hint">${esc(nameHint)}</div>` : ''}</div><div class="form-err" id="set-name-err" role="alert"></div><div class="detail-actions"><button class="btn primary" type="submit"${(kycVerified || inCooldown) ? ' disabled' : ''}>${esc(t('save'))}</button></div></form></div>`
-    + `<div class="subcard"><div id="follower-username-wrap">${usernameFormHtml('follower')}</div></div>`;
+    + `<div class="subcard"><div id="follower-username-wrap">${usernameFormHtml('follower')}</div></div>`
+    + (S.trader ? `<div class="subcard"><div id="trader-username-wrap">${usernameFormHtml('trader')}</div></div>` : '');
   bindSettingsBack();
   bindUsernameForm(body, 'follower', () => renderSettingsAccount(body));
+  // R11: ubah username trader pindah ke sini dari Ruang Kerja → Trader →
+  // Profil. Hanya bila identitas trader ada; setup pertama kali tetap di
+  // Ruang Kerja (renderOfficeRole) dan tidak ditampilkan di sini.
+  if (S.trader) bindUsernameForm(body, 'trader', () => renderSettingsAccount(body));
   const form = $('#set-name-form');
   if (form) {
     form.addEventListener('submit', async (e) => {
