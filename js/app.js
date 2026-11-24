@@ -755,6 +755,14 @@ export function confirmDialog(title, body, yesLabel) {
   });
 }
 
+// Ronde 22: satu jalur keluar dipakai sidebar, Profil (HP), dan Pengaturan.
+async function doLogout() {
+  const yes = await confirmDialog(t('confirmLogoutTitle'), '', t('yesLogout'));
+  if (!yes) return;
+  try { await api.signOut(); } catch (e) { /* tetap lanjut */ }
+  toast(t('toastSignedOut'));
+}
+
 // --------------------------------------------------------- tema & bahasa ---
 function getThemePref() {
   try { return localStorage.getItem('ole-theme') || 'auto'; } catch (e) { return 'auto'; }
@@ -826,6 +834,8 @@ function showView(name) {
     b.setAttribute('aria-selected', String(b.dataset.nav === name));
   });
   window.scrollTo({ top: 0 });
+  const mn = document.querySelector('#app main');
+  if (mn) mn.scrollTop = 0;
   if (name === 'home') renderHome();
   if (name === 'search') renderSearch();
   if (name === 'trader') renderTraderProfile();
@@ -834,6 +844,7 @@ function showView(name) {
   if (name === 'profile') renderProfile();
   if (name === 'helpguide') renderHelpGuide();
   if (name === 'settings') renderSettings();
+  renderRightPanel(); // Ronde 22: panel kanan ikut segar di tiap halaman.
 }
 $$('.bottom-nav [data-nav]').forEach((b) => {
   b.addEventListener('click', () => showView(b.dataset.nav));
@@ -852,6 +863,24 @@ $('#btn-helpguide-back').addEventListener('click', () => showView('profile'));
 $('#notif-bell').addEventListener('click', (e) => {
   e.stopPropagation();
   setNotifPanel(!S.notifOpen);
+});
+$('#rp-avatar').addEventListener('click', () => showView('profile'));
+$('#side-logout').addEventListener('click', () => doLogout());
+$('#side-promo-go').addEventListener('click', () => showView('office'));
+// Ronde 22: ripple saat ditekan (preview) — satu span .ripple yang
+// mengembang dari titik tekan, lalu dihapus; tanpa setPointerCapture.
+document.addEventListener('pointerdown', (e) => {
+  const el = e.target.closest('.btn:not(:disabled), .fchip, .chip, .tab, .subtab, .seg button, .menurow, .side-nav button, .bottom-nav button, .iconbtn, .bellbtn, .avatar-btn, .side-promo-btn');
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  const d = Math.max(r.width, r.height);
+  const s = document.createElement('span');
+  s.className = 'ripple';
+  s.style.width = s.style.height = d + 'px';
+  s.style.left = (e.clientX - r.left - d / 2) + 'px';
+  s.style.top = (e.clientY - r.top - d / 2) + 'px';
+  el.appendChild(s);
+  setTimeout(() => s.remove(), 480);
 });
 document.addEventListener('click', (e) => {
   if (S.notifOpen && !e.target.closest('.notif-wrap')) setNotifPanel(false);
@@ -989,6 +1018,7 @@ async function handleSession(session, event = 'INITIAL_SESSION') {
     S.myFollows = await api.listMyFollows(S.user.id);
   } catch (e) { /* ikutan dimuat ulang saat membuka Cari / Ruang Kerja */ }
   showApp();
+  renderRightPanel(); // Ronde 22: panel kanan ikut segar setelah masuk.
   // C-01 + R9-1: hanya pindah ke Beranda saat pertama kali masuk / sesi awal
   // untuk user ini. SIGNED_IN ulang (tab kembali aktif, refresh lintas-tab)
   // dan INITIAL_SESSION kedua hanya memuat ulang data — jangan sentuh
@@ -2378,9 +2408,14 @@ function renderHomeFilters() {
   }
   html += '</div>';
   html += '<span class="filter-break" aria-hidden="true"></span>';
+  // Ronde 22: status jadi segmented control ala preview (wadah abu-abu,
+  // yang terpilih kartu putih) + opsi Selesai (WIN/LOSS) seperti preview.
+  html += '<div class="seg" role="group">';
   html += `<button class="fchip" type="button" data-fstatus="ALL" aria-pressed="${f.status === 'ALL'}">${esc(t('feedAllStatus'))}</button>`;
-  html += `<button class="fchip" type="button" data-fstatus="PENDING" aria-pressed="${f.status === 'PENDING'}">${esc(t('tabPending'))}</button>`;
   html += `<button class="fchip" type="button" data-fstatus="AKTIF" aria-pressed="${f.status === 'AKTIF'}">${esc(t('tabActive'))}</button>`;
+  html += `<button class="fchip" type="button" data-fstatus="PENDING" aria-pressed="${f.status === 'PENDING'}">${esc(t('tabPending'))}</button>`;
+  html += `<button class="fchip" type="button" data-fstatus="SELESAI" aria-pressed="${f.status === 'SELESAI'}">${esc(t('feedDone'))}</button>`;
+  html += '</div>';
   html += '</div>';
   box.innerHTML = html;
   const strip2 = box.querySelector('#pair-strip');
@@ -2457,7 +2492,8 @@ function homeFilteredSignals() {
     // B1-03: saat filter pair aktif, sinyal terkunci disembunyikan — pair
     // sinyal terkunci memang tidak ditampilkan, jadi tidak boleh ikut filter.
     .filter((s) => (f.pair === 'ALL' || (s.pair === f.pair && !isLockedForMe(s)))
-      && (f.status === 'ALL' || s.status === f.status))
+      && (f.status === 'ALL' || s.status === f.status
+        || (f.status === 'SELESAI' && (s.status === 'WIN' || s.status === 'LOSS'))))
     .sort((a, b) => (rank(a.status) - rank(b.status))
       || (new Date(b.created_at) - new Date(a.created_at)));
 }
@@ -2489,6 +2525,7 @@ async function renderHome(force = false) {
   }
   renderHomeFilters();
   renderHomeList();
+  renderRightPanel(); // Ronde 22: statistik panel kanan ikut segar.
 }
 
 // ------------------------------------------------------------------ Cari ---
@@ -3091,6 +3128,76 @@ function balanceCardHtml() {
   </div>`;
 }
 
+// ------------------------------------------------------- panel kanan (R22) ---
+// Ringkasan akun di panel kanan (desktop): saldo simulasi + 11 baris
+// statistik dari sinyal pengguna SENDIRI (computeStats) — TANPA angka
+// contoh; yang belum bisa dihitung tampil "—" seperti kebiasaan live.
+// Saldo diambil dari sumber yang sama dengan kartu saldo simulasi
+// (trader_progress via progressOf); bila belum ada identitas trader,
+// fallback-nya sama seperti kartu itu (saldo awal $10.000).
+let __rpHideBalance = false;
+try { __rpHideBalance = localStorage.getItem('ole-hide-balance') === '1'; } catch (e) { /* abaikan */ }
+async function renderRightPanel() {
+  const body = $('#rp-body');
+  const avBtn = $('#rp-avatar');
+  if (!body || !S.user) return;
+  // Avatar pengguna yang sebenarnya (foto profil; jatuh ke inisial).
+  if (avBtn) {
+    const p = S.profile || {};
+    const name = p.display_name || p.username || S.user.email || '—';
+    avBtn.innerHTML = avatarImg(name, S.user.id, S.photoUploadPreview.profile || p.avatar_url, 'avatar-sm');
+  }
+  await ensureAllSignals();
+  const p = progressOf(S.trader);
+  const balance = p ? Number(p.balance_usd) : START_BALANCE_USD;
+  const cumProfit = balance - START_BALANCE_USD;
+  const pctStart = ((balance - START_BALANCE_USD) / START_BALANCE_USD) * 100;
+  const balTxt = __rpHideBalance ? '$ ••••••••' : fmtUsd(balance);
+  const subTxt = S.trader
+    ? `${cumProfit >= 0 ? '↑' : '↓'} ${esc(fmtUsd(Math.abs(cumProfit)))} · ${ds(pctStart.toFixed(2))}% <span>${esc(t('balPctStart'))} ${esc(fmtUsd(START_BALANCE_USD))}</span>`
+    : esc(t('rpNoTrader'));
+  // Statistik dari sinyal pengguna sendiri; avgHold dihitung dari
+  // holding_minutes sinyal tertutup (computeStats mengembalikan null
+  // untuk avgHold karena settlement belum menulisnya dengan andal —
+  // bila tidak ada holding_minutes yang tercatat, tampil "—").
+  const mine = signalsOfTrader(S.user.id);
+  const st = computeStats(mine);
+  const closed = mine.filter((s) => s.status === 'WIN' || s.status === 'LOSS');
+  const holds = closed
+    .map((s) => s.holding_minutes)
+    .filter((v) => v !== null && v !== undefined && Number.isFinite(Number(v)))
+    .map((v) => Number(v));
+  const avgHold = holds.length ? holds.reduce((a, b) => a + b, 0) / holds.length : null;
+  const has = st.closed > 0;
+  const row = (icon, bg, label, sub, val, valCls = '') => `<div class="rp-stat-row"><span class="s-ic" style="background:${bg}">${esc(icon)}</span><div><div class="n">${esc(label)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ''}</div><div class="v"><div class="a ${valCls}">${esc(val)}</div></div></div>`;
+  body.innerHTML = `<div class="rp-bal-label">${esc(t('rpBalance'))}</div>`
+    + `<div class="rp-bal-num" id="rp-bal-num">${esc(balTxt)}</div>`
+    + `<div class="rp-bal-sub">${subTxt}</div>`
+    + `<div class="rp-hide-row"><span class="t">${esc(t('rpHideBalance'))}</span><button class="rp-switch" id="rp-hide-switch" type="button" role="switch" aria-checked="${__rpHideBalance ? 'true' : 'false'}" aria-label="${esc(t('rpHideBalance'))}"></button></div>`
+    + `<h4>${esc(t('rpStats'))}</h4>`
+    + row('%', '#7C5CFF', t('stWinRate'), t('rpClosedSub', { n: st.closed }), has ? `${st.wr.toFixed(0)}%` : '—')
+    + row('R', '#38BDF8', t('stTotalRNet'), '', has ? fmtR(st.totalR) : '—', st.totalR >= 0 ? 'pips-pos' : 'pips-neg')
+    + row('$', '#0EA5E9', t('stTotalProfitUSD'), '', has ? fmtUsd(st.totalUSD) : '—', st.totalUSD >= 0 ? 'pips-pos' : 'pips-neg')
+    + row('↓', '#F472B6', t('stMaxDDShort'), '', has ? `−${fmtUsd(st.drawdown.usd)}` : '—')
+    + row('#', '#0E7490', t('rpTotalSignals'), t('stTotalSignalsOpen', { n: st.active }), String(st.totalSignals))
+    + row('PF', '#B45309', t('stProfitFactor'), '', has ? fmtPf(st.pf) : '—')
+    + row('RF', '#DB2777', t('stRecovery'), '', has ? fmtRf(st.recovery) : '—')
+    + row('R', '#334155', t('stAvgR'), '', has ? fmtR(st.avgR) : '—')
+    + row('W', '#059669', t('stStreakWinLong'), '', has ? String(st.streaks.longestWin) : '—')
+    + row('L', '#DC2626', t('stStreakLoseLong'), '', has ? String(st.streaks.longestLose) : '—')
+    + row('H', '#7C5CFF', t('stThHold'), '', fmtHoldMin(avgHold));
+  const sw = $('#rp-hide-switch');
+  if (sw) {
+    sw.addEventListener('click', () => {
+      __rpHideBalance = !__rpHideBalance;
+      try { localStorage.setItem('ole-hide-balance', __rpHideBalance ? '1' : '0'); } catch (e) { /* abaikan */ }
+      sw.setAttribute('aria-checked', __rpHideBalance ? 'true' : 'false');
+      const num = $('#rp-bal-num');
+      if (num) num.textContent = __rpHideBalance ? '$ ••••••••' : fmtUsd(balance);
+    });
+  }
+}
+
 function signalFormHtml(editing) {
   const sig = editing || null;
   const pairOpts = PAIRS.map((p) => `<option value="${p}"${sig && sig.pair === p ? ' selected' : ''}>${p}</option>`).join('');
@@ -3450,6 +3557,7 @@ async function renderOffice() {
     });
   });
   await renderOfficeRole();
+  renderRightPanel(); // Ronde 22: statistik panel kanan ikut segar.
 }
 
 async function renderOfficeRole() {
@@ -3950,6 +4058,7 @@ async function renderProfile() {
       <div class="detail-menu">
         <button type="button" class="menurow" id="menu-settings"><span class="grow"><span class="t">${esc(t('settings'))}</span></span><span class="marrow">${ICONS.arrow}</span></button>
         <button type="button" class="menurow" id="menu-helpguide"><span class="grow"><span class="t">${esc(t('menuHelpGuide'))}</span><span class="d">${esc(t('menuHelpGuideDesc'))}</span></span><span class="marrow">${ICONS.arrow}</span></button>
+        <button type="button" class="menurow danger logout-mobile" id="menu-logout"><span class="grow"><span class="t">${esc(t('logout'))}</span></span><span class="marrow">${ICONS.arrow}</span></button>
       </div>
     </div>`;
   bindPhotoInput('profile-photo-input', 'profile');
@@ -3999,6 +4108,7 @@ async function renderProfile() {
   if (photoBtn) photoBtn.addEventListener('click', () => { const inp = $('#profile-photo-input'); if (inp) inp.click(); });
   $('#menu-settings').addEventListener('click', () => { S.settingsSub = null; showView('settings'); });
   $('#menu-helpguide').addEventListener('click', () => { S.helpGuideTab = 'guide'; showView('helpguide'); });
+  $('#menu-logout').addEventListener('click', doLogout);
 }
 
 // ----------------------------------------------------------- Pengaturan ---
@@ -4031,12 +4141,7 @@ function renderSettings() {
   $$('[data-setsub]', body).forEach((b) => {
     b.addEventListener('click', () => { S.settingsSub = b.dataset.setsub; S.secPage = null; S.wdAdd = false; renderSettings(); });
   });
-  $('#set-logout').addEventListener('click', async () => {
-    const yes = await confirmDialog(t('confirmLogoutTitle'), '', t('yesLogout'));
-    if (!yes) return;
-    try { await api.signOut(); } catch (e) { /* tetap lanjut */ }
-    toast(t('toastSignedOut'));
-  });
+  $('#set-logout').addEventListener('click', doLogout);
 }
 function settingsBackButton() {
   return `<button class="btn backbtn" id="set-sub-back" type="button">${esc(t('backShort'))}</button>`;
