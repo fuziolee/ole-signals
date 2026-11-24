@@ -157,6 +157,14 @@ export async function cancelSignal(id) {
   return data;
 }
 
+// R9-4: tandai sinyal sebagai sudah dibagikan (set shared_at). Dipanggil
+// best-effort dari downloadShareCard — kegagalan RPC tidak merusak bagikan.
+export async function markSignalShared(signalId) {
+  const { data, error } = await supabase.rpc('mark_signal_shared', { p_signal_id: signalId });
+  if (error) throw error;
+  return data;
+}
+
 // ---------------------------------------------------------------- trader ---
 export async function listTraders() {
   const { data, error } = await supabase
@@ -200,7 +208,7 @@ export async function listAllSignals(limit = 500) {
     .from('signals')
     // B4-01: join traders agar halaman verifikasi /v/ bisa menampilkan
     // @username + level trader (sebelumnya S.traders kosong di jalur /v/).
-    .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, status, version, created_at, expires_at, activated_at, closed_at, close_price, profit_usd, profit_pips, r_value, holding_minutes, traders(username, trader_display_name, trader_avatar_url, trader_progress(level, balance_usd))')
+    .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, status, version, shared_at, created_at, expires_at, activated_at, closed_at, close_price, profit_usd, profit_pips, r_value, holding_minutes, traders(username, trader_display_name, trader_avatar_url, trader_progress(level, balance_usd))')
     .neq('status', 'CANCELLED')
     .order('created_at', { ascending: false })
     .limit(limit);
