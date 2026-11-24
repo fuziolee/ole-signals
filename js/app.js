@@ -16,6 +16,31 @@ import * as api from './api.js';
 // flag ini hanya menyembunyikan alur daftar di UI + memblokir submit.
 const REGISTRATION_OPEN = false;
 
+// Ikon SVG garis tipis, satu set (stroke currentColor, viewBox 24) —
+// pengganti glyph Unicode/emoji (R-04). Satu set yang koheren, bukan
+// campuran glyph. Ukuran diatur di CSS per konteks pemakaian.
+const ICONS = {
+  home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+  grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  wallet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H6"/></svg>',
+  user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>',
+  camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>',
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>',
+  download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>',
+  chevD: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
+  chevL: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>',
+  chevR: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
+  arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+};
+
 // ---------------------------------------------------------------- state ---
 const S = {
   session: null,
@@ -190,7 +215,7 @@ function dateFilterBarHtml(key) {
   const range = key === 'office' ? S.officeRange : key === 'wallet' ? S.walletRange : key === 'follower' ? S.followerRange : S.traderProfileRange;
   const open = S.dateFilterOpen === key;
   const label = range === 'ALL' ? t('dateFilterBtn') : rangeLabel(range, key);
-  return `<span class="df-wrap"><button class="date-filter-btn" type="button" data-df="${key}">${esc(label)} ▾</button>`
+  return `<span class="df-wrap"><button class="date-filter-btn" type="button" data-df="${key}">${esc(label)} ${ICONS.chevD}</button>`
     + (open ? dateFilterPopupHtml(key) : '') + `</span>`;
 }
 function monthGridHtml(y, m, from, to) {
@@ -218,7 +243,7 @@ function monthGridHtml(y, m, from, to) {
       ? `<span class="${cls.join(' ')}" aria-disabled="true">${d}</span>`
       : `<button class="${cls.join(' ')}" type="button" data-df-day="${iso}">${d}</button>`;
   }
-  return `<div class="df-cal"><div class="df-cal-head"><button class="btn" type="button" data-df-nav="-1" aria-label="‹">‹</button><span>${esc(monthName)}</span><button class="btn" type="button" data-df-nav="1" aria-label="›">›</button></div><div class="df-grid">${cells}</div></div>`;
+  return `<div class="df-cal"><div class="df-cal-head"><button class="btn" type="button" data-df-nav="-1" aria-label="${esc(t('dfPrevMonth'))}">${ICONS.chevL}</button><span>${esc(monthName)}</span><button class="btn" type="button" data-df-nav="1" aria-label="${esc(t('dfNextMonth'))}">${ICONS.chevR}</button></div><div class="df-grid">${cells}</div></div>`;
 }
 function dateFilterPopupHtml(key) {
   const range = key === 'office' ? S.officeRange : key === 'wallet' ? S.walletRange : key === 'follower' ? S.followerRange : S.traderProfileRange;
@@ -871,14 +896,14 @@ function lockLabelHtml(sig, mine) {
   if (sig.status === 'PENDING') {
     return `<span class="lock">${esc(mine ? t('lockUnlockedOwn') : t('lockWaiting'))}</span>`;
   }
-  return `<span class="lock">🔒 ${esc(t('locked'))}</span>`;
+  return `<span class="lock">${ICONS.lock} ${esc(t('locked'))}</span>`;
 }
 function signalCardHtml(sig) {
   const tr = traderOf(sig);
   const name = traderHandle(tr); // publik: hanya @username (ronde 5)
   const level = levelOfSignal(sig);
   const verified = level >= PAY_GATE_LEVEL
-    ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
+    ? ` <span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : '';
   const mine = S.user && sig.trader_id === S.user.id;
   const locked = isLockedForMe(sig);
   const d = decimalsForPair(sig.pair);
@@ -897,8 +922,8 @@ function signalCardHtml(sig) {
   // tombol Langganan/Ikuti.
   if (locked) {
     return `<article class="sig ${dirCls}" data-sig="${esc(sig.id)}">
-    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><div class="right"><span class="lvlbadge">Lv.${level} ${esc(levelName(level, getLang()))}</span>${verified} ${subBadgeHtml(sig.trader_id)}<span class="pill">🔒 ${esc(t('locked'))}</span></div></div>
-    <div class="locked-body"><span aria-hidden="true">🔒</span><div><div class="lt">${esc(t('lockedTitle'))}</div><div class="ld">${esc(lockedDescFor(sig.trader_id))}</div></div></div>
+    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><div class="right"><span class="lvlbadge">Lv.${level} ${esc(levelName(level, getLang()))}</span>${verified} ${subBadgeHtml(sig.trader_id)}<span class="pill">${ICONS.lock} ${esc(t('locked'))}</span></div></div>
+    <div class="locked-body"><span aria-hidden="true">${ICONS.lock}</span><div><div class="lt">${esc(t('lockedTitle'))}</div><div class="ld">${esc(lockedDescFor(sig.trader_id))}</div></div></div>
     ${dupHtml}
     <div class="sig-foot"><span class="facts">${esc(t('lockedTitle'))}</span>${subscribeBtnHtml(sig.trader_id)}${followBtnHtml(sig.trader_id)}</div>
   </article>`;
@@ -959,14 +984,14 @@ function signalCardHtml(sig) {
   const copied = S.copiedIds.has(sig.id);
   const actions = [];
   if (sig.status === 'PENDING') {
-    actions.push(`<button class="btn" type="button" data-act="copy" data-sig="${esc(sig.id)}">${copied ? '✓ ' : '⧉ '}${esc(copied ? t('copied') : t('copySignal'))}</button>`);
+    actions.push(`<button class="btn" type="button" data-act="copy" data-sig="${esc(sig.id)}">${copied ? ICONS.check + ' ' : ICONS.copy + ' '}${esc(copied ? t('copied') : t('copySignal'))}</button>`);
   }
   if (mine && sig.status === 'PENDING') {
     actions.push(`<button class="btn" type="button" data-act="edit" data-sig="${esc(sig.id)}">${esc(t('editSignal'))}</button>`);
     actions.push(`<button class="btn danger" type="button" data-act="cancel" data-sig="${esc(sig.id)}">${esc(t('cancelSignal'))}</button>`);
   }
   if (mine) {
-    actions.push(`<button class="btn" type="button" data-act="share" data-sig="${esc(sig.id)}" aria-label="${esc(t('sigShareDownload'))}">⬇ ${esc(t('sigShareDownload'))}</button>`);
+    actions.push(`<button class="btn" type="button" data-act="share" data-sig="${esc(sig.id)}" aria-label="${esc(t('sigShareDownload'))}">${ICONS.download} ${esc(t('sigShareDownload'))}</button>`);
   }
   actions.push(`<button class="btn" type="button" data-act="detail" data-sig="${esc(sig.id)}">${esc(t('sigDetail'))}</button>`);
   if (!mine) actions.push(followBtnHtml(sig.trader_id));
@@ -1016,7 +1041,7 @@ function bindSignalCards(root) {
       if (act === 'copy') {
         await copySignalText(id);
         S.copiedIds.add(id);
-        btn.textContent = '✓ ' + t('copied');
+        btn.innerHTML = ICONS.check + ' ' + t('copied');
         return;
       }
       if (act === 'edit') {
@@ -1171,21 +1196,21 @@ function cardBg(ctx) {
     ctx.drawImage(shareBgImg, 0, 0, 1080, 1080);
   } else {
     const g = ctx.createLinearGradient(0, 0, 0, 1080);
-    g.addColorStop(0, '#0B1118'); g.addColorStop(0.55, '#070B14'); g.addColorStop(1, '#05070A');
+    g.addColorStop(0, '#111A2E'); g.addColorStop(0.55, '#0D1526'); g.addColorStop(1, '#0A1128');
     ctx.fillStyle = g; ctx.fillRect(0, 0, 1080, 1080);
     const glow = ctx.createRadialGradient(950, 90, 10, 950, 90, 520);
-    glow.addColorStop(0, 'rgba(34,211,238,0.16)'); glow.addColorStop(1, 'rgba(34,211,238,0)');
+    glow.addColorStop(0, 'rgba(56,189,248,0.16)'); glow.addColorStop(1, 'rgba(56,189,248,0)');
     ctx.fillStyle = glow; ctx.fillRect(0, 0, 1080, 1080);
     const glow2 = ctx.createRadialGradient(80, 1020, 10, 80, 1020, 480);
-    glow2.addColorStop(0, 'rgba(212,175,55,0.10)'); glow2.addColorStop(1, 'rgba(212,175,55,0)');
+    glow2.addColorStop(0, 'rgba(255,196,0,0.10)'); glow2.addColorStop(1, 'rgba(255,196,0,0)');
     ctx.fillStyle = glow2; ctx.fillRect(0, 0, 1080, 1080);
   }
   const ov = ctx.createLinearGradient(0, 0, 1080, 0);
-  ov.addColorStop(0, 'rgba(5,7,10,0.82)');
-  ov.addColorStop(0.55, 'rgba(5,7,10,0.55)');
-  ov.addColorStop(1, 'rgba(5,7,10,0.15)');
+  ov.addColorStop(0, 'rgba(10,17,40,0.82)');
+  ov.addColorStop(0.55, 'rgba(10,17,40,0.55)');
+  ov.addColorStop(1, 'rgba(10,17,40,0.15)');
   ctx.fillStyle = ov; ctx.fillRect(0, 0, 1080, 1080);
-  ctx.fillStyle = '#D4AF37';
+  ctx.fillStyle = '#FFC400';
   ctx.fillRect(72, 128, 120, 4);
 }
 function cardStatusPill(ctx, text, bg, x, yCenter) {
@@ -1195,7 +1220,7 @@ function cardStatusPill(ctx, text, bg, x, yCenter) {
   cardRoundRect(ctx, x, yCenter - h / 2, w, h, h / 2);
   ctx.fillStyle = bg;
   ctx.fill();
-  ctx.fillStyle = '#05070A';
+  ctx.fillStyle = '#0A1128';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x + w / 2, yCenter + 1);
@@ -1234,9 +1259,9 @@ function cardSpark(ctx, sig, x, y, w, h, levels) {
   const Y = [];
   for (let i = 0; i < n; i++) { X.push(x + (i / (n - 1)) * w); Y.push(Yv(pts[i])); }
   const fuv = levels && cur !== null ? floatingUsd(sig) : 0;
-  const col = sig.status === 'LOSS' ? '#EF4444'
-    : (sig.status === 'WIN' ? '#22C55E'
-      : (sig.status === 'PENDING' ? '#F59E0B' : ((fuv !== null && fuv >= 0) ? '#22C55E' : '#EF4444')));
+  const col = sig.status === 'LOSS' ? '#FF1744'
+    : (sig.status === 'WIN' ? '#00E676'
+      : (sig.status === 'PENDING' ? '#FFC400' : ((fuv !== null && fuv >= 0) ? '#00E676' : '#FF1744')));
   ctx.beginPath();
   ctx.moveTo(X[0], y + h);
   for (let i = 0; i < n; i++) ctx.lineTo(X[i], Y[i]);
@@ -1249,9 +1274,9 @@ function cardSpark(ctx, sig, x, y, w, h, levels) {
   ctx.fill();
   if (levels) {
     const lvls = [
-      { v: Number(sig.take_profit), col: '#22C55E', lbl: 'TP' },
-      { v: start, col: sig.status === 'PENDING' ? '#F59E0B' : '#8A94A6', lbl: 'ENTRY' },
-      { v: Number(sig.stop_loss), col: '#EF4444', lbl: 'SL' },
+      { v: Number(sig.take_profit), col: '#00E676', lbl: 'TP' },
+      { v: start, col: sig.status === 'PENDING' ? '#FFC400' : '#94A3B8', lbl: 'ENTRY' },
+      { v: Number(sig.stop_loss), col: '#FF1744', lbl: 'SL' },
     ];
     if (ctx.setLineDash) ctx.setLineDash([9, 9]);
     ctx.lineWidth = 2.5;
@@ -1283,10 +1308,10 @@ function cardSpark(ctx, sig, x, y, w, h, levels) {
   ctx.fillStyle = col;
   ctx.fill();
   ctx.lineWidth = 4;
-  ctx.strokeStyle = '#05070A';
+  ctx.strokeStyle = '#0A1128';
   ctx.stroke();
   if (levels && cur !== null) {
-    ctx.fillStyle = '#F5F7FA';
+    ctx.fillStyle = '#FFFFFF';
     ctx.font = '700 24px Inter, sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'alphabetic';
@@ -1302,14 +1327,14 @@ function cardHero(ctx, sig, y) {
   const d = decimalsForPair(sig.pair);
   if (sig.status === 'WIN' || sig.status === 'LOSS') {
     const uv = Number(sig.profit_usd) || 0;
-    ctx.fillStyle = sig.status === 'WIN' ? '#22C55E' : '#EF4444';
+    ctx.fillStyle = sig.status === 'WIN' ? '#00E676' : '#FF1744';
     ctx.font = '800 150px Inter, sans-serif';
     ctx.fillText(fmtUsd0(uv), 72, y);
     const sub = fmtPipsSigned(sig.profit_pips) + '  ·  ' + fmtRShort(sig.r_value);
-    ctx.fillStyle = '#8A94A6';
+    ctx.fillStyle = '#94A3B8';
     ctx.font = '500 42px Inter, sans-serif';
     ctx.fillText(sub, 72, subY);
-    cardStatusPill(ctx, statusPillLabel(sig.status), sig.status === 'WIN' ? '#22C55E' : '#EF4444', 72 + ctx.measureText(sub).width + 20, subY - 15);
+    cardStatusPill(ctx, statusPillLabel(sig.status), sig.status === 'WIN' ? '#00E676' : '#FF1744', 72 + ctx.measureText(sub).width + 20, subY - 15);
     return subY;
   }
   if (sig.status === 'AKTIF') {
@@ -1318,18 +1343,18 @@ function cardHero(ctx, sig, y) {
     const fpips = cur !== null ? ((sig.direction === 'SELL' ? -1 : 1) * (cur - Number(sig.entry))) / pipSize(sig.pair) : null;
     const rt = riskTargetUsd(sig);
     const frv = (fuv !== null && rt.riskUsd) ? fuv / rt.riskUsd : 0;
-    ctx.fillStyle = '#8A94A6';
+    ctx.fillStyle = '#94A3B8';
     ctx.font = '600 24px Inter, sans-serif';
     try { ctx.letterSpacing = '3px'; } catch (e) { /* abaikan */ }
     ctx.fillText(fuv !== null && fuv >= 0 ? t('cardFloatProfit') : t('cardFloatLoss'), 72, y - 137);
     try { ctx.letterSpacing = '0px'; } catch (e) { /* abaikan */ }
-    ctx.fillStyle = fuv !== null && fuv >= 0 ? '#22C55E' : '#EF4444';
+    ctx.fillStyle = fuv !== null && fuv >= 0 ? '#00E676' : '#FF1744';
     ctx.font = '800 150px Inter, sans-serif';
     ctx.fillText(fuv !== null ? fmtUsd0(fuv) : '—', 72, y);
     const subA = fuv !== null
       ? fmtPipsSigned(fpips) + '  ·  ' + fmtRShort(frv)
       : t('sigNoPrice');
-    ctx.fillStyle = '#8A94A6';
+    ctx.fillStyle = '#94A3B8';
     ctx.font = '500 42px Inter, sans-serif';
     ctx.fillText(subA, 72, subY);
     cardStatusPill(ctx, statusPillLabel(sig.status), '#38BDF8', 72 + ctx.measureText(subA).width + 20, subY - 15);
@@ -1338,21 +1363,21 @@ function cardHero(ctx, sig, y) {
   // PENDING: jarak harga sekarang ke entry + harga sekarang.
   const curP = priceOf(sig.pair);
   const dist = curP !== null ? Math.abs(curP - Number(sig.entry)) / pipSize(sig.pair) : null;
-  ctx.fillStyle = '#8A94A6';
+  ctx.fillStyle = '#94A3B8';
   ctx.font = '600 24px Inter, sans-serif';
   try { ctx.letterSpacing = '3px'; } catch (e) { /* abaikan */ }
   ctx.fillText(t('cardDistToEntry'), 72, y - 137);
   try { ctx.letterSpacing = '0px'; } catch (e) { /* abaikan */ }
-  ctx.fillStyle = '#F59E0B';
+  ctx.fillStyle = '#FFC400';
   ctx.font = '800 150px Inter, sans-serif';
   ctx.fillText(dist !== null ? `${Math.round(dist)} pips` : '—', 72, y);
   const subP = curP !== null
     ? t('cardNowPrice') + fmtNum(curP, d)
     : t('sigNoPrice');
-  ctx.fillStyle = '#8A94A6';
+  ctx.fillStyle = '#94A3B8';
   ctx.font = '500 42px Inter, sans-serif';
   ctx.fillText(subP, 72, subY);
-  cardStatusPill(ctx, statusPillLabel(sig.status), '#F59E0B', 72 + ctx.measureText(subP).width + 20, subY - 15);
+  cardStatusPill(ctx, statusPillLabel(sig.status), '#FFC400', 72 + ctx.measureText(subP).width + 20, subY - 15);
   return subY;
 }
 function cardFooter(ctx, sig) {
@@ -1374,14 +1399,14 @@ function cardFooter(ctx, sig) {
     const m = (qs - 12) / (n + 4);
     const ox = qx + (qs - m * n) / 2;
     const oy = qy + (qs - m * n) / 2;
-    ctx.fillStyle = '#05070A';
+    ctx.fillStyle = '#0A1128';
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
         if (qr.isDark(r, c)) ctx.fillRect(ox + c * m, oy + r * m, m + 0.5, m + 0.5);
       }
     }
   } else {
-    ctx.fillStyle = '#05070A';
+    ctx.fillStyle = '#0A1128';
     ctx.font = '700 24px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -1392,19 +1417,19 @@ function cardFooter(ctx, sig) {
   const tx = qx + qs + 24;
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#F5F7FA';
+  ctx.fillStyle = '#FFFFFF';
   ctx.font = '700 30px Inter, sans-serif';
   ctx.fillText('OLE Signals', tx, 944);
   const w1 = ctx.measureText('OLE Signals').width;
-  ctx.fillStyle = '#8A94A6';
+  ctx.fillStyle = '#94A3B8';
   ctx.font = '500 30px Inter, sans-serif';
   ctx.fillText(`  ·  ID ${cardId}`, tx + w1, 944);
   ctx.fillText(t('cardVerifyCode'), tx, 982);
   const w2 = ctx.measureText(t('cardVerifyCode')).width;
-  ctx.fillStyle = '#F5F7FA';
+  ctx.fillStyle = '#FFFFFF';
   ctx.font = '700 30px Inter, sans-serif';
   ctx.fillText(code, tx + w2 + 12, 982);
-  ctx.fillStyle = '#8A94A6';
+  ctx.fillStyle = '#94A3B8';
   ctx.font = '500 28px Inter, sans-serif';
   const open = sig.status === 'PENDING' || sig.status === 'AKTIF';
   ctx.fillText(open ? `${t('cardPriceAsOf')}${cardDateStr(new Date())}  ·  ${t('cardNotFinal')}` : cardDateStr(new Date()), tx, 1020);
@@ -1421,7 +1446,7 @@ function cardFooter(ctx, sig) {
     if (riskLines.length <= 2) break;
   }
   const riskLH = riskFont + 8;
-  ctx.fillStyle = '#7A8494';
+  ctx.fillStyle = '#94A3B8';
   ctx.font = `500 ${riskFont}px Inter, sans-serif`;
   riskLines.slice(0, 2).forEach((ln, i) => {
     ctx.fillText(ln, 72, 1072 - (Math.min(riskLines.length, 2) - 1 - i) * riskLH);
@@ -1442,7 +1467,7 @@ async function drawShareCard(sig) {
   // Brand emas (nama live tetap "OLE SIGNALS", gaya prototipe).
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#D4AF37';
+  ctx.fillStyle = '#FFC400';
   ctx.font = '700 30px Inter, sans-serif';
   try { ctx.letterSpacing = '6px'; } catch (e) { /* abaikan */ }
   ctx.fillText('OLE SIGNALS', 72, 96);
@@ -1450,27 +1475,27 @@ async function drawShareCard(sig) {
   // Baris trader: avatar + ring cyan, username, "Level N · Pangkat".
   ctx.beginPath();
   ctx.arc(116, 200, 44, 0, Math.PI * 2);
-  ctx.fillStyle = '#121826';
+  ctx.fillStyle = '#111A2E';
   ctx.fill();
   ctx.lineWidth = 3;
-  ctx.strokeStyle = '#22D3EE';
+  ctx.strokeStyle = '#38BDF8';
   ctx.stroke();
-  ctx.fillStyle = '#F5F7FA';
+  ctx.fillStyle = '#FFFFFF';
   ctx.font = '700 44px Inter, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(initialOf(name), 116, 202);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = '#F5F7FA';
+  ctx.fillStyle = '#FFFFFF';
   ctx.font = '700 46px Inter, sans-serif';
   ctx.fillText(name, 184, 208);
   const folN = S.followerCounts ? (S.followerCounts[sig.trader_id] || 0) : 0;
-  ctx.fillStyle = '#8A94A6';
+  ctx.fillStyle = '#94A3B8';
   ctx.font = '500 30px Inter, sans-serif';
   ctx.fillText(`Level ${level} · ${levelName(level, getLang())}${folN > 0 ? `  ·  ${folN} ${getLang() === 'en' ? 'followers' : 'pengikut'}` : ''}${isDemo(sig.trader_id) ? ' · Demo' : ''}`, 184, 252);
   // Pair + pil BUY/SELL.
-  ctx.fillStyle = '#F5F7FA';
+  ctx.fillStyle = '#FFFFFF';
   ctx.font = '800 96px Inter, sans-serif';
   const pairY = open ? 330 : 350;
   ctx.fillText(sig.pair, 72, pairY);
@@ -1480,16 +1505,16 @@ async function drawShareCard(sig) {
   const dw = ctx.measureText(sig.direction).width + 56;
   const px = 72 + pw + 28;
   cardRoundRect(ctx, px, pairY - 55, dw, 40, 20);
-  ctx.fillStyle = isBuy ? '#22C55E' : '#EF4444';
+  ctx.fillStyle = isBuy ? '#00E676' : '#FF1744';
   ctx.fill();
-  ctx.fillStyle = '#05070A';
+  ctx.fillStyle = '#0A1128';
   ctx.textAlign = 'center';
   ctx.fillText(sig.direction, px + dw / 2, pairY - 24);
   ctx.textAlign = 'left';
   // Angka hero + sparkline + detail 3 kolom + footer.
   cardHero(ctx, sig, open ? 500 : 510);
   cardSpark(ctx, sig, 72, 632, 540, 138, open);
-  ctx.fillStyle = 'rgba(138,148,166,0.25)';
+  ctx.fillStyle = 'rgba(148,163,184,0.25)';
   ctx.fillRect(72, 800, 1080 - 144, 2);
   const cols = [
     ['ENTRY', fmtNum(sig.entry, d)],
@@ -1500,10 +1525,10 @@ async function drawShareCard(sig) {
   ctx.textAlign = 'left';
   cols.forEach(([label, val], i) => {
     const cx = 72 + i * 216;
-    ctx.fillStyle = '#8A94A6';
+    ctx.fillStyle = '#94A3B8';
     ctx.font = '600 26px Inter, sans-serif';
     ctx.fillText(label, cx, 836);
-    ctx.fillStyle = '#F5F7FA';
+    ctx.fillStyle = '#FFFFFF';
     ctx.font = '700 38px Inter, sans-serif';
     ctx.fillText(val, cx, 884);
   });
@@ -1548,7 +1573,7 @@ function openSignalDetail(id) {
   const name = traderHandle(tr); // publik: hanya @username (ronde 5)
   const level = levelOfSignal(sig);
   const verified = level >= PAY_GATE_LEVEL
-    ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
+    ? ` <span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : '';
   const mine = S.user && sig.trader_id === S.user.id;
   const locked = isLockedForMe(sig);
   const d = decimalsForPair(sig.pair);
@@ -1566,8 +1591,8 @@ function openSignalDetail(id) {
   // judul terkunci + tombol Langganan (prototipe: subscribe + Tutup).
   if (locked) {
     openOverlay(`
-    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><span class="spacer"></span><span class="pill">Lv.${level} ${esc(levelName(level, getLang()))}</span>${verified}<span class="pill">🔒 ${esc(t('locked'))}</span></div>
-    <div class="locked-body" style="margin-top:14px;"><span aria-hidden="true">🔒</span><div><div class="lt">${esc(t('lockedTitle'))}</div><div class="ld">${esc(lockedDescFor(sig.trader_id))}</div></div></div>
+    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><span class="spacer"></span><span class="pill">Lv.${level} ${esc(levelName(level, getLang()))}</span>${verified}<span class="pill">${ICONS.lock} ${esc(t('locked'))}</span></div>
+    <div class="locked-body" style="margin-top:14px;"><span aria-hidden="true">${ICONS.lock}</span><div><div class="lt">${esc(t('lockedTitle'))}</div><div class="ld">${esc(lockedDescFor(sig.trader_id))}</div></div></div>
     ${dupHtml}
     <div class="detail-actions">${subscribeBtnHtml(sig.trader_id)}${followBtnHtml(sig.trader_id)}<button class="btn" id="ov-close2" type="button">${esc(t('close'))}</button></div>`);
     $('#ov-close2').onclick = closeOverlay;
@@ -1637,10 +1662,10 @@ function openSignalDetail(id) {
   const lockNote = sig.status === 'PENDING' ? esc(t('detUnlocked')) : esc(t('detLockedNote'));
   const actions = [];
   if (mine) {
-    actions.push(`<button class="btn" id="ov-share" type="button" aria-label="${esc(t('sigShareDownload'))}">⬇ ${esc(t('sigShareDownload'))}</button>`);
+    actions.push(`<button class="btn" id="ov-share" type="button" aria-label="${esc(t('sigShareDownload'))}">${ICONS.download} ${esc(t('sigShareDownload'))}</button>`);
   }
   if (sig.status === 'PENDING') {
-    actions.push(`<button class="btn primary" id="ov-copy" type="button" style="flex:1;">⧉ ${esc(t('copySignal'))}</button>`);
+    actions.push(`<button class="btn primary" id="ov-copy" type="button" style="flex:1;">${ICONS.copy} ${esc(t('copySignal'))}</button>`);
   }
   actions.push(`<button class="btn" id="ov-trader" type="button">${esc(t('sigViewTrader'))}</button>`);
   actions.push(`<button class="btn" id="ov-close2" type="button">${esc(t('close'))}</button>`);
@@ -1659,7 +1684,7 @@ function openSignalDetail(id) {
     copyBtn.onclick = async () => {
       await copySignalText(sig.id);
       S.copiedIds.add(sig.id);
-      copyBtn.textContent = '✓ ' + t('copied');
+      copyBtn.innerHTML = ICONS.check + ' ' + t('copied');
     };
   }
   const shareBtn = $('#ov-share');
@@ -1739,7 +1764,7 @@ function pairTableHtml(s, subKey = 'stPairSub') {
       + `<td class="num mono">${fmtRf(e.recovery)}</td>`
       + `<td class="num mono">${fmtHold(e.avgHold)}</td></tr>`;
   }).join('') : `<tr><td colspan="13" style="color:var(--muted)">${esc(t('ppNoTrades'))}</td></tr>`;
-  return `<div class="chart-card"><h3>${esc(t('stPairTitle'))}</h3><div class="sub">${esc(t(subKey))}<span class="estbadge">${esc(t('estBadge'))}</span> <button class="guidelink" type="button" data-guide="risk">${esc(t('sigDetail'))} →</button></div>`
+  return `<div class="chart-card"><h3>${esc(t('stPairTitle'))}</h3><div class="sub">${esc(t(subKey))}<span class="estbadge">${esc(t('estBadge'))}</span> <button class="guidelink" type="button" data-guide="risk">${esc(t('sigDetail'))} ${ICONS.arrow}</button></div>`
     + `<div class="board-wrap" style="box-shadow:none"><table class="board"><thead><tr><th>${esc(t('stThPair'))}</th><th class="num">${esc(t('stThTrades'))}</th><th class="num">${esc(t('stThWR'))}</th><th class="num">${esc(t('stThProfit'))}</th><th class="num">${esc(t('stThPF'))}</th><th class="num">${esc(t('stThTotalR'))}</th><th class="num">${esc(t('stThAvgR'))}</th><th class="num">${esc(t('stThAvgSL'))}</th><th class="num">${esc(t('stThAvgTP'))}</th><th class="num">${esc(t('stThStreak'))}</th><th class="num">${esc(t('stThMaxDD'))}</th><th class="num">${esc(t('stThRecovery'))}</th><th class="num">${esc(t('stThHold'))}</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
 function statsSectionHtml(s, titleKey, subKey = null, afterGridHtml = '') {
@@ -1791,13 +1816,13 @@ function journalRowHtml(sig, opts = {}) {
   // (non-AKTIF saja; AKTIF menampilkan ikon nonaktif + catatan).
   let extraBtns = '';
   if (opts.mine) {
-    extraBtns += `<button class="iconbtn" type="button" data-jshare="${esc(sig.id)}" aria-label="${esc(t('sigShareDownload'))}" style="width:34px;height:34px;font-size:14px;">⬇</button>`;
+    extraBtns += `<button class="iconbtn" type="button" data-jshare="${esc(sig.id)}" aria-label="${esc(t('sigShareDownload'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.download}</button>`;
   }
   if (opts.isCopy && opts.copyId) {
     if (sig.status === 'AKTIF') {
-      extraBtns += `<button class="iconbtn" type="button" disabled title="${esc(t('jrnlNoDeleteActive'))}" style="width:34px;height:34px;font-size:14px;">🗑</button>`;
+      extraBtns += `<button class="iconbtn" type="button" disabled title="${esc(t('jrnlNoDeleteActive'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.trash}</button>`;
     } else {
-      extraBtns += `<button class="iconbtn trashbtn" type="button" data-uncopy="${esc(opts.copyId)}" aria-label="${esc(t('cancel'))}" style="width:34px;height:34px;font-size:14px;">🗑</button>`;
+      extraBtns += `<button class="iconbtn trashbtn" type="button" data-uncopy="${esc(opts.copyId)}" aria-label="${esc(t('cancel'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.trash}</button>`;
     }
   }
   return `<div class="hist-row"><span class="p mono">${esc(sig.pair)}</span>`
@@ -1916,7 +1941,7 @@ async function renderHome(force = false) {
 function traderCardHtml(tr, rank) {
   const p = progressOf(tr);
   const level = p ? Number(p.level) || 1 : 1;
-  const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
+  const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : '';
   const st = statsForTrader(tr.profile_id);
   const price = tr.subscription_price_usd;
   // D34: lencana langganan dalam IDR (fmtIDR prototipe).
@@ -2129,7 +2154,7 @@ function boardCardHtml(row, rank) {
   const st = row.stats;
   const p = progressOf(tr);
   const level = p ? Number(p.level) || 1 : 1;
-  const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
+  const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : '';
   const name = traderHandle(tr); // publik: hanya @username (ronde 5)
   return `<article class="board-card" data-trader="${esc(tr.profile_id)}" tabindex="0" role="button">
     <div class="board-top">
@@ -2159,7 +2184,7 @@ function renderBoardList() {
   const hasClosed = ranked.some((r) => r.stats.closed > 0);
   let html = `<div class="board-intro"><p class="lead-sm">${t('boardLead')}</p>`
     + `<ul class="board-rules"><li>${t('boardRule1')}</li><li>${t('boardRule2')}</li><li>${t('boardRule3')}</li></ul>`
-    + `<button class="guidelink" id="board-guide-link" type="button">${esc(t('guideCta'))}<span aria-hidden="true"> →</span></button></div>`;
+    + `<button class="guidelink" id="board-guide-link" type="button">${esc(t('guideCta'))}<span aria-hidden="true"> ${ICONS.arrow}</span></button></div>`;
   // D55: prototipe tidak menampilkan pesan apa pun bila daftar kosong.
   const perPage = 10;
   const pages = Math.max(1, Math.ceil(ranked.length / perPage));
@@ -2244,7 +2269,7 @@ async function renderTraderProfile() {
   });
   const p = progressOf(tr);
   const level = p ? Number(p.level) || 1 : 1;
-  const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
+  const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : '';
   const name = traderHandle(tr); // publik: hanya @username (ronde 5)
   const mine = S.user && traderId === S.user.id;
   box.innerHTML = `
@@ -2255,7 +2280,7 @@ async function renderTraderProfile() {
         <h2>${esc(name)}${verified}${demoBadge(traderId)}</h2>
         <div class="sub">Lv.${level} ${esc(levelName(level, getLang()))}</div>
       </div>
-      <div class="followbox">${followBtnHtml(traderId)}${subscribeBtnHtml(traderId)}<button class="iconbtn" id="tp-share" type="button" aria-label="${esc(t('shareTrader'))}">↗</button><div class="followers" id="tp-followers">—</div></div>
+      <div class="followbox">${followBtnHtml(traderId)}${subscribeBtnHtml(traderId)}<button class="iconbtn" id="tp-share" type="button" aria-label="${esc(t('shareTrader'))}">${ICONS.share}</button><div class="followers" id="tp-followers">—</div></div>
     </div>
     ${!mine ? `<div class="risk-note">${t('riskNote')}</div>` : ''}
     <div class="subtabs" role="tablist" style="margin-top:14px;">
@@ -2416,7 +2441,7 @@ function balanceCardHtml() {
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <span class="pill gold">Level ${level} · ${esc(levelName(level, getLang()))}</span>
-      ${level >= PAY_GATE_LEVEL ? `<span class="pill gold">✓ ${esc(t('verified'))}</span>` : ''}
+      ${level >= PAY_GATE_LEVEL ? `<span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : ''}
       <span style="font-size:13px;color:var(--muted);">${t('lvlProgress', { up: upCount, down: downCount })}</span>
     </div>
     <div>
@@ -2435,7 +2460,7 @@ function balanceCardHtml() {
       </div>
     </div>
     <p class="note">${esc(t('balLatch'))}</p>
-    <button class="guidelink" id="bal-guide-link" type="button" style="padding-top:0;">${esc(t('balGuide'))}<span aria-hidden="true"> →</span></button>
+    <button class="guidelink" id="bal-guide-link" type="button" style="padding-top:0;">${esc(t('balGuide'))}<span aria-hidden="true"> ${ICONS.arrow}</span></button>
   </div>`;
 }
 
@@ -2446,9 +2471,9 @@ function signalFormHtml(editing) {
   return `<div class="card">
     <h2>${esc(editing ? t('formTitleEdit') : t('formTitleNew'))}</h2>
     <p class="sub">${t('formIntro', { bal: fmtUsd(balance) })}</p>
-    <div class="locknote"><span aria-hidden="true">🔒</span><div><strong>${esc(t('formLockTitle'))}</strong>
+    <div class="locknote"><span aria-hidden="true">${ICONS.lock}</span><div><strong>${esc(t('formLockTitle'))}</strong>
       <ul class="mini-list"><li>${t('formLock1')}</li><li>${t('formLock2')}</li><li>${t('formLock3')}</li></ul>
-      <button class="guidelink" id="sf-guide-link" type="button">${esc(t('guideCta'))}<span aria-hidden="true"> →</span></button>
+      <button class="guidelink" id="sf-guide-link" type="button">${esc(t('guideCta'))}<span aria-hidden="true"> ${ICONS.arrow}</span></button>
     </div></div>
     <div class="risk-note">${t('formRisk')}</div>
     <form id="sig-form">
@@ -2798,7 +2823,7 @@ function traderIdentityCardHtml() {
   const tr = S.trader;
   const p = progressOf(tr);
   const level = p ? Number(p.level) || 1 : 1;
-  const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">✓ ${esc(t('verified'))}</span>` : '';
+  const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : '';
   const username = tr.username ? '@' + tr.username : '—';
   const price = tr.subscription_price_usd;
   const subLabel = price !== null && price !== undefined && Number(price) > 0
@@ -2812,13 +2837,13 @@ function traderIdentityCardHtml() {
         <div style="font-weight:800; font-size:16px;">${esc(username)}${verified}${demoBadge(tr.profile_id)}</div>
         <div style="font-size:13px; color:var(--muted);">Lv.${level} ${esc(levelName(level, getLang()))} · ${subLabel}</div>
       </div>
-      <button class="iconbtn" id="trader-share-btn" type="button" aria-label="${esc(t('shareTrader'))}">↗</button>
-      <label class="iconbtn" for="trader-photo-input" title="${esc(t('photoChangeTrader'))}" style="cursor:pointer;">📷</label>
+      <button class="iconbtn" id="trader-share-btn" type="button" aria-label="${esc(t('shareTrader'))}">${ICONS.share}</button>
+      <label class="iconbtn" for="trader-photo-input" title="${esc(t('photoChangeTrader'))}" style="cursor:pointer;">${ICONS.camera}</label>
     </div>
     <div class="avatar-edit">
       <label class="btn" for="trader-photo-input">${esc(t('photoChangeTrader'))}</label>
       <input type="file" id="trader-photo-input" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
-      ${avUrl ? `<button class="iconbtn trashbtn" id="trader-photo-del" type="button" aria-label="${esc(t('photoRemoveTrader'))}" title="${esc(t('photoRemoveTrader'))}">🗑</button>` : ''}
+      ${avUrl ? `<button class="iconbtn trashbtn" id="trader-photo-del" type="button" aria-label="${esc(t('photoRemoveTrader'))}" title="${esc(t('photoRemoveTrader'))}">${ICONS.trash}</button>` : ''}
       <span class="note">${esc(draftDel ? t('photoRemoveDraft') : t('photoHintDraft'))}</span>
       ${draftDel ? `<button class="btn primary" id="trader-photo-done" type="button">${esc(t('doneBtn'))}</button>` : ''}
     </div>
@@ -2904,7 +2929,7 @@ function renderOfficeTraderTab(editing = null) {
       + traderIdentityCardHtml()
       + `<div class="subcard" style="margin-top:14px;">
           <button type="button" class="menurow" id="trader-account-toggle" aria-expanded="false">
-            <span class="grow"><span class="t">${esc(t('traderAccountTitle'))}</span><span class="d">${esc(accDesc)}</span></span><span class="marrow">→</span>
+            <span class="grow"><span class="t">${esc(t('traderAccountTitle'))}</span><span class="d">${esc(accDesc)}</span></span><span class="marrow">${ICONS.arrow}</span>
           </button>
           <div id="trader-account-panel" hidden>${accPanel}</div>
         </div>`
@@ -3327,9 +3352,9 @@ async function renderProfile() {
       <div class="profile-id">
         <div class="profile-name">${esc(displayName)}</div>
       </div>
-      <button class="iconbtn" id="profile-photo-btn" type="button" aria-label="${esc(t('photoChange'))}">📷</button>
+      <button class="iconbtn" id="profile-photo-btn" type="button" aria-label="${esc(t('photoChange'))}">${ICONS.camera}</button>
       <input type="file" id="profile-photo-input" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
-      ${p.avatar_url && !S.photoDraft.profile ? `<button class="iconbtn trashbtn" id="profile-photo-del" type="button" aria-label="${esc(t('photoRemove'))}" title="${esc(t('photoRemove'))}">🗑</button>` : ''}
+      ${p.avatar_url && !S.photoDraft.profile ? `<button class="iconbtn trashbtn" id="profile-photo-del" type="button" aria-label="${esc(t('photoRemove'))}" title="${esc(t('photoRemove'))}">${ICONS.trash}</button>` : ''}
     </div>
     ${S.photoDraft.profile ? `<div class="avatar-edit" style="margin-top:10px;"><span class="note">${esc(t('photoRemoveDraft'))}</span><button class="btn primary" id="profile-photo-done" type="button">${esc(t('doneBtn'))}</button></div>` : ''}
     <div class="subcard kyc-card">
@@ -3349,9 +3374,9 @@ async function renderProfile() {
         <div class="menurow"><span class="grow"><span class="t">${esc(t('region'))}</span><span class="d">Indonesia</span></span></div>
       </div>
       <div class="detail-menu">
-        <button type="button" class="menurow" id="menu-settings"><span class="grow"><span class="t">${esc(t('settings'))}</span></span><span class="marrow">→</span></button>
-        <button type="button" class="menurow" id="menu-help"><span class="grow"><span class="t">${esc(t('menuHelp'))}</span><span class="d">${esc(t('menuHelpDesc'))}</span></span><span class="marrow">→</span></button>
-        <button type="button" class="menurow" id="menu-guide"><span class="grow"><span class="t">${esc(t('guide'))}</span><span class="d">${esc(t('menuGuideDesc'))}</span></span><span class="marrow">→</span></button>
+        <button type="button" class="menurow" id="menu-settings"><span class="grow"><span class="t">${esc(t('settings'))}</span></span><span class="marrow">${ICONS.arrow}</span></button>
+        <button type="button" class="menurow" id="menu-help"><span class="grow"><span class="t">${esc(t('menuHelp'))}</span><span class="d">${esc(t('menuHelpDesc'))}</span></span><span class="marrow">${ICONS.arrow}</span></button>
+        <button type="button" class="menurow" id="menu-guide"><span class="grow"><span class="t">${esc(t('guide'))}</span><span class="d">${esc(t('menuGuideDesc'))}</span></span><span class="marrow">${ICONS.arrow}</span></button>
       </div>
     </div>`;
   bindPhotoInput('profile-photo-input', 'profile');
@@ -3408,9 +3433,9 @@ function renderSettings() {
   body.innerHTML = `<button class="btn backbtn" id="set-back-profile" type="button">${esc(t('backProfile'))}</button>`
     + `<div class="page-head"><h2>${esc(t('settings'))}</h2><p class="sub">${esc(t('profileSub'))}</p></div>`
     + rows.map(([key, title, desc]) =>
-    `<div class="subcard"><button type="button" class="menurow" data-setsub="${key}"><span class="grow"><span class="t">${esc(title)}</span><span class="d">${esc(desc)}</span></span><span class="marrow">→</span></button></div>`
+    `<div class="subcard"><button type="button" class="menurow" data-setsub="${key}"><span class="grow"><span class="t">${esc(title)}</span><span class="d">${esc(desc)}</span></span><span class="marrow">${ICONS.arrow}</span></button></div>`
   ).join('')
-    + `<div class="subcard"><button type="button" class="menurow danger" id="set-logout"><span class="grow"><span class="t">${esc(t('logout'))}</span></span><span class="marrow">→</span></button></div>`;
+    + `<div class="subcard"><button type="button" class="menurow danger" id="set-logout"><span class="grow"><span class="t">${esc(t('logout'))}</span></span><span class="marrow">${ICONS.arrow}</span></button></div>`;
   $('#set-back-profile').addEventListener('click', () => showView('profile'));
   $$('[data-setsub]', body).forEach((b) => {
     b.addEventListener('click', () => { S.settingsSub = b.dataset.setsub; S.secPage = null; S.wdAdd = false; renderSettings(); });
@@ -3480,8 +3505,8 @@ function renderSettingsSecurity(body) {
   body.innerHTML = settingsBackButton()
     + `<div class="page-head"><h2>${esc(t('securityTitle'))}</h2></div>`
     + `<div class="subcard">
-      <div class="menurow" style="cursor:default;"><span class="grow"><span class="t">${esc(t('email'))}</span><span class="d">${esc(S.user?.email || '—')}</span></span><button type="button" class="iconbtn" id="sec-open-email" aria-label="${esc(t('secChangeEmail'))}">✎</button></div>
-      <div class="menurow" style="cursor:default;"><span class="grow"><span class="t">${esc(t('password'))}</span><span class="d">••••••••${S.user?.updated_at ? ' · ' + esc(t('secPwChangedOn', { date: fmtDateShort(S.user.updated_at) })) : ''}</span></span><button type="button" class="iconbtn" id="sec-open-pw" aria-label="${esc(t('secChangePw'))}">✎</button></div>
+      <div class="menurow" style="cursor:default;"><span class="grow"><span class="t">${esc(t('email'))}</span><span class="d">${esc(S.user?.email || '—')}</span></span><button type="button" class="iconbtn" id="sec-open-email" aria-label="${esc(t('secChangeEmail'))}">${ICONS.edit}</button></div>
+      <div class="menurow" style="cursor:default;"><span class="grow"><span class="t">${esc(t('password'))}</span><span class="d">••••••••${S.user?.updated_at ? ' · ' + esc(t('secPwChangedOn', { date: fmtDateShort(S.user.updated_at) })) : ''}</span></span><button type="button" class="iconbtn" id="sec-open-pw" aria-label="${esc(t('secChangePw'))}">${ICONS.edit}</button></div>
     </div>`;
   bindSettingsBack();
   $('#sec-open-pw').addEventListener('click', () => { S.secPage = 'pw'; renderSettings(); });
@@ -3677,7 +3702,7 @@ function renderSettingsWithdraw(body) {
     + `<div class="subcard"><p>${esc(t('setWithdrawDesc'))}</p>`
     + `<div class="empty" style="margin-top:10px">${esc(t('setWithdrawEmpty'))}</div>`;
   if (!S.wdAdd) {
-    html += `<button type="button" class="menurow" id="wd-add"><span class="grow"><span class="t">${esc(t('setWithdrawAdd'))}</span></span><span class="marrow" aria-hidden="true">→</span></button>`;
+    html += `<button type="button" class="menurow" id="wd-add"><span class="grow"><span class="t">${esc(t('setWithdrawAdd'))}</span></span><span class="marrow" aria-hidden="true">${ICONS.arrow}</span></button>`;
   } else {
     html += `<form id="wd-form" novalidate>
       <div class="wal-grid">
@@ -3746,7 +3771,7 @@ function renderHelp() {
       if (S.view === 'help') renderHelp();
     }).catch(() => {});
   }
-  const faqs = [1, 2, 3, 4, 5].map((n) => `<details class="more"><summary>${esc(t('helpFaq' + n + 'Q'))}<span aria-hidden="true">▾</span></summary><div class="more-body"><p>${esc(t('helpFaq' + n + 'A'))}</p></div></details>`).join('');
+  const faqs = [1, 2, 3, 4, 5].map((n) => `<details class="more"><summary>${esc(t('helpFaq' + n + 'Q'))}<span aria-hidden="true">${ICONS.chevD}</span></summary><div class="more-body"><p>${esc(t('helpFaq' + n + 'A'))}</p></div></details>`).join('');
   // D22: diri sendiri dikeluarkan dari select laporan.
   const traders = (S.traders || []).filter((tr) => tr.profile_id !== S.user?.id).map((tr) => {
     // Publik: opsi laporan hanya @username, tanpa nama profil (ronde 5).
@@ -3773,9 +3798,9 @@ function renderHelp() {
       }).join('') + `</div>`
       : `<p class="note" style="margin-top:10px;">${esc(t('helpReportEmpty'))}</p>`)
     + `<h3 class="section">${esc(t('helpRulesTitle'))}</h3>`
-    + `<details class="more"><summary>${esc(t('helpRuleTos'))}<span aria-hidden="true">▾</span></summary><div class="more-body"><p>${esc(t('helpRuleTosBody'))}</p></div></details>`
-    + `<details class="more"><summary>${esc(t('helpRulePrivacy'))}<span aria-hidden="true">▾</span></summary><div class="more-body"><p>${esc(t('helpRulePrivacyBody'))}</p></div></details>`
-    + `<details class="more"><summary>${esc(t('helpRuleRefund'))}<span aria-hidden="true">▾</span></summary><div class="more-body"><p>${esc(t('helpRuleRefundBody'))}</p></div></details>`;
+    + `<details class="more"><summary>${esc(t('helpRuleTos'))}<span aria-hidden="true">${ICONS.chevD}</span></summary><div class="more-body"><p>${esc(t('helpRuleTosBody'))}</p></div></details>`
+    + `<details class="more"><summary>${esc(t('helpRulePrivacy'))}<span aria-hidden="true">${ICONS.chevD}</span></summary><div class="more-body"><p>${esc(t('helpRulePrivacyBody'))}</p></div></details>`
+    + `<details class="more"><summary>${esc(t('helpRuleRefund'))}<span aria-hidden="true">${ICONS.chevD}</span></summary><div class="more-body"><p>${esc(t('helpRuleRefundBody'))}</p></div></details>`;
   const form = $('#help-report-form');
   if (form) form.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -3814,7 +3839,7 @@ function saveGuideOpen() {
 
 function guideSectionHtml(id, title, bodyHtml) {
   const open = S.guideOpen.includes(id) ? ' open' : '';
-  return `<details class="card guide-sec" id="guide-${id}"${open}><summary class="guide-sec-sum"><h3>${esc(title)}</h3><span class="guide-sec-chev" aria-hidden="true">▾</span></summary><div class="more-body">${bodyHtml}</div></details>`;
+  return `<details class="card guide-sec" id="guide-${id}"${open}><summary class="guide-sec-sum"><h3>${esc(title)}</h3><span class="guide-sec-chev" aria-hidden="true">${ICONS.chevD}</span></summary><div class="more-body">${bodyHtml}</div></details>`;
 }
 
 // Petunjuk scroll tabel pangkat di layar kecil: bayangan tepi kanan hanya
@@ -3841,8 +3866,8 @@ function renderGuide() {
   const secs = $('#guide-sections');
   if (!secs) return;
   const flow = `<div class="flow" role="img" aria-label="PENDING → ${esc(t('flowLocked'))} → WIN / LOSS">`
-    + `<span class="fstep"><b>PENDING</b><i>${esc(t('flowPendingSub'))}</i></span><span class="farr" aria-hidden="true">→</span>`
-    + `<span class="fstep"><b>${esc(t('flowLocked'))}</b><i>${esc(t('flowLockedSub'))}</i></span><span class="farr" aria-hidden="true">→</span>`
+    + `<span class="fstep"><b>PENDING</b><i>${esc(t('flowPendingSub'))}</i></span><span class="farr" aria-hidden="true">${ICONS.arrow}</span>`
+    + `<span class="fstep"><b>${esc(t('flowLocked'))}</b><i>${esc(t('flowLockedSub'))}</i></span><span class="farr" aria-hidden="true">${ICONS.arrow}</span>`
     + `<span class="fstep win"><b>WIN / LOSS</b><i>${esc(t('flowResultSub'))}</i></span></div>`;
   // Tangga pangkat lengkap (dihitung dari rumus tangga tetap $10.000).
   let ladderRows = '';
@@ -3933,7 +3958,7 @@ async function renderVerifyView() {
   } else if (ok) {
     const tr = traderOf(sig);
     const d = decimalsForPair(sig.pair);
-    body = `<p class="verify-ok">✓ ${esc(t('verifyValid'))}</p>`
+    body = `<p class="verify-ok">${ICONS.check} ${esc(t('verifyValid'))}</p>`
       + `<dl class="kv"><dt>${esc(t('sigShareId'))}</dt><dd class="share-id">${esc(cardId)}</dd>`
       + `<dt>${esc(t('sigShareCode'))}</dt><dd class="share-id">${esc(verifyCode(sig))}</dd>`
       + `<dt>${esc(t('pair'))}</dt><dd><b>${esc(sig.pair)}</b> ${esc(sig.direction)} — ${esc(statusPillLabel(sig.status))}</dd>`

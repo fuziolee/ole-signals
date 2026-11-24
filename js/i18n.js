@@ -563,6 +563,8 @@ const STR = {
     dfPresetCustom: 'Custom Range',
     dfFrom: 'Dari',
     dfTo: 'Sampai',
+    dfPrevMonth: 'Bulan sebelumnya',
+    dfNextMonth: 'Bulan berikutnya',
     histEmptyMonth: 'Tidak ada entri dalam 30 hari terakhir.',
     histEmptyRange: 'Tidak ada entri dalam rentang tanggal ini.',
     // --- Ruang Kerja ---
@@ -1312,6 +1314,8 @@ const STR = {
     dfPresetCustom: 'Custom range',
     dfFrom: 'From',
     dfTo: 'To',
+    dfPrevMonth: 'Previous month',
+    dfNextMonth: 'Next month',
     histEmptyMonth: 'No entries in the last 30 days.',
     histEmptyRange: 'No entries in this date range.',
     // --- Workspace ---
