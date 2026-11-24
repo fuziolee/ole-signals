@@ -402,6 +402,34 @@ function subBadgeHtml(traderId) {
     ? `<span class="subbadge">${esc(t('subscribe'))} ${esc(fmtIdr(price))}${esc(t('perMonth'))}</span>`
     : `<span class="subbadge free">${esc(t('profFree'))}</span>`;
 }
+// Ronde 8b (a): perbarui SEMUA tombol Ikuti untuk trader yang sama di
+// seluruh tampilan (feed, Cari, Peringkat, profil trader, Diikuti) —
+// bukan hanya tombol yang diklik — supaya label tidak basi.
+function paintFollowButtons(traderId) {
+  const followed = isFollowing(traderId);
+  $$(`[data-follow="${CSS.escape(traderId)}"]`).forEach((b) => {
+    b.classList.toggle('active', followed);
+    b.textContent = followed ? t('followed') : t('follow');
+    b.setAttribute('aria-pressed', String(followed));
+  });
+}
+// Ronde 8b (b): muat ulang jumlah pengikut trader dari DB lalu perbarui
+// semua tampilannya (kartu Cari .fol + halaman profil #tp-followers).
+async function paintFollowerCount(traderId) {
+  try { S.followerCounts[traderId] = await api.countFollowers(traderId); } catch (e) { return; }
+  const txt = t('followersCount', { n: S.followerCounts[traderId] });
+  $$(`.tcard[data-trader="${CSS.escape(traderId)}"] .fol`).forEach((el) => { el.textContent = txt; });
+  const tp = $('#tp-followers');
+  if (tp) tp.textContent = txt;
+}
+// Ronde 8b (a): perbarui SEMUA tombol Salin untuk sinyal yang sama di
+// seluruh tampilan (feed, Ruang Kerja) — bukan hanya yang diklik.
+function paintCopyButtons(signalId) {
+  const copied = S.copiedIds.has(signalId);
+  $$(`[data-act="copy"][data-sig="${CSS.escape(signalId)}"]`).forEach((b) => {
+    b.innerHTML = (copied ? ICONS.check + ' ' : ICONS.copy + ' ') + t(copied ? 'copied' : 'copySignal');
+  });
+}
 function bindFollowSubscribe(root) {
   $$('[data-follow]', root).forEach((b) => {
     b.addEventListener('click', async (e) => {
@@ -419,9 +447,8 @@ function bindFollowSubscribe(root) {
         // "Diikuti saja", tombol) konsisten.
         try { S.myFollows = await api.listMyFollows(S.user.id); } catch (err) { /* abaikan */ }
         const nowFollowed = isFollowing(traderId);
-        b.classList.toggle('active', nowFollowed);
-        b.textContent = nowFollowed ? t('followed') : t('follow');
-        b.setAttribute('aria-pressed', String(nowFollowed));
+        paintFollowButtons(traderId);
+        await paintFollowerCount(traderId);
         const name = traderHandle(traderOf({ trader_id: traderId }));
         toast(t(nowFollowed ? 'toastFollowed' : 'toastUnfollowed', { name }));
       } catch (err) {
@@ -1116,7 +1143,7 @@ function bindSignalCards(root) {
       if (act === 'detail') { openSignalDetail(id); return; }
       if (act === 'share') { const sg = findSignal(id); if (sg) downloadShareCard(sg); return; }
       if (act === 'copy') {
-        if (await copySignalText(id)) btn.innerHTML = ICONS.check + ' ' + t('copied');
+        if (await copySignalText(id)) paintCopyButtons(id);
         return;
       }
       if (act === 'edit') {
@@ -1841,7 +1868,7 @@ function openSignalDetail(id) {
   const copyBtn = $('#ov-copy');
   if (copyBtn) {
     copyBtn.onclick = async () => {
-      if (await copySignalText(sig.id)) copyBtn.innerHTML = ICONS.check + ' ' + t('copied');
+      if (await copySignalText(sig.id)) { copyBtn.innerHTML = ICONS.check + ' ' + t('copied'); paintCopyButtons(sig.id); }
     };
   }
   const shareBtn = $('#ov-share');
@@ -1966,8 +1993,11 @@ function journalRowHtml(sig, opts = {}) {
   const timeline = `${esc(t('detPosted'))} ${esc(fmtDate(sig.created_at))}`
     + (sig.activated_at ? ` · ${esc(t('dtEntry'))} ${esc(fmtDate(sig.activated_at))}` : '')
     + (sig.closed_at ? ` · ${esc(sig.status === 'WIN' ? t('dtTP') : t('dtSL'))} ${esc(fmtDate(sig.closed_at))}` : '');
+  // Ronde 8b (c): waktu "disalin" memakai created_at baris copies (waktu
+  // salin), bukan created_at sinyal — seperti prototipe journalRow
+  // (myCopies[s.id].ago).
   const postedTxt = opts.isCopy
-    ? t('jrnlCopiedAgo', { ago: fmtRel(sig.created_at), lot: fmtNum(sig.lot_size, 2) })
+    ? t('jrnlCopiedAgo', { ago: fmtRel(opts.copyCreatedAt || sig.created_at), lot: fmtNum(sig.lot_size, 2) })
     : t('myJrnlPosted', { ago: fmtRel(sig.created_at), lot: fmtNum(sig.lot_size, 2) });
   // D13: tombol Bagikan untuk sinyal sendiri. D14: tombol hapus salinan
   // (non-AKTIF saja; AKTIF menampilkan ikon nonaktif + catatan).
@@ -2005,9 +2035,17 @@ function bindJournalRows(root) {
   $$('[data-uncopy]', root).forEach((b) => {
     b.addEventListener('click', async () => {
       try {
-        await api.uncopy(b.dataset.uncopy);
+        const copyId = b.dataset.uncopy;
+        // Ronde 8b (a): hapus salinan dari state lokal SEBELUM render
+        // ulang — kalau tidak, kartu sinyal tetap menampilkan
+        // "Sudah disalin" karena S.copiedIds masih berisi id sinyalnya.
+        const copy = S.myCopies.find((c) => c.id === copyId);
+        await api.uncopy(copyId);
+        if (copy) S.copiedIds.delete(copy.signal_id);
+        S.myCopies = S.myCopies.filter((c) => c.id !== copyId);
         toast(t('jrnlDeleted'));
         if (S.view === 'office') await renderOffice();
+        renderHomeList(); // kartu feed ikut diperbarui tanpa reload
       } catch (e) {
         toast(t('errNetwork'), true);
       }
@@ -3410,7 +3448,7 @@ function renderOfficeFollowerTab() {
   // D14: salinan aktif memakai journalRowHtml(isCopy) — floating/waiting
   // + hapus salinan (non-AKTIF).
   const activeCopies = S.myCopies
-    .map((c) => ({ sig: one(c.signals), copyId: c.id }))
+    .map((c) => ({ sig: one(c.signals), copyId: c.id, copyCreatedAt: c.created_at }))
     .filter((x) => x.sig && (x.sig.status === 'PENDING' || x.sig.status === 'AKTIF'));
   const f = S.followFilter;
   const openSigs = followedSignals.filter((s) => s.status === 'PENDING' || s.status === 'AKTIF');
@@ -3424,8 +3462,13 @@ function renderOfficeFollowerTab() {
   const filtersHtml = `<div class="pfilters">${fchip('ALL', t('pfAll', { n: openSigs.length }))}${fchip('PENDING', t('pfPending'))}${fchip('AKTIF', t('pfActive'))}<button class="chip hist-tab" type="button" data-ffilter="HISTORY" aria-pressed="${f === 'HISTORY'}">${esc(t('tabHistory'))} (${doneSigs.length})</button></div>`;
   let html = `<h2 style="font-size:16px; margin: 6px 0 10px;">${esc(t('officeActiveCopies'))} (${activeCopies.length})</h2>`;
   html += activeCopies.length
-    ? `<div class="hist journal-scroll" tabindex="0">` + activeCopies.map((x) => journalRowHtml(x.sig, { showTrader: true, isCopy: true, copyId: x.copyId })).join('') + `</div>`
+    ? `<div class="hist journal-scroll" tabindex="0">` + activeCopies.map((x) => journalRowHtml(x.sig, { showTrader: true, isCopy: true, copyId: x.copyId, copyCreatedAt: x.copyCreatedAt })).join('') + `</div>`
     : `<div class="empty"><strong>${S.myCopies.length === 0 ? t('jrnlEmpty') : t('jrnlNoActive')}</strong></div>`;
+  // (8b) Chip filter Semua/Pending/Aktif/Riwayat SELALU tampil, termasuk di
+  // tampilan Riwayat — kalau tidak, pengguna tidak bisa kembali dari Riwayat
+  // (jalan buntu). Prototipe: chip filter di slot terpisah yang selalu tampil.
+  html += `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeFollowSignals'))}</h2>`;
+  html += filtersHtml;
   if (f === 'HISTORY') {
     // B2-03: baris terpisah — chip "Semua" + Filter tanggal (seperti
     // Riwayat trader); rentang memakai waktu salin (prototipe).
@@ -3433,14 +3476,12 @@ function renderOfficeFollowerTab() {
     const shown = doneCopies.filter((x) => withinHistRange(x.copy.created_at, range, S.followerCustom));
     html += `<div class="pfilters"><button class="chip" type="button" data-frng="ALL" aria-pressed="${range === 'ALL'}">${esc(t('rangeAll'))}</button>${dateFilterBarHtml('follower')}</div>`;
     html += shown.length
-      ? `<div class="hist journal-scroll tall" tabindex="0">` + shown.map((x) => journalRowHtml(x.sig, { showTrader: true })).join('') + `</div>`
+      ? `<div class="hist journal-scroll tall" tabindex="0">` + shown.map((x) => journalRowHtml(x.sig, { showTrader: true, isCopy: true, copyCreatedAt: x.copy.created_at })).join('') + `</div>`
       : `<div class="empty"><strong>${esc(range === 'ALL' ? t('officeCopyHistoryEmpty') : t('histEmptyRange'))}</strong></div>`;
   } else {
-    html += `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeFollowSignals'))}</h2>`;
-    html += filtersHtml;
     const shown = f === 'ALL' ? openSigs : openSigs.filter((s) => s.status === f);
     if (!S.myFollows.length) {
-      html += `<div class="empty"><strong>${t('officeFollowedEmpty')}</strong>${esc(t('officeFollowedHint'))}</div>`;
+      html += `<div class="empty"><strong>${t('officeFollowedEmpty')}</strong></div>`;
     } else if (!shown.length) {
       html += `<div class="empty"><strong>${esc(t('officeFollowSignalsEmpty'))}</strong></div>`;
     } else {
@@ -3498,7 +3539,7 @@ function renderOfficeFollowedBody() {
   }
   const h3tr = `<h3 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeFollowedTraders'))}</h3>`;
   if (!S.myFollows.length) {
-    box.innerHTML = h3tr + `<div class="empty"><strong>${t('officeFollowedEmpty')}</strong>${esc(t('officeFollowedHint'))}</div>`;
+    box.innerHTML = h3tr + `<div class="empty"><strong>${t('officeFollowedEmpty')}</strong></div>`;
     return;
   }
   box.innerHTML = h3tr + S.myFollows.map((f) => {
