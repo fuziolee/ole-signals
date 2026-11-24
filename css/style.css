@@ -118,6 +118,8 @@ h1 { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
 .btn.primary:hover { background: var(--teal-hover); border-color: var(--teal-hover); }
 .btn.primary:active { background: var(--teal-hover); border-color: var(--teal-hover); }
 .btn.danger { border-color: var(--sell-text); color: var(--sell-text); }
+/* Tombol dalam keadaan aktif (mis. "Diikuti") — isi sky blue muda. */
+.btn.active { background: color-mix(in srgb, var(--teal) 16%, var(--panel)); border-color: var(--teal); color: var(--teal); }
 .btn:disabled, .btn.primary:disabled { background: var(--panel-2); color: var(--muted); border-color: var(--line); opacity: 1; cursor: not-allowed; }
 .btn.ghost { background: transparent; }
 .field { margin-bottom: 12px; }
@@ -431,6 +433,7 @@ table.board td.num, table.board th.num { text-align: right; }
 .stchip { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 6px; background: var(--panel-2); color: var(--muted); }
 .stchip.ok { background: var(--buy-bg); color: var(--buy); }
 .stchip.no { background: var(--panel); color: var(--muted); }
+.stchip.bad { background: var(--sell-bg); color: var(--sell-text); }
 .kyc-card { margin-bottom: 12px; }
 .kyc-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
 
@@ -652,8 +655,8 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
 .dup-flag { font-size: 12.5px; color: var(--gold); background: var(--gold-bg); border-radius: 8px; padding: 6px 10px; margin-top: 8px; }
 .lvlbadge { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 6px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line-2); white-space: nowrap; }
 /* D10/D64: avatar + nama sebagai tombol profil */
+.avatar-btn { appearance: none; background: none; border: 0; padding: 0; cursor: pointer; border-radius: 50%; flex: none; display: inline-grid; place-items: center; }
 .sig-top button.avatar { cursor: pointer; border: 0; padding: 0; }
-.sig-top button.avatar-btn { appearance: none; background: none; border: 0; padding: 0; cursor: pointer; border-radius: 50%; flex: none; display: inline-grid; place-items: center; }
 .sig-top .right { margin-left: auto; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .locked-body { display: flex; gap: 10px; align-items: flex-start; background: var(--panel-2); border-radius: 10px; padding: 12px; margin-top: 12px; font-size: 13.5px; color: var(--muted); }
 .locked-body .lt { font-weight: 700; font-size: 15px; color: var(--ink); }
