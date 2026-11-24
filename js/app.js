@@ -2394,22 +2394,39 @@ function renderHomeFilters() {
     // cukup — pengguna desktop yang mencoba menyeret strip sebelumnya
     // tidak terjadi apa-apa (tidak ada handler drag). Hanya pointer mouse;
     // sentuh tetap memakai scroll native (overflow-x: auto).
+    // R20b: JANGAN setPointerCapture di sini — capture me-retarget event
+    // click ke strip sehingga handler klik chip tidak pernah jalan (klik
+    // chip pair mati; terbukti probe: pointerdown menarget chip, lalu
+    // pointerup + click menarget div#pair-strip). Sebagai gantinya,
+    // pointermove/pointerup dipasang di window selama drag (pola standar):
+    // event click tetap menarget chip, dan drag tetap berlanjut walau
+    // pointer keluar strip.
     let dragX = null, dragScroll = 0, dragged = false;
-    strip2.addEventListener('pointerdown', (ev) => {
-      if (ev.pointerType !== 'mouse') return;
-      dragX = ev.clientX; dragScroll = strip2.scrollLeft; dragged = false;
-      strip2.classList.add('dragging');
-      try { strip2.setPointerCapture(ev.pointerId); } catch (e) { /* abaikan */ }
-    });
-    strip2.addEventListener('pointermove', (ev) => {
+    const onDragMove = (ev) => {
       if (dragX === null || ev.pointerType !== 'mouse') return;
       const dx = ev.clientX - dragX;
       if (Math.abs(dx) > 5) dragged = true;
       strip2.scrollLeft = dragScroll - dx;
+    };
+    const endDrag = () => {
+      dragX = null;
+      strip2.classList.remove('dragging');
+      window.removeEventListener('pointermove', onDragMove);
+      window.removeEventListener('pointerup', endDrag);
+      window.removeEventListener('pointercancel', endDrag);
+      // Bila seret berakhir tanpa click yang menelan flag (mis. dilepas
+      // di luar strip), bersihkan flag setelah jeda singkat agar klik chip
+      // berikutnya tidak ikut tertelan.
+      if (dragged) setTimeout(() => { dragged = false; }, 150);
+    };
+    strip2.addEventListener('pointerdown', (ev) => {
+      if (ev.pointerType !== 'mouse') return;
+      dragX = ev.clientX; dragScroll = strip2.scrollLeft; dragged = false;
+      strip2.classList.add('dragging');
+      window.addEventListener('pointermove', onDragMove);
+      window.addEventListener('pointerup', endDrag);
+      window.addEventListener('pointercancel', endDrag);
     });
-    const endDrag = () => { dragX = null; strip2.classList.remove('dragging'); };
-    strip2.addEventListener('pointerup', endDrag);
-    strip2.addEventListener('pointercancel', endDrag);
     // Bila habis diseret, klik chip yang terpicu di bawah pointer harus
     // dibatalkan (kalau tidak, seret malah memfilter pair).
     strip2.addEventListener('click', (ev) => {
