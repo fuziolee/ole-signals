@@ -3080,9 +3080,9 @@ function traderIdentityCardHtml() {
         <div style="font-size:13px; color:var(--muted);">Level ${level} · ${esc(levelName(level, getLang()))} · ${subLabel}</div>
       </div>
       <button class="iconbtn" id="trader-share-btn" type="button" aria-label="${esc(t('shareTrader'))}">${ICONS.share}</button>
+      <label class="iconbtn" for="trader-photo-input" title="${esc(t('photoChangeTrader'))}" style="cursor:pointer;">${ICONS.camera}</label>
     </div>
     <div class="avatar-edit">
-      <label class="btn" for="trader-photo-input">${esc(t('photoChangeTrader'))}</label>
       <input type="file" id="trader-photo-input" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
       ${avUrl && !uploadDraft ? `<button class="iconbtn trashbtn" id="trader-photo-del" type="button" aria-label="${esc(t('photoRemoveTrader'))}" title="${esc(t('photoRemoveTrader'))}">${ICONS.trash}</button>` : ''}
       <span class="note">${esc(uploadDraft ? t('photoUploadDraft') : draftDel ? t('photoRemoveDraft') : t('photoHintDraft'))}</span>
