@@ -81,7 +81,7 @@ const S = {
   searchFilters: { q: '', pair: 'ALL', topPair: 'ALL', sort: 'wr', wrMin: '0', rrMin: '0', pfMin: '0', levelMin: '1', price: 'all', rfMin: '0' },
   searchDraft: null,
   searchPfHidden: 0,
-  feedFilter: { pair: 'ALL', status: 'ALL', followed: false },
+  feedFilter: { pair: 'ALL', status: 'ALL' },
   guideOpen: loadGuideOpen(),
   helpGuideTab: 'guide', // sub-tab tampilan gabungan: 'guide' | 'help'
   editingId: null,
@@ -2340,8 +2340,6 @@ function renderHomeFilters() {
   html += `<button class="fchip" type="button" data-fstatus="ALL" aria-pressed="${f.status === 'ALL'}">${esc(t('feedAllStatus'))}</button>`;
   html += `<button class="fchip" type="button" data-fstatus="PENDING" aria-pressed="${f.status === 'PENDING'}">${esc(t('tabPending'))}</button>`;
   html += `<button class="fchip" type="button" data-fstatus="AKTIF" aria-pressed="${f.status === 'AKTIF'}">${esc(t('tabActive'))}</button>`;
-  html += '<span class="sep" aria-hidden="true"></span>';
-  html += `<button class="fchip" type="button" data-ffollowed="1" aria-pressed="${f.followed}">${esc(t('feedFollowedOnly'))}</button>`;
   html += '</div>';
   box.innerHTML = html;
   const strip2 = box.querySelector('#pair-strip');
@@ -2368,20 +2366,15 @@ function renderHomeFilters() {
   $$('[data-fstatus]', box).forEach((b) => {
     b.addEventListener('click', () => { S.feedFilter.status = b.dataset.fstatus; renderHomeList(); renderHomeFilters(); });
   });
-  $$('[data-ffollowed]', box).forEach((b) => {
-    b.addEventListener('click', () => { S.feedFilter.followed = !S.feedFilter.followed; renderHomeList(); renderHomeFilters(); });
-  });
 }
 function homeFilteredSignals() {
   const f = S.feedFilter;
-  const followedIds = new Set(S.myFollows.map((x) => x.trader_id));
   const rank = (st) => (st === 'PENDING' ? 0 : st === 'AKTIF' ? 1 : 2);
   return S.homeSignals
     // B1-03: saat filter pair aktif, sinyal terkunci disembunyikan — pair
     // sinyal terkunci memang tidak ditampilkan, jadi tidak boleh ikut filter.
     .filter((s) => (f.pair === 'ALL' || (s.pair === f.pair && !isLockedForMe(s)))
-      && (f.status === 'ALL' || s.status === f.status)
-      && (!f.followed || followedIds.has(s.trader_id)))
+      && (f.status === 'ALL' || s.status === f.status))
     .sort((a, b) => (rank(a.status) - rank(b.status))
       || (new Date(b.created_at) - new Date(a.created_at)));
 }
