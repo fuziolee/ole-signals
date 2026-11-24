@@ -63,6 +63,13 @@
   --radius-lg: 24px;
   /* Ronde 21 (arah X Wallet): sidebar HITAM di kedua tema; nav bawah HP
      pil hitam melayang. */
+  /* Ronde 22: cangkang aplikasi (halaman abu-abu, kartu putih, panel
+     kanan abu-abu) + analog gelapnya. */
+  --page: #060A18;
+  --shell: #0A1128;
+  --aside-bg: #0E1830;
+  --shell-shadow: 0 24px 60px rgba(0, 0, 0, .5), 0 4px 16px rgba(0, 0, 0, .35);
+  --chip-on-ink: #BAE6FD;
   --side-bg: #000000;
   --side-ink: #9CA3AF;
   --side-active-bg: rgba(255, 255, 255, .12);
@@ -104,6 +111,13 @@ html[data-theme="light"] {
   --side-active-bg: rgba(255, 255, 255, .12);
   --demo-badge-color: #0F172A;
   --demo-badge-border: rgba(15, 23, 42, .35);
+  /* Ronde 22 (tema TERANG): halaman abu-abu #E8E8EB, cangkang putih,
+     panel kanan abu-abu #F4F4F6 — seperti preview yang disetujui. */
+  --page: #E8E8EB;
+  --shell: #FFFFFF;
+  --aside-bg: #F4F4F6;
+  --shell-shadow: 0 24px 60px rgba(20, 20, 30, .14), 0 4px 16px rgba(20, 20, 30, .06);
+  --chip-on-ink: #07304A;
   --sl-bg: rgba(220, 38, 38, .16);
   --sl-border: #DC2626;
   --sl-text: #DC2626;
@@ -182,12 +196,18 @@ html[data-theme="light"] {
     --hero-btn-border: #E2E8F0;
     --hero-btn-bg-dis: rgba(255, 255, 255, .6);
     --hero-btn-ink-dis: #94A3B8;
+    /* Ronde 22: sama seperti tema TERANG di atas. */
+    --page: #E8E8EB;
+    --shell: #FFFFFF;
+    --aside-bg: #F4F4F6;
+    --shell-shadow: 0 24px 60px rgba(20, 20, 30, .14), 0 4px 16px rgba(20, 20, 30, .06);
+    --chip-on-ink: #07304A;
   }
 }
 html { -webkit-text-size-adjust: 100%; }
 body {
-  margin: 0; background: var(--bg); color: var(--ink);
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  margin: 0; background: var(--page); color: var(--ink);
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 16px; line-height: 1.5;
   font-variant-numeric: tabular-nums;
 }
@@ -214,7 +234,12 @@ details.more summary span svg { width: 16px; height: 16px; display: block; }
 .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 /* ---- kerangka ---- */
-.app { max-width: 1060px; margin: 0 auto; padding: 0 20px 100px; }
+/* Ronde 22: cangkang aplikasi — kartu putih radius 30px di halaman
+   abu-abu #E8E8EB, bayangan besar (lihat blok RONDE 22 di akhir file
+   untuk grid 250px / 1fr / 322px + scroll kolom mandiri). */
+.app { max-width: 1280px; margin: 26px auto; padding: 0; background: var(--shell); border-radius: 30px; box-shadow: var(--shell-shadow); overflow: hidden; }
+.app.auth-wrap, .app#verify-view { display: block; max-width: 420px; min-height: 0; height: auto; overflow: visible; padding: 28px 24px 32px; margin: 26px auto; }
+main { min-width: 0; }
 .app-header {
   position: sticky; top: 0; z-index: 30;
   background: var(--header-bg); padding: 14px 0 10px;
@@ -332,7 +357,7 @@ h1 { font-size: 24px; font-weight: 800; margin: 2px 0 4px; }
 .sig.sell { border-left: 4px solid var(--sell); }
 .sig-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .sig-pair { font-weight: 800; font-size: 17px; }
-.sig-pair-lg { font-size: 28px; }
+.sig-pair-lg { font-size: 23px; }
 .dir { font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 5px; }
 .dir.buy { background: var(--buy-bg); color: var(--buy); }
 .dir.sell { background: var(--sell-bg); color: var(--sell-text); }
@@ -999,4 +1024,160 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
   .fchip[aria-pressed="true"], .chip[aria-pressed="true"],
   .tab[aria-selected="true"], .subtab[aria-selected="true"],
   .seg button[aria-pressed="true"] { animation: none; }
+}
+
+/* ============================================================
+   RONDE 22 — Samakan preview "Pratinjau Klik Hidup" ke live.
+   Sumber: ~/workspace/user/files/Pratinjau_Klik_Hidup.html + revisi
+   yang disetujui user (panel kanan ADA 322px tanpa ikon Cari dan
+   tanpa "Trader Teratas"; sidebar tanpa Pengaturan + Keluar di bawah
+   Profil; Profil tanpa baris Keluar di desktop; 3 kolom scroll
+   sendiri-sendiri; pinggiran kartu biru muda tipis).
+   Aturan: TIDAK ada fitur yang dibuang — semua yang ada di live
+   (feed 2 kolom, Cari 2 kolom + 4 tab, strip pair drag, dst.)
+   tetap jalan di dalam cangkang baru ini.
+   ============================================================ */
+
+/* --- Cangkang: grid 3 kolom desktop ≥1100px, kolom scroll mandiri --- */
+@media (min-width: 1100px) {
+  .app { display: grid; grid-template-columns: 250px minmax(0, 1fr) 322px; height: calc(100vh - 52px); min-height: 640px; }
+  .side-nav { position: static; width: auto; height: 100%; overflow-y: auto; scrollbar-width: thin; border-right: 0; }
+  #app { margin: 26px auto; padding-bottom: 0; }
+  main { overflow-y: auto; scrollbar-width: thin; padding: 30px 34px 40px; }
+  .view { padding-top: 0; }
+  .right-panel { overflow-y: auto; scrollbar-width: thin; }
+  .bottom-nav { display: none; }
+}
+/* --- Tablet 900–1100px: sidebar rel ikon (live), panel kanan turun --- */
+@media (min-width: 900px) and (max-width: 1099px) {
+  .app { display: grid; grid-template-columns: 64px minmax(0, 1fr); }
+  .side-nav { position: static; width: 64px; height: 100%; overflow-y: auto; scrollbar-width: thin; padding: 18px 8px; align-items: stretch; border-right: 0; }
+  .side-nav .side-brand { display: none; }
+  .side-nav button { padding: 10px; justify-content: center; }
+  .side-nav button .lbl { display: none; }
+  .side-promo { display: none; }
+  #app { margin: 26px auto; padding-bottom: 0; }
+  main { padding: 24px 28px 40px; }
+  .right-panel { grid-column: 2; border-top: 1px solid var(--line); }
+  .bottom-nav { display: none; }
+}
+/* --- HP <900px: satu halaman, panel kanan di bawah konten --- */
+@media (max-width: 899px) {
+  body { padding: 0; }
+  .app { margin: 0; border-radius: 0; box-shadow: none; min-height: 100vh; }
+  main { padding: 14px 17px 110px; }
+  .right-panel { padding: 22px 17px 110px; }
+  .side-nav { display: none; }
+}
+
+/* --- Sidebar: kartu promo + Keluar di bawah Profil --- */
+.side-nav .side-promo { margin-top: 26px; background: var(--teal); color: #07304A; border-radius: 20px; padding: 20px 18px 18px; }
+.side-nav .side-promo h3 { margin: 0 0 5px; font-size: 16.5px; font-weight: 800; letter-spacing: -.01em; }
+.side-nav .side-promo p { margin: 0 0 14px; font-size: 12.5px; line-height: 1.5; color: #175A75; }
+.side-nav .side-promo-btn { display: inline-flex; align-items: center; gap: 8px; background: #0A0A0B; color: #fff; font-weight: 700; font-size: 13.5px; padding: 10px 18px; border-radius: 999px; border: 0; cursor: pointer; min-height: 2.5rem; }
+.side-nav .side-promo-btn svg { width: 15px; height: 15px; }
+.side-nav .side-promo-btn:active { transform: scale(.95); }
+
+/* --- Panel kanan --- */
+.right-panel { background: var(--aside-bg); padding: 26px 22px 30px; min-width: 0; }
+.rp-top { display: flex; align-items: center; gap: 9px; margin-bottom: 24px; }
+.rp-top .notif-wrap { margin-left: 0; }
+.rp-bell { background: var(--panel); box-shadow: 0 1px 4px rgba(20, 20, 30, .05); }
+.rp-avatar { margin-left: auto; width: 40px; height: 40px; font-size: 14px; }
+.rp-avatar .avatar { width: 40px; height: 40px; font-size: 14px; }
+/* Panel notifikasi: fixed agar tidak terpotong kolom yang bisa di-scroll. */
+.right-panel .notif-panel { position: fixed; top: 118px; right: max(38px, calc((100vw - 1280px) / 2 + 22px)); }
+@media (max-width: 1099px) {
+  .right-panel .notif-panel { top: 84px; right: 12px; }
+}
+.rp-bal-label { font-size: 13px; font-weight: 700; color: var(--muted); }
+.rp-bal-num { font-size: 33px; font-weight: 800; letter-spacing: -.03em; margin: 3px 0 2px; font-variant-numeric: tabular-nums; }
+.rp-bal-sub { font-size: 12.5px; font-weight: 700; color: var(--buy); margin-bottom: 20px; }
+.rp-bal-sub span { color: var(--muted); font-weight: 600; }
+.rp-hide-row { display: flex; align-items: center; gap: 9px; margin-bottom: 22px; }
+.rp-hide-row .t { font-size: 13px; font-weight: 700; }
+.rp-switch { margin-left: auto; width: 46px; height: 27px; border-radius: 999px; flex: none; background: #DCDCE1; position: relative; min-height: 27px; border: 0; cursor: pointer; padding: 0; }
+.rp-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 21px; height: 21px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .18); transition: left .22s cubic-bezier(.34, 1.4, .64, 1); }
+.rp-switch[aria-checked="true"] { background: var(--teal); }
+.rp-switch[aria-checked="true"]::after { left: 22px; }
+.rp-switch:active { transform: scale(.93); }
+.right-panel h4 { margin: 0 0 12px; font-size: 13px; font-weight: 800; letter-spacing: .02em; }
+.rp-stat-row { display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 11px 13px; margin-bottom: 9px; }
+.rp-stat-row .s-ic { width: 39px; height: 39px; border-radius: 50%; flex: none; display: grid; place-items: center; color: #fff; font-size: 14px; font-weight: 800; }
+.rp-stat-row .n { font-size: 13.5px; font-weight: 800; }
+.rp-stat-row .s { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.rp-stat-row .v { margin-left: auto; text-align: right; flex: none; }
+.rp-stat-row .v .a { font-size: 14.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rp-stat-row .v .b { font-size: 11px; font-weight: 700; }
+.rp-empty { font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+
+/* --- Pinggiran kartu utama: biru muda tipis #38BDF8 1.5px (R22) --- */
+.card, .tcard, .board-card, .subcard, .balance-card, .auth-card, .chart-card, .verify-card { border: 1.5px solid var(--teal); }
+.sig { border-color: var(--teal); }
+/* Kartu terpilih: 2.5px + latar biru muda lembut (pilihan peran Trader/Follower). */
+.role-toggle button[aria-pressed="true"] { border: 2.5px solid var(--teal); background: var(--teal-soft); color: var(--ink); }
+/* Kartu sinyal: panel level abu-abu seperti preview. */
+/* R22: di feed 2 kolom (web ≥900px) kartu hanya ~300px — grid 4 kolom
+   membuat kotak ke-4 ("Harga sekarang") meluber keluar kartu (terbukti
+   screenshot r22-01). Pakai 2×2 seperti di HP (≤560px) — rapi. */
+.sig-levels { background: var(--panel-2); border-radius: 14px; padding: 12px 15px; }
+.sig-levels .lv { background: transparent; }
+@media (min-width: 900px) {
+  .sig-levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* Baris atas kartu boleh membungkus: grup kanan (level, lencana, status)
+   turun ke baris sendiri bila sempit, bukan menjepit nama/waktu sampai
+   teks patah ("14 jam / lalu"). Waktu + nama dipotong elipsis, bukan patah. */
+.sig-top { flex-wrap: wrap; }
+.sig-top .who { min-width: 0; }
+.sig-top .who .mt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sig-top .who button.name { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* --- Chip pair bercentang + pop (preview) --- */
+.fchip, .chip { display: inline-flex; align-items: center; gap: 7px; }
+.fchip[aria-pressed="true"], .chip[aria-pressed="true"] { border-color: var(--teal); background: var(--teal-soft); color: var(--chip-on-ink); }
+/* Chip status di dalam segmented control TIDAK bercentang (preview: yang
+   terpilih hanya kartu putih berbayang). */
+.feed-filters .seg .fchip[aria-pressed="true"]::before { display: none; }
+.fchip[aria-pressed="true"]::before, .chip[aria-pressed="true"]::before {
+  content: ""; width: 17px; height: 17px; flex: none; border-radius: 50%;
+  background: var(--teal) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2307304A' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4.5 12.5 5 5 10-11'/%3E%3C/svg%3E") center/11px no-repeat;
+  animation: r22-pop .28s cubic-bezier(.34, 1.4, .64, 1) both;
+}
+@keyframes r22-pop { from { transform: scale(.3); } to { transform: scale(1); } }
+/* Segmented control status (preview): wadah abu-abu, yang terpilih kartu putih berbayang. */
+.feed-filters .seg { background: var(--panel-2); border-radius: 999px; padding: 4px; gap: 2px; margin: 0; }
+.feed-filters .seg button { border: 0; background: transparent; color: var(--muted); padding: 8px 18px; border-radius: 999px; min-height: 2.25rem; font-size: 13px; font-weight: 700; box-shadow: none; }
+.feed-filters .seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 2px 8px rgba(20, 20, 30, .10); }
+/* Segmented control Pengaturan/Bahasa ikut gaya preview (wadah abu-abu). */
+.seg { background: var(--panel-2); border-radius: 999px; padding: 4px; gap: 2px; }
+.seg button { border: 0; background: transparent; color: var(--muted); box-shadow: none; }
+.seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 2px 8px rgba(20, 20, 30, .10); }
+
+/* --- Ripple saat ditekan (preview: pointerdown, span .ripple) --- */
+.btn, .tab, .subtab, .fchip, .chip, .seg button, .dir-toggle button,
+.role-toggle button, .bellbtn, .iconbtn, .menurow, .side-nav button,
+.side-nav #side-logout, .bottom-nav button, .date-filter-btn,
+.df-preset, .df-day, .avatar-btn, .side-promo-btn { position: relative; overflow: hidden; }
+.ripple { position: absolute; border-radius: 50%; pointer-events: none; background: currentColor; opacity: .16; transform: scale(0); animation: r22-rip .45s ease-out forwards; }
+@keyframes r22-rip { to { transform: scale(2.6); opacity: 0; } }
+
+/* --- Toast pil hitam (preview) --- */
+/* R22: toast tidak boleh menelan klik — toast menutupi tombol di dekat
+   bawah viewport selama 4,2 detik dan klik kedua (mis. Berhenti ikuti)
+   mendarat di toast, bukan di tombol (terbukti probe follow). Toast
+   tidak punya tombol/aksi, jadi pointer-events: none aman. */
+#toasts { pointer-events: none; }
+.toast { background: #0A0A0B; color: #fff; border-radius: 999px; padding: 12px 20px; box-shadow: 0 12px 30px rgba(0, 0, 0, .25); }
+.toast.err { background: var(--sell); }
+
+/* --- Keluar di halaman Profil: HANYA di HP (<900px). Di desktop tombol
+   Keluar sudah ada di sidebar, jadi baris ini disembunyikan. --- */
+@media (min-width: 900px) {
+  .logout-mobile { display: none; }
+}
+
+/* --- Gerak minimal: ripple + pop ikut dimatikan --- */
+@media (prefers-reduced-motion: reduce) {
+  .ripple, .fchip[aria-pressed="true"]::before, .chip[aria-pressed="true"]::before { animation: none; }
 }
