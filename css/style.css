@@ -35,10 +35,8 @@
   /* SL merah / TP hijau jelas (Ronde 15 #5) — alpha latar ≥ .15 supaya
      tetap terbaca sebagai warna (bukan transparan) di tema mana pun. */
   --sl-bg: rgba(239, 68, 68, .22);
-  --sl-border: #FF1744;
   --sl-text: #FF5C73;
   --tp-bg: rgba(0, 230, 118, .20);
-  --tp-border: #00E676;
   --tp-text: #00E676;
   /* Permukaan yang tadinya hardcode gelap — kini variabel per tema. */
   --header-bg: rgba(10, 17, 40, .92);
@@ -119,10 +117,8 @@ html[data-theme="light"] {
   --shell-shadow: 0 24px 60px rgba(20, 20, 30, .14), 0 4px 16px rgba(20, 20, 30, .06);
   --chip-on-ink: #07304A;
   --sl-bg: rgba(220, 38, 38, .16);
-  --sl-border: #DC2626;
   --sl-text: #DC2626;
   --tp-bg: rgba(5, 150, 105, .16);
-  --tp-border: #059669;
   --tp-text: #059669;
   --header-bg: rgba(255, 255, 255, .92);
   --nav-bg: #000000;
@@ -176,10 +172,8 @@ html[data-theme="light"] {
     --demo-badge-color: #0F172A;
     --demo-badge-border: rgba(15, 23, 42, .35);
     --sl-bg: rgba(220, 38, 38, .16);
-    --sl-border: #DC2626;
     --sl-text: #DC2626;
     --tp-bg: rgba(5, 150, 105, .16);
-    --tp-border: #059669;
     --tp-text: #059669;
     --header-bg: rgba(255, 255, 255, .92);
     --nav-bg: #000000;
@@ -353,8 +347,8 @@ h1 { font-size: 24px; font-weight: 800; margin: 2px 0 4px; }
 .sig, .tcard, .board-card, .stat-cell { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
 .sig:hover, .tcard:hover, .board-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--teal) 45%, var(--line)); }
 .sig { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; margin-bottom: 12px; cursor: pointer; }
-.sig.buy { border-left: 4px solid var(--buy); }
-.sig.sell { border-left: 4px solid var(--sell); }
+/* Ronde 22b: garis kiri hijau/merah dihapus — kartu sudah berpinggiran
+   biru muda; arah tetap terlihat dari pil BUY/SELL di samping pair. */
 .sig-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .sig-pair { font-weight: 800; font-size: 17px; }
 .sig-pair-lg { font-size: 23px; }
@@ -443,12 +437,9 @@ h1 { font-size: 24px; font-weight: 800; margin: 2px 0 4px; }
   #app { margin-left: max(64px, calc((100vw - 996px) / 2)); }
 }
 
-/* ---- feed 2 kolom (Ronde 15 #4) ---- */
+/* ---- feed 1 kolom (Ronde 15 #4, diubah ke 1 kolom di Ronde 22b) ---- */
 #home-list, .feed-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 #home-list .sig, .feed-grid .sig { margin-bottom: 0; }
-@media (min-width: 900px) {
-  #home-list, .feed-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 
 /* ---- overlay detail ---- */
 .overlay {
@@ -801,10 +792,12 @@ table.board td.num, table.board th.num { text-align: right; }
 
 /* ---- SL merah / TP hijau jelas (Ronde 15 #5) ---- */
 /* Kotak ke-2 = SL, ke-3 = TP — berlaku di kartu sinyal (.sig-levels) dan
-   dialog Detail (.detail-rows). Entry (ke-1) tetap netral. */
-.sig-levels .lv:nth-child(2), .detail-rows .lv:nth-child(2) { background: var(--sl-bg); border: 1px solid var(--sl-border); }
+   dialog Detail (.detail-rows). Entry (ke-1) tetap netral.
+   Ronde 22b: pinggiran merah/hijau dihapus — kartu sudah berpinggiran
+   biru muda; yang tersisa hanya latar lembut + teks berwarna. */
+.sig-levels .lv:nth-child(2), .detail-rows .lv:nth-child(2) { background: var(--sl-bg); }
 .sig-levels .lv:nth-child(2) small, .sig-levels .lv:nth-child(2) b, .detail-rows .lv:nth-child(2) .k, .detail-rows .lv:nth-child(2) .v { color: var(--sl-text); font-weight: 700; }
-.sig-levels .lv:nth-child(3), .detail-rows .lv:nth-child(3) { background: var(--tp-bg); border: 1px solid var(--tp-border); }
+.sig-levels .lv:nth-child(3), .detail-rows .lv:nth-child(3) { background: var(--tp-bg); }
 .sig-levels .lv:nth-child(3) small, .sig-levels .lv:nth-child(3) b, .detail-rows .lv:nth-child(3) .k, .detail-rows .lv:nth-child(3) .v { color: var(--tp-text); font-weight: 700; }
 .det-lock-note { font-size: 12.5px; color: var(--muted); }
 .page-head h2 { font-size: 24px; font-weight: 800; margin: 2px 0 4px; }
