@@ -78,7 +78,7 @@ const S = {
   searchQuery: '',
   searchSort: 'wr',
   searchTab: 'traders',
-  searchFilters: { q: '', pair: 'ALL', topPair: 'ALL', sort: 'wr', wrMin: '0', rrMin: '0', pfMin: '0', levelMin: '1', price: 'all', rfMin: '0', followed: false },
+  searchFilters: { q: '', pair: 'ALL', topPair: 'ALL', sort: 'wr', wrMin: '0', rrMin: '0', pfMin: '0', levelMin: '1', price: 'all', rfMin: '0' },
   searchDraft: null,
   searchPfHidden: 0,
   feedFilter: { pair: 'ALL', status: 'ALL', followed: false },
@@ -449,8 +449,8 @@ function bindFollowSubscribe(root) {
         } else {
           await api.followTrader(S.user.id, traderId);
         }
-        // Muat ulang daftar ikutan agar semua tampilan (Diikuti, chip
-        // "Diikuti saja", tombol) konsisten.
+        // Muat ulang daftar ikutan agar semua tampilan (tab Diikuti di
+        // Cari, tombol) konsisten.
         try { S.myFollows = await api.listMyFollows(S.user.id); } catch (err) { /* abaikan */ }
         const nowFollowed = isFollowing(traderId);
         paintFollowButtons(traderId);
@@ -2416,7 +2416,7 @@ async function renderHome(force = false) {
 }
 
 // ------------------------------------------------------------------ Cari ---
-function traderCardHtml(tr, rank) {
+function traderCardHtml(tr, rank, badge) {
   const p = progressOf(tr);
   const level = p ? Number(p.level) || 1 : 1;
   const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : '';
@@ -2427,6 +2427,10 @@ function traderCardHtml(tr, rank) {
   const subBadge = price !== null && price !== undefined && Number(price) > 0
     ? `${esc(t('subscribe'))} ${esc(fmtIdr(price))}${esc(t('perMonth'))}`
     : esc(t('profFree'));
+  // R17: lencana tab — HANYA di tab Diikuti/Langganan (kartu Traders
+  // tidak berubah, sesuai Ronde 16).
+  const badgeHtml = badge === 'followed' ? `<span class="pill">${esc(t('followed'))}</span>`
+    : badge === 'subscribed' ? `<span class="pill gold">${esc(t('subscribed'))}</span>` : '';
   const handle = traderHandle(tr); // publik: hanya @username (ronde 5)
   const folN = S.followerCounts[tr.profile_id];
   return `<article class="tcard" data-trader="${esc(tr.profile_id)}" tabindex="0" role="button">
@@ -2449,7 +2453,7 @@ function traderCardHtml(tr, rank) {
         <div class="cell"><div class="v ${ddUsd > 0 ? 'pips-neg' : ''}">${ddUsd > 0 ? '-' + esc(fmtUsd(ddUsd)) : '—'}</div><div class="k">${esc(t('stMaxDDShort'))}</div></div>
       </div>
     </div>
-    <div class="meta"><span class="pill">${subBadge}</span><span class="fol">${folN === undefined ? '—' : esc(t('followersCount', { n: folN }))}</span></div>
+    <div class="meta">${badgeHtml}<span class="pill">${subBadge}</span><span class="fol">${folN === undefined ? '—' : esc(t('followersCount', { n: folN }))}</span></div>
     <div class="actions"><button class="btn" type="button" data-act="view" data-trader="${esc(tr.profile_id)}">${esc(t('sigViewTrader'))}</button>${subscribeBtnHtml(tr.profile_id)}${followBtnHtml(tr.profile_id)}</div>
   </article>`;
 }
@@ -2475,22 +2479,27 @@ function renderSearchList() {
   const stats = traderStatsMap();
   const q = (f.q || '').trim().toLowerCase();
   let pfHidden = 0;
+  // R17: tab Diikuti/Langganan membatasi daftar ke trader yang diikuti /
+  // dilanggan (data dimuat renderSearch). Di kedua tab ini hanya pencarian
+  // nama (q) + pengurutan yang berlaku — filter pair/WR/dll hanya di tab
+  // Traders (kontrolnya hanya tampil di sana).
+  const tabScope = S.searchTab === 'followed'
+    ? new Set(S.myFollows.map((x) => x.trader_id))
+    : S.searchTab === 'subs'
+      ? new Set(S.mySubs.filter((x) => x.status === 'active').map((x) => x.trader_id))
+      : null;
   let rows = S.traders.filter((tr) => {
+    if (tabScope && !tabScope.has(tr.profile_id)) return false;
     const st = stats[tr.profile_id];
     const p = progressOf(tr);
     const level = p ? Number(p.level) || 1 : 1;
-    // Ronde 15 (#2): filter "Diikuti saja" — hanya trader yang diikuti
-    // (S.myFollows); dikombinasikan dengan semua filter lain.
-    if (f.followed) {
-      const followedIds = new Set(S.myFollows.map((x) => x.trader_id));
-      if (!followedIds.has(tr.profile_id)) return false;
-    }
     if (q) {
       // B1-11b: prototipe hanya mencocokkan handle (@ diabaikan) — nama
       // tampilan bukan identitas publik, jadi tidak dicari.
       const username = (tr.username || '').toLowerCase();
       if (!(username.includes(q) || ('@' + username).includes(q))) return false;
     }
+    if (S.searchTab !== 'traders') return true;
     if (f.pair !== 'ALL' && !signalsOfTrader(tr.profile_id).some((s) => s.pair === f.pair)) return false;
     if (f.topPair !== 'ALL' && topPairOf(tr.profile_id) !== f.topPair) return false;
     if (Number(f.wrMin) > 0 && !(st.wr !== null && st.wr >= Number(f.wrMin))) return false;
@@ -2535,7 +2544,15 @@ function renderSearchList() {
   S.searchLastCount = rows.length;
   let html = `<p class="sub">${esc(t('searchCount', { n: rows.length, total: S.traders.length }))}</p>`;
   if (rows.length === 0) {
-    html += `<div class="empty"><strong>${esc(t('searchNoMatch'))}</strong></div>`;
+    // R17: pesan kosong khusus per tab — bila belum mengikuti / belum
+    // berlangganan siapa pun. Bila hanya pencarian nama (q) yang
+    // menyaring habis, pakai searchNoMatch seperti biasa.
+    // (officeFollowedEmpty tidak dipakai: kalimat keduanya ("Cari trader
+    // di menu Cari...") + <br />-nya tidak cocok di konteks tab Cari.)
+    let key = 'searchNoMatch';
+    if (S.searchTab === 'followed' && S.myFollows.length === 0) key = 'searchFollowedEmpty';
+    if (S.searchTab === 'subs' && !S.mySubs.some((x) => x.status === 'active')) key = 'searchSubsEmpty';
+    html += `<div class="empty"><strong>${esc(t(key))}</strong></div>`;
     list.innerHTML = html;
     return;
   }
@@ -2543,7 +2560,9 @@ function renderSearchList() {
   const ranked = rankedTraders(S.traders, stats);
   const rankOf = {};
   ranked.forEach((r, i) => { rankOf[r.tr.profile_id] = i + 1; });
-  html += `<div class="traders">` + rows.map((tr) => traderCardHtml(tr, rankOf[tr.profile_id] || '—')).join('') + `</div>`;
+  // R17: lencana tab di kartu (hanya di tab Diikuti/Langganan).
+  const badge = S.searchTab === 'followed' ? 'followed' : S.searchTab === 'subs' ? 'subscribed' : null;
+  html += `<div class="traders">` + rows.map((tr) => traderCardHtml(tr, rankOf[tr.profile_id] || '—', badge)).join('') + `</div>`;
   list.innerHTML = html;
   $$('[data-trader]', list).forEach((el) => {
     const open = () => openTraderProfile(el.dataset.trader);
@@ -2581,7 +2600,6 @@ function renderSearchControls() {
     <div class="field"><label>${esc(t('searchFilterLevelMin'))}</label><select id="search-level-min">${searchFilterOptions([[1, t('optAllLevels')], [2, `≥ Level 2 · ${levelName(2, getLang())}`], [3, `≥ Level 3 · ${levelName(3, getLang())}`], [4, `≥ Level 4 · ${levelName(4, getLang())}`], [5, `≥ Level 5 · ${levelName(5, getLang())}`]], d.levelMin)}</select></div>
     <div class="field"><label>${esc(t('searchFilterPrice'))}</label><select id="search-price">${searchFilterOptions([['all', t('feedFilterAll')], ['free', t('searchPriceFree')], ['paid', t('searchPricePaid')]], d.price)}</select></div>
     <div class="field"><label>${esc(t('searchFilterRfMin'))}</label><select id="search-rf-min">${searchFilterOptions([[0, t('feedFilterAll')], [3, '≥ 3x'], [5, '≥ 5x'], [8, '≥ 8x']], d.rfMin)}</select></div>
-    <div class="field field-check"><label class="chk"><input type="checkbox" id="search-followed-only"${d.followed ? ' checked' : ''}> ${esc(t('searchFollowedOnly'))}</label></div>
   </div>
   <div class="search-actions">
     <button class="btn primary btn-go" id="search-apply" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> ${esc(t('searchBtn'))}</button>
@@ -2599,12 +2617,11 @@ function renderSearchControls() {
       levelMin: $('#search-level-min').value,
       price: $('#search-price').value,
       rfMin: $('#search-rf-min').value,
-      followed: $('#search-followed-only').checked,
     };
   };
   // B1-02: filter menyaring LANGSUNG saat diubah (prototipe) — tombol
   // "Cari" tetap ada untuk membaca ulang + toast konfirmasi.
-  ['search-pair', 'search-top-pair', 'search-sort', 'search-wr-min', 'search-rr-min', 'search-pf-min', 'search-level-min', 'search-price', 'search-rf-min', 'search-followed-only'].forEach((id) => {
+  ['search-pair', 'search-top-pair', 'search-sort', 'search-wr-min', 'search-rr-min', 'search-pf-min', 'search-level-min', 'search-price', 'search-rf-min'].forEach((id) => {
     $('#' + id).addEventListener('change', () => { readDraft(); applySearchDraft(); });
   });
   let searchDebounce = null;
@@ -2625,7 +2642,7 @@ function renderSearchControls() {
     if (list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
   $('#search-reset').addEventListener('click', () => {
-    S.searchFilters = { q: '', pair: 'ALL', topPair: 'ALL', sort: 'wr', wrMin: '0', rrMin: '0', pfMin: '0', levelMin: '1', price: 'all', rfMin: '0', followed: false };
+    S.searchFilters = { q: '', pair: 'ALL', topPair: 'ALL', sort: 'wr', wrMin: '0', rrMin: '0', pfMin: '0', levelMin: '1', price: 'all', rfMin: '0' };
     S.searchDraft = { ...S.searchFilters };
     renderSearchControls();
     renderSearchList();
@@ -2644,15 +2661,18 @@ async function renderSearch() {
   });
   list.innerHTML = `<p class="sub">${esc(t('loading'))}</p>`;
   try {
-    // Ronde 15 (#2): muat daftar ikutan juga — filter "Diikuti saja"
-    // butuh S.myFollows walau pengguna langsung membuka Cari.
-    const [traders, follows] = await Promise.all([
+    // Ronde 15 (#2) + Ronde 17: muat daftar ikutan dan langganan juga —
+    // tab Diikuti / Langganan butuh S.myFollows / S.mySubs walau pengguna
+    // langsung membuka Cari.
+    const [traders, follows, subs] = await Promise.all([
       api.listTraders(),
       S.user ? api.listMyFollows(S.user.id).catch(() => []) : Promise.resolve([]),
+      S.user ? api.listMySubscriptions(S.user.id).catch(() => []) : Promise.resolve([]),
       ensureAllSignals(),
     ]);
     S.traders = traders;
     S.myFollows = follows;
+    S.mySubs = subs;
     try {
       const counts = await Promise.all(S.traders.map((tr) => api.countFollowers(tr.profile_id).catch(() => 0)));
       S.followerCounts = {};
