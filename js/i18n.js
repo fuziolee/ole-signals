@@ -458,8 +458,8 @@ const STR = {
     sigShareId: 'ID sinyal',
     sigShareCode: 'Kode verifikasi',
     sigShareDownload: 'Unduh kartu (PNG)',
+    sigShare: 'Bagikan',
     toastShareSaved: 'Kartu bagikan diunduh.',
-    toastShareCopied: 'Gambar kartu disalin ke clipboard.',
     // --- Statistik (grid, grafik, tabel) ---
     stWinRate: 'Win rate',
     stSignals: 'Sinyal',
@@ -1168,8 +1168,8 @@ const STR = {
     sigShareId: 'Signal ID',
     sigShareCode: 'Verification code',
     sigShareDownload: 'Download card (PNG)',
+    sigShare: 'Share',
     toastShareSaved: 'Share card downloaded.',
-    toastShareCopied: 'Card image copied to clipboard.',
     // --- Statistics (grid, chart, tables) ---
     stWinRate: 'Win rate',
     stSignals: 'Sinyal',

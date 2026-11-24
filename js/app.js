@@ -1118,7 +1118,11 @@ function signalCardHtml(sig) {
     actions.push(`<button class="btn danger" type="button" data-act="cancel" data-sig="${esc(sig.id)}">${esc(t('cancelSignal'))}</button>`);
   }
   if (mine) {
-    actions.push(`<button class="btn" type="button" data-act="share" data-sig="${esc(sig.id)}" aria-label="${esc(t('sigShareDownload'))}">${ICONS.share}</button>`);
+    // R9b: ikon + teks "Bagikan" (bukan ikon saja). Sebelumnya tombol ini
+    // hanya ikon tanpa teks dan aria-label "Unduh kartu (PNG)" — tidak bisa
+    // ditemukan lewat pencarian teks dan tidak jelas fungsinya (cacat live
+    // ronde 9+10: pencarian "Bagikan" tidak menemukan apa-apa).
+    actions.push(`<button class="btn" type="button" data-act="share" data-sig="${esc(sig.id)}" aria-label="${esc(t('sigShare'))}">${ICONS.share} ${esc(t('sigShare'))}</button>`);
   }
   actions.push(`<button class="btn" type="button" data-act="detail" data-sig="${esc(sig.id)}">${esc(t('sigDetail'))}</button>`);
   // D29: Salin hanya bila PENDING; label berubah "Sudah disalin" bila sudah.
@@ -1738,6 +1742,16 @@ function statusPillLabel(status) {
 // tidak boleh merusak alur bagikan; kunci server ditegakkan update_signal,
 // kunci UI dari shared_at di objek lokal). Kembalikan true bila berhasil
 // ditandai, agar tampilan bisa diperbarui (tombol Ubah hilang, label kunci).
+// R9b: urutan prototipe DIHAPUS — unduh LANGSUNG. Alasan: `await
+// navigator.share(...)` menggantungkan seluruh alur di browser desktop yang
+// mendukung berbagi file (lembar bagikan OS terbuka, fungsi tertahan sampai
+// pengguna menyelesaikan/menutupnya; selama itu tidak ada toast, unduhan,
+// atau kunci — cacat live ronde 9+10). Harness tidak menangkapnya karena
+// headless-shell TIDAK punya navigator.share sehingga cabang itu tidak
+// pernah terpicu lokal. Tombolnya pun berlabel "Unduh kartu (PNG)" —
+// unduhan langsung adalah perilaku yang dijanjikan dan terverifikasi di
+// semua platform. Berbagi native bisa ditambah lagi nanti sebagai opsi
+// eksplisit bila user minta (bukan sebagai langkah pertama yang menggantung).
 async function markSharedBestEffort(sig) {
   try {
     await api.markSignalShared(sig.id);
@@ -1757,22 +1771,7 @@ async function downloadShareCard(sig) {
     const blob = await new Promise((resolve) => cv.toBlob(resolve, 'image/png'));
     if (!blob) throw new Error('no-blob');
     const fileName = `${shareCardId(sig)}.png`;
-    const file = new File([blob], fileName, { type: 'image/png' });
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: t('sigShareTitle'), text: shareCardText(sig) });
-        if (await markSharedBestEffort(sig)) await refreshAfterShare();
-        return;
-      } catch (e) { /* pengguna membatalkan / gagal — lanjut ke clipboard */ }
-    }
-    if (navigator.clipboard && window.ClipboardItem) {
-      try {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        toast(t('toastShareCopied'));
-        if (await markSharedBestEffort(sig)) await refreshAfterShare();
-        return;
-      } catch (e) { /* lanjut ke unduh */ }
-    }
+    // R9b: unduh langsung (lihat catatan di atas markSharedBestEffort).
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -1968,8 +1967,12 @@ async function drawPortfolioCard(tr) {
   cardPortfolioFooter(ctx, tr);
   return cv;
 }
-// R9-5: jalur bagikan yang sama seperti share sinyal (native → clipboard →
-// unduh). Teks pendamping = traderShareText yang sudah ada.
+// R9-5: kartu PNG portofolio untuk share profil.
+// R9b: unduh LANGSUNG (tanpa navigator.share / clipboard) — alasan sama
+// seperti downloadShareCard: `await navigator.share(...)` menggantungkan
+// alur di browser desktop (lembar bagikan OS), sehingga klik "Bagikan
+// profil trader" tidak menghasilkan apa-apa yang terlihat (cacat live
+// ronde 9+10). Unduhan langsung deterministik di semua platform.
 async function downloadPortfolioCard(tr) {
   try {
     await ensureAllSignals();
@@ -1977,20 +1980,6 @@ async function downloadPortfolioCard(tr) {
     const blob = await new Promise((resolve) => cv.toBlob(resolve, 'image/png'));
     if (!blob) throw new Error('no-blob');
     const fileName = `portofolio-${String(tr.username || tr.profile_id || '').replace(/^@/, '')}.png`;
-    const file = new File([blob], fileName, { type: 'image/png' });
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: `${t('portfolioShareTitle')} ${traderHandle(tr)}`, text: traderShareText(tr) });
-        return;
-      } catch (e) { /* pengguna membatalkan / gagal — lanjut ke clipboard */ }
-    }
-    if (navigator.clipboard && window.ClipboardItem) {
-      try {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        toast(t('toastShareCopied'));
-        return;
-      } catch (e) { /* lanjut ke unduh */ }
-    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
