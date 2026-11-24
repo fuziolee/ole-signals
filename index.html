@@ -9,7 +9,7 @@
   <title>OLE Signals</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
@@ -33,14 +33,6 @@
     }, 12000);
   </script>
   <div class="app" id="app" hidden>
-    <header class="app-header">
-      <div class="logo">OLE <em>Signals</em></div>
-      <div class="notif-wrap">
-        <button class="bellbtn" id="notif-bell" type="button" aria-label="Notifikasi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="bellbadge" id="notif-badge" hidden>0</span></button>
-        <div class="notif-panel" id="notif-panel" hidden></div>
-      </div>
-    </header>
-
     <!-- Sidebar web (Ronde 15 #3): layar lebar ≥900px; di HP pakai bottom nav -->
     <nav class="side-nav" aria-label="Navigasi utama">
       <div class="side-brand"><span class="logo">OLE <em>Signals</em></span></div>
@@ -49,6 +41,12 @@
       <button type="button" data-nav="office" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><span class="lbl" data-i18n="navOffice"></span></button>
       <button type="button" data-nav="wallet" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H6"/></svg></span><span class="lbl" data-i18n="navWallet"></span></button>
       <button type="button" data-nav="profile" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="lbl" data-i18n="navProfile"></span></button>
+      <button type="button" id="side-logout"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3"/><path d="m16 16.5 5-4.5-5-4.5"/><path d="M21 12H9.5"/></svg></span><span class="lbl" data-i18n="logout"></span></button>
+      <div class="side-promo">
+        <h3 data-i18n="promoTitle"></h3>
+        <p data-i18n="promoText"></p>
+        <button class="side-promo-btn" id="side-promo-go" type="button"><span data-i18n="promoStart"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15"/><path d="m13 6 6 6-6 6"/></svg></button>
+      </div>
     </nav>
 
     <main>
@@ -125,6 +123,19 @@
         <div id="helpguide-help" hidden><div id="help-body"></div></div>
       </section>
     </main>
+
+    <!-- Panel kanan (Ronde 22): ringkasan akun — saldo + statistik nyata,
+         tanpa "Trader Teratas" (dihapus atas persetujuan user). -->
+    <aside class="right-panel" id="right-panel" aria-label="Ringkasan akun">
+      <div class="rp-top">
+        <div class="notif-wrap">
+          <button class="bellbtn rp-bell" id="notif-bell" type="button" aria-label="Notifikasi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="bellbadge" id="notif-badge" hidden>0</span></button>
+          <div class="notif-panel" id="notif-panel" hidden></div>
+        </div>
+        <button class="avatar-btn rp-avatar" id="rp-avatar" type="button" aria-label="Profil"></button>
+      </div>
+      <div id="rp-body"></div>
+    </aside>
 
     <div class="bottom-nav">
       <nav aria-label="Navigasi utama">
