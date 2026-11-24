@@ -805,7 +805,7 @@ $('#auth-password').addEventListener('input', refreshMatchHint);
 $('#auth-password-confirm').addEventListener('input', refreshMatchHint);
 
 // ------------------------------------------------------------------ nav ---
-const VIEWS = ['home', 'search', 'trader', 'prices', 'office', 'wallet', 'profile', 'guide', 'settings', 'help'];
+const VIEWS = ['home', 'search', 'trader', 'office', 'wallet', 'profile', 'guide', 'settings', 'help'];
 function showView(name) {
   S.view = name;
   VIEWS.forEach((v) => $('#view-' + v).classList.toggle('active', v === name));
@@ -3451,24 +3451,10 @@ function renderOfficeTraderTab(editing = null) {
   if (S.officeTraderTab === 'profil') {
     const st = statsForTrader(S.user.id);
     const tr = S.trader;
-    const hasIdentity = !!tr;
-    const accDesc = hasIdentity ? t('traderAccountSet') : t('traderAccountNeed');
-    const accPanel = hasIdentity
-      ? `<div class="kv-rows">
-          <div class="kv-row"><div class="k">${esc(t('profileName'))}</div><div class="v">${esc(tr.trader_display_name || t('noName'))}</div></div>
-          <div class="kv-row"><div class="k">${esc(t('username'))}</div><div class="v">${tr.username ? '@' + esc(tr.username) : '—'}</div></div>
-        </div>`
-      : `<p class="note">${esc(t('traderAccountNeed'))}</p>`;
     const resetRow = (k, v) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="color:var(--muted);">${esc(k)}</span><b>${esc(v)}</b></div>`;
     box.innerHTML = `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeIdentityTitle'))}</h2>`
       + `<p class="sub">${esc(t('officeIdentitySub'))}</p>`
       + traderIdentityCardHtml()
-      + `<div class="subcard" style="margin-top:14px;">
-          <button type="button" class="menurow" id="trader-account-toggle" aria-expanded="false">
-            <span class="grow"><span class="t">${esc(t('traderAccountTitle'))}</span><span class="d">${esc(accDesc)}</span></span><span class="marrow">${ICONS.arrow}</span>
-          </button>
-          <div id="trader-account-panel" hidden>${accPanel}</div>
-        </div>`
       + balanceCardHtml()
       + `<div class="subcard" style="margin-top:14px;">
           <h3>${esc(t('resetTitle'))}</h3>
@@ -3481,8 +3467,6 @@ function renderOfficeTraderTab(editing = null) {
         </div>`
       + statsSectionHtml(st, 'officeStatsTitle');
     bindPhotoInput('trader-photo-input', 'trader');
-    // R11: form ubah username trader PINDAH ke Pengaturan → Akun;
-    // panel ini tinggal info read-only (kv-rows di accPanel).
     const trShare = $('#trader-share-btn');
     if (trShare) {
       // R9-5 (B-05): bagikan kartu PNG portofolio (dulu hanya teks).
@@ -3530,14 +3514,6 @@ function renderOfficeTraderTab(editing = null) {
         renderOfficeTraderTab();
       });
     }
-    const accToggle = $('#trader-account-toggle');
-    if (accToggle) accToggle.addEventListener('click', () => {
-      const panel = $('#trader-account-panel');
-      if (!panel) return;
-      const open = panel.hidden;
-      panel.hidden = !open;
-      accToggle.setAttribute('aria-expanded', String(open));
-    });
     const balGuide = $('#bal-guide-link');
     if (balGuide) balGuide.addEventListener('click', () => openGuideSection('level'));
     updateBoardScrollHints(box);
