@@ -86,7 +86,7 @@ function signalSelect() {
   // publik bisa tampil @username tanpa menunggu S.traders dimuat (ronde 5).
   // Username follower (profiles.username) TIDAK diambil di sini — tidak
   // dipakai permukaan trader mana pun.
-  return '*, traders(username, trader_display_name, trader_progress(level, balance_usd))';
+  return '*, traders(username, trader_display_name, trader_avatar_url, trader_progress(level, balance_usd))';
 }
 
 export async function listPublicSignals(limit = 50) {

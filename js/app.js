@@ -328,10 +328,12 @@ function bindDateFilter(root, key, onChange) {
 // cari namanya di daftar trader yang sudah dimuat.
 function one(x) { return Array.isArray(x) ? x[0] : x; }
 function traderOf(sig) {
-  const emb = one(sig.traders);
-  if (emb && (emb.trader_display_name || emb.trader_progress)) return emb;
+  // S.traders diutamakan: data segar (diperbarui refreshTraders() setelah
+  // ganti foto/identitas) dan memuat trader_avatar_url. Embed dipakai
+  // hanya bila trader belum ada di S.traders (mis. jalur /v/).
   const fromList = S.traders.find((x) => x.profile_id === sig.trader_id);
   if (fromList) return fromList;
+  const emb = one(sig.traders);
   return emb || {};
 }
 function progressOf(trader) { return one(trader?.trader_progress) || null; }
