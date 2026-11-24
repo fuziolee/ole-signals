@@ -686,7 +686,7 @@ function rpcErrorMessage(res) {
   const map = {
     pairlimit: 'errPairlimit', notpending: 'errNotpending', conflict: 'errConflict',
     needusername: 'errNeedusername', rr: 'errRr', risk: 'errRisk', invalid: 'errInvalid',
-    pair: 'errPair', taken: 'errTaken', shared: 'errShared',
+    pair: 'errPair', taken: 'errTaken', shared: 'errShared', notclosed: 'errNotclosed',
   };
   if (res.code && map[res.code]) return t(map[res.code]);
   return res.message || t('errInvalid');
@@ -1128,11 +1128,18 @@ function signalCardHtml(sig) {
     actions.push(`<button class="btn danger" type="button" data-act="cancel" data-sig="${esc(sig.id)}">${esc(t('cancelSignal'))}</button>`);
   }
   if (mine) {
-    // R9b: ikon + teks "Bagikan" (bukan ikon saja). Sebelumnya tombol ini
-    // hanya ikon tanpa teks dan aria-label "Unduh kartu (PNG)" — tidak bisa
-    // ditemukan lewat pencarian teks dan tidak jelas fungsinya (cacat live
-    // ronde 9+10: pencarian "Bagikan" tidak menemukan apa-apa).
-    actions.push(`<button class="btn" type="button" data-act="share" data-sig="${esc(sig.id)}" aria-label="${esc(t('sigShare'))}">${ICONS.share} ${esc(t('sigShare'))}</button>`);
+    // R19: HANYA sinyal selesai (WIN/LOSS) yang bisa dibagikan — sinyal
+    // yang dibagikan adalah bukti hasil akhir; PENDING/AKTIF belum punya
+    // hasil. Tombol DISEMBUNYIKAN (bukan disabled yang membingungkan).
+    // Sinyal PENDING yang sudah dibagikan SEBELUM R19 tetap terkunci
+    // (grandfathered) — tombolnya juga hilang, bukan dibuka lagi.
+    if (sig.status === 'WIN' || sig.status === 'LOSS') {
+      // R9b: ikon + teks "Bagikan" (bukan ikon saja). Sebelumnya tombol ini
+      // hanya ikon tanpa teks dan aria-label "Unduh kartu (PNG)" — tidak bisa
+      // ditemukan lewat pencarian teks dan tidak jelas fungsinya (cacat live
+      // ronde 9+10: pencarian "Bagikan" tidak menemukan apa-apa).
+      actions.push(`<button class="btn" type="button" data-act="share" data-sig="${esc(sig.id)}" aria-label="${esc(t('sigShare'))}">${ICONS.share} ${esc(t('sigShare'))}</button>`);
+    }
   }
   actions.push(`<button class="btn" type="button" data-act="detail" data-sig="${esc(sig.id)}">${esc(t('sigDetail'))}</button>`);
   // D29: Salin hanya bila PENDING; label berubah "Sudah disalin" bila sudah.
@@ -1765,7 +1772,16 @@ function statusPillLabel(status) {
 // eksplisit bila user minta (bukan sebagai langkah pertama yang menggantung).
 async function markSharedBestEffort(sig) {
   try {
-    await api.markSignalShared(sig.id);
+    // R19: RPC bisa menolak dengan { ok:false } TANPA throw (pola
+    // api_error) — hasil HARUS diperiksa. Sebelumnya hasil diabaikan:
+    // RPC menolak 'notclosed' tapi shared_at lokal tetap diisi (cacat
+    // yang ditangkap harness r19). 'notclosed' diberi toast jujur;
+    // kegagalan lain tetap diam (best-effort seperti sebelumnya).
+    const res = await api.markSignalShared(sig.id);
+    if (res && res.ok === false) {
+      if (res.code === 'notclosed') toast(t('errNotclosed'), true);
+      return false;
+    }
     sig.shared_at = new Date().toISOString();
     return true;
   } catch (e) { return false; }
@@ -1777,6 +1793,15 @@ async function refreshAfterShare() {
   try { await renderOffice(); } catch (e) { /* abaikan */ }
 }
 async function downloadShareCard(sig) {
+  // R19: hanya sinyal selesai (WIN/LOSS) yang bisa dibagikan. Tolak DI
+  // SINI, sebelum menggambar/mengunduh — jangan sampai PNG terlanjur
+  // diunduh lalu RPC menolak (toast jadi bertentangan dengan unduhan).
+  // Jalur normal sudah tidak menampilkan tombolnya; gerbang ini untuk
+  // panggilan langsung (mis. konsol) dan kondisi balap.
+  if (sig.status !== 'WIN' && sig.status !== 'LOSS') {
+    toast(t('errNotclosed'), true);
+    return;
+  }
   try {
     const cv = await drawShareCard(sig);
     const blob = await new Promise((resolve) => cv.toBlob(resolve, 'image/png'));
@@ -2113,7 +2138,10 @@ function openSignalDetail(id) {
   // "Menunggu entry", AKTIF = "Entry tersentuh · dinilai sistem dari harga".
   const lockNote = sig.status === 'PENDING' ? esc(t('detUnlocked')) : esc(t('detLockedNote'));
   const actions = [];
-  if (mine) {
+  // R19: "Unduh kartu (PNG)" hanya untuk sinyal selesai (WIN/LOSS) —
+  // `done` sudah didefinisikan di atas (status WIN/LOSS). PENDING/AKTIF
+  // tidak menampilkan tombol ini.
+  if (mine && done) {
     actions.push(`<button class="btn" id="ov-share" type="button" aria-label="${esc(t('sigShareDownload'))}">${ICONS.download} ${esc(t('sigShareDownload'))}</button>`);
   }
   if (sig.status === 'PENDING') {
@@ -2266,8 +2294,11 @@ function journalRowHtml(sig, opts = {}) {
     : t('myJrnlPosted', { ago: fmtRel(sig.created_at), lot: fmtNum(sig.lot_size, 2) });
   // D13: tombol Bagikan untuk sinyal sendiri. D14: tombol hapus salinan
   // (non-AKTIF saja; AKTIF menampilkan ikon nonaktif + catatan).
+  // R19: tombol Bagikan hanya untuk sinyal selesai (WIN/LOSS). Riwayat
+  // profil memang sudah hanya berisi WIN/LOSS — gerbang ini pertahanan
+  // berlapis bila pemanggil berubah.
   let extraBtns = '';
-  if (opts.mine) {
+  if (opts.mine && (sig.status === 'WIN' || sig.status === 'LOSS')) {
     extraBtns += `<button class="iconbtn" type="button" data-jshare="${esc(sig.id)}" aria-label="${esc(t('sigShareDownload'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.download}</button>`;
   }
   if (opts.isCopy && opts.copyId) {

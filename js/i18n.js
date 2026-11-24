@@ -389,6 +389,8 @@ const STR = {
     postUsernameWarnCta: 'Buat username trader',
     // R9-4: sinyal yang sudah dibagikan terkunci dari edit.
     errShared: 'Sinyal ini sudah dibagikan, jadi tidak bisa diubah lagi.',
+    // R19: hanya sinyal selesai (WIN/LOSS) yang bisa dibagikan.
+    errNotclosed: 'Hanya sinyal yang sudah selesai (WIN/LOSS) yang bisa dibagikan.',
     balStartPrefix: 'Saldo awal $10.000 · ',
     balFloatingFrom: ' dari sinyal aktifmu',
     toTP: 'ke TP',
@@ -1071,6 +1073,8 @@ const STR = {
     postUsernameWarnCta: 'Create trader username',
     // R9-4: a signal that has already been shared is locked from editing.
     errShared: 'This signal has already been shared, so it can no longer be edited.',
+    // R19: only finished signals (WIN/LOSS) can be shared.
+    errNotclosed: 'Only finished signals (WIN/LOSS) can be shared.',
     balStartPrefix: 'Starting balance $10,000 · ',
     balFloatingFrom: ' from your active signals',
     toTP: 'to TP',
