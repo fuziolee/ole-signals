@@ -707,14 +707,24 @@ function openOverlay(html) {
   // B4-09: simpan fokus pemicu agar bisa dikembalikan saat overlay ditutup.
   S.lastFocus = document.activeElement;
   sheet.innerHTML = html;
-  $('#overlay').classList.add('open');
+  const ov = $('#overlay');
+  ov.classList.remove('closing'); // R21: batalkan animasi tutup bila dibuka lagi cepat.
+  ov.classList.add('open');
   // Fokus ke tombol Tutup agar keyboard langsung bisa menutup overlay.
   const closeBtn = sheet.querySelector('#ov-close, #ov-close2, #cf-no, button');
   if (closeBtn) closeBtn.focus();
 }
 function closeOverlay() {
-  $('#overlay').classList.remove('open');
-  $('#overlay-sheet').innerHTML = '';
+  const ov = $('#overlay');
+  if (!ov.classList.contains('open')) return;
+  // R21: animasi tutup (kebalikan animasi buka) — backdrop + kartu memudar
+  // dan mengecil 180ms, baru overlay disembunyikan dan isinya dibersihkan.
+  ov.classList.add('closing');
+  setTimeout(() => {
+    if (!ov.classList.contains('closing')) return; // sudah dibuka lagi.
+    ov.classList.remove('open', 'closing');
+    $('#overlay-sheet').innerHTML = '';
+  }, 180);
   // B4-09: kembalikan fokus ke pemicu (prototipe).
   if (S.lastFocus && S.lastFocus.focus) { try { S.lastFocus.focus(); } catch (e) { /* abaikan */ } }
   S.lastFocus = null;
