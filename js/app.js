@@ -2185,7 +2185,7 @@ function openSignalDetail(id) {
     actions.push(`<button class="btn" id="ov-share" type="button" aria-label="${esc(t('sigShareDownload'))}">${ICONS.download} ${esc(t('sigShareDownload'))}</button>`);
   }
   if (sig.status === 'PENDING') {
-    actions.push(`<button class="btn primary" id="ov-copy" type="button" style="flex:1;">${ICONS.copy} ${esc(t('copySignal'))}</button>`);
+    actions.push(`<button class="btn primary" id="ov-copy" type="button">${ICONS.copy} ${esc(t('copySignal'))}</button>`);
   }
   actions.push(`<button class="btn" id="ov-trader" type="button">${esc(t('sigViewTrader'))}</button>`);
   actions.push(`<button class="btn" id="ov-close2" type="button">${esc(t('close'))}</button>`);
@@ -3169,23 +3169,23 @@ async function renderRightPanel() {
     .map((v) => Number(v));
   const avgHold = holds.length ? holds.reduce((a, b) => a + b, 0) / holds.length : null;
   const has = st.closed > 0;
-  const row = (icon, bg, label, sub, val, valCls = '') => `<div class="rp-stat-row"><span class="s-ic" style="background:${bg}">${esc(icon)}</span><div><div class="n">${esc(label)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ''}</div><div class="v"><div class="a ${valCls}">${esc(val)}</div></div></div>`;
+  const row = (label, sub, val, valCls = '') => `<div class="rp-stat-row"><div><div class="n">${esc(label)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ''}</div><div class="v"><div class="a ${valCls}">${esc(val)}</div></div></div>`;
   body.innerHTML = `<div class="rp-bal-label">${esc(t('rpBalance'))}</div>`
     + `<div class="rp-bal-num" id="rp-bal-num">${esc(balTxt)}</div>`
     + `<div class="rp-bal-sub">${subTxt}</div>`
     + `<div class="rp-hide-row"><span class="t">${esc(t('rpHideBalance'))}</span><button class="rp-switch" id="rp-hide-switch" type="button" role="switch" aria-checked="${__rpHideBalance ? 'true' : 'false'}" aria-label="${esc(t('rpHideBalance'))}"></button></div>`
     + `<h4>${esc(t('rpStats'))}</h4>`
-    + row('%', '#7C5CFF', t('stWinRate'), t('rpClosedSub', { n: st.closed }), has ? `${st.wr.toFixed(0)}%` : '—')
-    + row('R', '#38BDF8', t('stTotalRNet'), '', has ? fmtR(st.totalR) : '—', st.totalR >= 0 ? 'pips-pos' : 'pips-neg')
-    + row('$', '#0EA5E9', t('stTotalProfitUSD'), '', has ? fmtUsd(st.totalUSD) : '—', st.totalUSD >= 0 ? 'pips-pos' : 'pips-neg')
-    + row('↓', '#F472B6', t('stMaxDDShort'), '', has ? `−${fmtUsd(st.drawdown.usd)}` : '—')
-    + row('#', '#0E7490', t('rpTotalSignals'), t('stTotalSignalsOpen', { n: st.active }), String(st.totalSignals))
-    + row('PF', '#B45309', t('stProfitFactor'), '', has ? fmtPf(st.pf) : '—')
-    + row('RF', '#DB2777', t('stRecovery'), '', has ? fmtRf(st.recovery) : '—')
-    + row('R', '#334155', t('stAvgR'), '', has ? fmtR(st.avgR) : '—')
-    + row('W', '#059669', t('stStreakWinLong'), '', has ? String(st.streaks.longestWin) : '—')
-    + row('L', '#DC2626', t('stStreakLoseLong'), '', has ? String(st.streaks.longestLose) : '—')
-    + row('H', '#7C5CFF', t('stThHold'), '', fmtHoldMin(avgHold));
+    + row(t('stWinRate'), t('rpClosedSub', { n: st.closed }), has ? `${st.wr.toFixed(0)}%` : '—')
+    + row(t('stTotalRNet'), '', has ? fmtR(st.totalR) : '—', st.totalR >= 0 ? 'pips-pos' : 'pips-neg')
+    + row(t('stTotalProfitUSD'), '', has ? fmtUsd(st.totalUSD) : '—', st.totalUSD >= 0 ? 'pips-pos' : 'pips-neg')
+    + row(t('stMaxDDShort'), '', has ? `−${fmtUsd(st.drawdown.usd)}` : '—')
+    + row(t('rpTotalSignals'), t('stTotalSignalsOpen', { n: st.active }), String(st.totalSignals))
+    + row(t('stProfitFactor'), '', has ? fmtPf(st.pf) : '—')
+    + row(t('stRecovery'), '', has ? fmtRf(st.recovery) : '—')
+    + row(t('stAvgR'), '', has ? fmtR(st.avgR) : '—')
+    + row(t('stStreakWinLong'), '', has ? String(st.streaks.longestWin) : '—')
+    + row(t('stStreakLoseLong'), '', has ? String(st.streaks.longestLose) : '—')
+    + row(t('stThHold'), '', fmtHoldMin(avgHold));
   const sw = $('#rp-hide-switch');
   if (sw) {
     sw.addEventListener('click', () => {
