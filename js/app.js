@@ -57,7 +57,6 @@ const S = {
   officeRole: 'trader',
   officeTraderTab: 'sinyal',
   officeFollowerTab: 'sinyal',
-  officeFollowedTab: 'subs',
   traderProfileTab: 'sinyal',
   traderProfileFilter: 'ALL',
   traderProfileId: null,
@@ -79,11 +78,12 @@ const S = {
   searchQuery: '',
   searchSort: 'wr',
   searchTab: 'traders',
-  searchFilters: { q: '', pair: 'ALL', topPair: 'ALL', sort: 'wr', wrMin: '0', rrMin: '0', pfMin: '0', levelMin: '1', price: 'all', rfMin: '0' },
+  searchFilters: { q: '', pair: 'ALL', topPair: 'ALL', sort: 'wr', wrMin: '0', rrMin: '0', pfMin: '0', levelMin: '1', price: 'all', rfMin: '0', followed: false },
   searchDraft: null,
   searchPfHidden: 0,
   feedFilter: { pair: 'ALL', status: 'ALL', followed: false },
   guideOpen: loadGuideOpen(),
+  helpGuideTab: 'guide', // sub-tab tampilan gabungan: 'guide' | 'help'
   editingId: null,
   editingVersion: null,
   homeSignals: [],
@@ -805,11 +805,14 @@ $('#auth-password').addEventListener('input', refreshMatchHint);
 $('#auth-password-confirm').addEventListener('input', refreshMatchHint);
 
 // ------------------------------------------------------------------ nav ---
-const VIEWS = ['home', 'search', 'trader', 'office', 'wallet', 'profile', 'guide', 'settings', 'help'];
+const VIEWS = ['home', 'search', 'trader', 'office', 'wallet', 'profile', 'helpguide', 'settings'];
 function showView(name) {
   S.view = name;
   VIEWS.forEach((v) => $('#view-' + v).classList.toggle('active', v === name));
   $$('.bottom-nav [data-nav]').forEach((b) => {
+    b.setAttribute('aria-selected', String(b.dataset.nav === name));
+  });
+  $$('.side-nav [data-nav]').forEach((b) => {
     b.setAttribute('aria-selected', String(b.dataset.nav === name));
   });
   window.scrollTo({ top: 0 });
@@ -819,11 +822,14 @@ function showView(name) {
   if (name === 'office') renderOffice();
   if (name === 'wallet') renderWallet();
   if (name === 'profile') renderProfile();
-  if (name === 'guide') renderGuide();
+  if (name === 'helpguide') renderHelpGuide();
   if (name === 'settings') renderSettings();
-  if (name === 'help') renderHelp();
 }
 $$('.bottom-nav [data-nav]').forEach((b) => {
+  b.addEventListener('click', () => showView(b.dataset.nav));
+});
+// Ronde 15 (#3): sidebar web memakai showView yang sama.
+$$('.side-nav [data-nav]').forEach((b) => {
   b.addEventListener('click', () => showView(b.dataset.nav));
 });
 $$('#search-tabs [data-stab]').forEach((b) => {
@@ -832,8 +838,7 @@ $$('#search-tabs [data-stab]').forEach((b) => {
     renderSearch();
   });
 });
-$('#btn-guide-back').addEventListener('click', () => showView('profile'));
-$('#btn-help-back').addEventListener('click', () => showView('profile'));
+$('#btn-helpguide-back').addEventListener('click', () => showView('profile'));
 $('#notif-bell').addEventListener('click', (e) => {
   e.stopPropagation();
   setNotifPanel(!S.notifOpen);
@@ -2467,6 +2472,12 @@ function renderSearchList() {
     const st = stats[tr.profile_id];
     const p = progressOf(tr);
     const level = p ? Number(p.level) || 1 : 1;
+    // Ronde 15 (#2): filter "Diikuti saja" — hanya trader yang diikuti
+    // (S.myFollows); dikombinasikan dengan semua filter lain.
+    if (f.followed) {
+      const followedIds = new Set(S.myFollows.map((x) => x.trader_id));
+      if (!followedIds.has(tr.profile_id)) return false;
+    }
     if (q) {
       // B1-11b: prototipe hanya mencocokkan handle (@ diabaikan) — nama
       // tampilan bukan identitas publik, jadi tidak dicari.
@@ -2563,6 +2574,7 @@ function renderSearchControls() {
     <div class="field"><label>${esc(t('searchFilterLevelMin'))}</label><select id="search-level-min">${searchFilterOptions([[1, t('optAllLevels')], [2, `≥ Level 2 · ${levelName(2, getLang())}`], [3, `≥ Level 3 · ${levelName(3, getLang())}`], [4, `≥ Level 4 · ${levelName(4, getLang())}`], [5, `≥ Level 5 · ${levelName(5, getLang())}`]], d.levelMin)}</select></div>
     <div class="field"><label>${esc(t('searchFilterPrice'))}</label><select id="search-price">${searchFilterOptions([['all', t('feedFilterAll')], ['free', t('searchPriceFree')], ['paid', t('searchPricePaid')]], d.price)}</select></div>
     <div class="field"><label>${esc(t('searchFilterRfMin'))}</label><select id="search-rf-min">${searchFilterOptions([[0, t('feedFilterAll')], [3, '≥ 3x'], [5, '≥ 5x'], [8, '≥ 8x']], d.rfMin)}</select></div>
+    <div class="field field-check"><label class="chk"><input type="checkbox" id="search-followed-only"${d.followed ? ' checked' : ''}> ${esc(t('searchFollowedOnly'))}</label></div>
   </div>
   <div class="search-actions">
     <button class="btn primary btn-go" id="search-apply" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> ${esc(t('searchBtn'))}</button>
@@ -2580,11 +2592,12 @@ function renderSearchControls() {
       levelMin: $('#search-level-min').value,
       price: $('#search-price').value,
       rfMin: $('#search-rf-min').value,
+      followed: $('#search-followed-only').checked,
     };
   };
   // B1-02: filter menyaring LANGSUNG saat diubah (prototipe) — tombol
   // "Cari" tetap ada untuk membaca ulang + toast konfirmasi.
-  ['search-pair', 'search-top-pair', 'search-sort', 'search-wr-min', 'search-rr-min', 'search-pf-min', 'search-level-min', 'search-price', 'search-rf-min'].forEach((id) => {
+  ['search-pair', 'search-top-pair', 'search-sort', 'search-wr-min', 'search-rr-min', 'search-pf-min', 'search-level-min', 'search-price', 'search-rf-min', 'search-followed-only'].forEach((id) => {
     $('#' + id).addEventListener('change', () => { readDraft(); applySearchDraft(); });
   });
   let searchDebounce = null;
@@ -2605,7 +2618,7 @@ function renderSearchControls() {
     if (list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
   $('#search-reset').addEventListener('click', () => {
-    S.searchFilters = { q: '', pair: 'ALL', topPair: 'ALL', sort: 'wr', wrMin: '0', rrMin: '0', pfMin: '0', levelMin: '1', price: 'all', rfMin: '0' };
+    S.searchFilters = { q: '', pair: 'ALL', topPair: 'ALL', sort: 'wr', wrMin: '0', rrMin: '0', pfMin: '0', levelMin: '1', price: 'all', rfMin: '0', followed: false };
     S.searchDraft = { ...S.searchFilters };
     renderSearchControls();
     renderSearchList();
@@ -2624,11 +2637,15 @@ async function renderSearch() {
   });
   list.innerHTML = `<p class="sub">${esc(t('loading'))}</p>`;
   try {
-    const [traders] = await Promise.all([
+    // Ronde 15 (#2): muat daftar ikutan juga — filter "Diikuti saja"
+    // butuh S.myFollows walau pengguna langsung membuka Cari.
+    const [traders, follows] = await Promise.all([
       api.listTraders(),
+      S.user ? api.listMyFollows(S.user.id).catch(() => []) : Promise.resolve([]),
       ensureAllSignals(),
     ]);
     S.traders = traders;
+    S.myFollows = follows;
     try {
       const counts = await Promise.all(S.traders.map((tr) => api.countFollowers(tr.profile_id).catch(() => 0)));
       S.followerCounts = {};
@@ -2726,7 +2743,9 @@ function renderBoardList() {
 }
 function openGuideSection(id) {
   if (!S.guideOpen.includes(id)) { S.guideOpen.push(id); saveGuideOpen(); }
-  showView('guide');
+  // Ronde 15 (#3): Panduan kini tab di dalam tampilan gabungan.
+  S.helpGuideTab = 'guide';
+  showView('helpguide');
   setTimeout(() => {
     const sec = document.getElementById('guide-' + id);
     if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3600,34 +3619,6 @@ async function renderOfficeList() {
   bindSignalCards(list);
 }
 
-// Kartu info akun Follower (4 kotak stat) — hanya tampil di sub-tab
-// "Diikuti", di atas sub-tab Langganan/Trader (seperti prototipe).
-function followerAccountInfoHtml() {
-  const p = S.profile || {};
-  const username = p.username ? '@' + p.username : esc(t('officeFollowerNoUser'));
-  const displayName = username;
-  const followedIds = new Set(S.myFollows.map((x) => x.trader_id));
-  const followedSignals = S.allSignals.filter((s) => followedIds.has(s.trader_id));
-  const followedOpen = followedSignals.filter((s) => s.status === 'PENDING' || s.status === 'AKTIF').length;
-  const activeSubs = S.mySubs.filter((x) => x.status === 'active').length;
-  return `<div class="subcard">
-    <h3>${esc(t('folInfoTitle'))}</h3>
-    <div class="board-top">
-      ${avatarImg(displayName, S.user.id, p.avatar_url, 'avatar-md')}
-      <div style="min-width:0; flex:1;">
-        <div style="font-weight:800; font-size:17px;">${esc(username)}</div>
-        <div style="font-size:13px; color:var(--muted);">${esc(p.region || 'Indonesia')}</div>
-      </div>
-    </div>
-    <div class="pstats" style="margin-top:12px;">
-      <div class="stat-cell"><div class="num mono">${S.myFollows.length}</div><div class="lbl">${esc(t('officeFollowerStatsFollowed'))}</div></div>
-      <div class="stat-cell"><div class="num mono">${activeSubs}</div><div class="lbl">${esc(t('officeFollowerStatsSubs'))}</div></div>
-      <div class="stat-cell"><div class="num mono">${followedOpen}</div><div class="lbl">${esc(t('officeFollowerStatsOpen'))}</div></div>
-      <div class="stat-cell"><div class="num mono">${followedSignals.length}</div><div class="lbl">${esc(t('officeFollowerStatsTotal'))}</div></div>
-    </div>
-  </div>`;
-}
-
 // ---------------------------------------------------------- Ruang Kerja: pengikut ---
 async function renderOfficeFollower(box) {
   try {
@@ -3648,7 +3639,6 @@ async function renderOfficeFollower(box) {
   let html = `<div class="subtabs" role="tablist">
     <button class="subtab" role="tab" data-ftab="sinyal" aria-selected="${S.officeFollowerTab === 'sinyal'}">${esc(t('profTabSignals'))}</button>
     <button class="subtab" role="tab" data-ftab="jurnal" aria-selected="${S.officeFollowerTab === 'jurnal'}">${esc(t('officeFollowerTabJournal'))}</button>
-    <button class="subtab" role="tab" data-ftab="diikuti" aria-selected="${S.officeFollowerTab === 'diikuti'}">${esc(t('officeFollowerTabFollowed'))}</button>
   </div><div id="office-follower-body"></div>`;
   box.innerHTML = html;
   $$('[data-ftab]', box).forEach((b) => {
@@ -3688,26 +3678,11 @@ function renderOfficeFollowerTab() {
     updateBoardScrollHints(box);
     return;
   }
-  if (S.officeFollowerTab === 'diikuti') {
-    // Kartu info akun di atas sub-tab Diikuti; "Langganan saya" dulu
-    // (default), "Trader yang kamu ikuti" kedua — seperti prototipe.
-    let html = followerAccountInfoHtml();
-    html += `<div class="subtabs" role="tablist">
-      <button class="subtab" role="tab" data-followedtab="subs" aria-selected="${S.officeFollowedTab === 'subs'}">${esc(t('officeFollowedSubs'))}</button>
-      <button class="subtab" role="tab" data-followedtab="traders" aria-selected="${S.officeFollowedTab === 'traders'}">${esc(t('officeFollowedTraders'))}</button>
-    </div><div id="office-followed-body"></div>`;
-    box.innerHTML = html;
-    $$('[data-followedtab]', box).forEach((b) => {
-      b.addEventListener('click', () => {
-        S.officeFollowedTab = b.dataset.followedtab;
-        renderOfficeFollowedBody();
-      });
-    });
-    renderOfficeFollowedBody();
-    return;
-  }
   // Tab Sinyal: salinan aktif + sinyal dari trader yang diikuti, dengan
   // chip filter (Semua/Pending/Aktif + Riwayat di kanan).
+  // (Ronde 15 #2: sub-tab "Diikuti" dihapus — daftar trader yang diikuti
+  // kini di Cari lewat filter "Diikuti saja"; daftar langganan tidak
+  // lagi punya tampilan sendiri, data/fungsi langganan tetap utuh.)
   const followedIds = new Set(S.myFollows.map((x) => x.trader_id));
   const followedSignals = S.allSignals
     .filter((s) => followedIds.has(s.trader_id))
@@ -3752,7 +3727,8 @@ function renderOfficeFollowerTab() {
     } else if (!shown.length) {
       html += `<div class="empty"><strong>${esc(t('officeFollowSignalsEmpty'))}</strong></div>`;
     } else {
-      html += shown.map(signalCardHtml).join('');
+      // Ronde 15 (#4): daftar sinyal diikuti sebagai grid 2 kolom di web.
+      html += `<div class="feed-grid">` + shown.map(signalCardHtml).join('') + `</div>`;
     }
   }
   box.innerHTML = html;
@@ -3772,59 +3748,6 @@ function renderOfficeFollowerTab() {
   bindSignalCards(box);
   bindJournalRows(box);
 }
-function renderOfficeFollowedBody() {
-  const box = $('#office-followed-body');
-  if (!box) return;
-  $$('[data-followedtab]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.followedtab === S.officeFollowedTab)));
-  if (S.officeFollowedTab === 'subs') {
-    const h3 = `<h3 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeFollowedSubs'))}</h3>`;
-    if (!S.mySubs.length) {
-      box.innerHTML = h3 + `<div class="empty"><strong>${esc(t('officeSubsMyEmpty'))}</strong>${esc(t('officeSubsNote'))}</div>`;
-      return;
-    }
-    box.innerHTML = h3 + S.mySubs.map((sub) => {
-      const tr = one(sub.traders) || {};
-      const name = traderHandle(tr); // publik: hanya @username (ronde 5)
-      const stChip = sub.status === 'active' ? t('subActive')
-        : sub.status === 'cancelled' ? t('subCancelled') : t('subEnded');
-      const pillCls = sub.status === 'active' ? 'green' : sub.status === 'cancelled' ? 'red' : '';
-      const action = sub.status === 'active'
-        ? `<button class="btn" type="button" data-sub-manage="${esc(sub.id)}" style="min-height:34px;padding:6px 12px;font-size:12.5px;">${esc(t('subManage'))}</button>`
-        : `<button class="btn" type="button" data-sub-again="${esc(sub.trader_id)}" style="min-height:34px;padding:6px 12px;font-size:12.5px;">${esc(t('subAgain'))}</button>`;
-      // D34: harga langganan dalam IDR (fmtIDR prototipe).
-      return `<div class="hist-row"><span class="p mono">${esc(name)}</span>`
-        + `<span class="pill ${pillCls}">${esc(stChip)}</span>`
-        + `<span style="color:var(--muted)">${esc(fmtIdr(sub.price_usd))} · ${esc(t('subRange', { start: fmtDateShort(sub.starts_at), end: sub.ends_at ? fmtDateShort(sub.ends_at) : '—' }))}</span>${action}</div>`;
-    }).join('');
-    $$('[data-sub-manage]', box).forEach((b) => {
-      b.addEventListener('click', () => toast(t('subManageSoon')));
-    });
-    $$('[data-sub-again]', box).forEach((b) => {
-      b.addEventListener('click', () => toast(t('subManageSoon')));
-    });
-    return;
-  }
-  const h3tr = `<h3 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeFollowedTraders'))}</h3>`;
-  if (!S.myFollows.length) {
-    box.innerHTML = h3tr + `<div class="empty"><strong>${t('officeFollowedEmpty')}</strong></div>`;
-    return;
-  }
-  box.innerHTML = h3tr + S.myFollows.map((f) => {
-    const tr = one(f.traders) || {};
-    const p = progressOf(tr);
-    const level = p ? Number(p.level) || 1 : 1;
-    const name = traderHandle(tr); // publik: hanya @username (ronde 5)
-    return `<div class="hist-row">${avatarHtml(name, f.trader_id, 'avatar-sm')}<span class="p">${esc(name)}${demoBadge(f.trader_id)}</span>`
-      + `<span style="color:var(--muted)">Level ${level} · ${esc(levelName(level, getLang()))}</span>`
-      + `${subscribeBtnHtml(f.trader_id)}`
-      + `<button class="btn" type="button" data-ftrader="${esc(f.trader_id)}" style="min-height:34px;padding:6px 12px;font-size:12.5px;">${esc(t('sigDetail'))}</button></div>`;
-  }).join('');
-  $$('[data-ftrader]', box).forEach((b) => {
-    b.addEventListener('click', () => openTraderProfile(b.dataset.ftrader));
-  });
-  bindFollowSubscribe(box);
-}
-
 
 // ------------------------------------------------------------- KYC (Zyphe) ---
 // D20: struktur alur 4 langkah prototipe (dokumen → KTP → selfie/liveness
@@ -3913,8 +3836,7 @@ async function renderProfile() {
       </div>
       <div class="detail-menu">
         <button type="button" class="menurow" id="menu-settings"><span class="grow"><span class="t">${esc(t('settings'))}</span></span><span class="marrow">${ICONS.arrow}</span></button>
-        <button type="button" class="menurow" id="menu-help"><span class="grow"><span class="t">${esc(t('menuHelp'))}</span><span class="d">${esc(t('menuHelpDesc'))}</span></span><span class="marrow">${ICONS.arrow}</span></button>
-        <button type="button" class="menurow" id="menu-guide"><span class="grow"><span class="t">${esc(t('guide'))}</span><span class="d">${esc(t('menuGuideDesc'))}</span></span><span class="marrow">${ICONS.arrow}</span></button>
+        <button type="button" class="menurow" id="menu-helpguide"><span class="grow"><span class="t">${esc(t('menuHelpGuide'))}</span><span class="d">${esc(t('menuHelpGuideDesc'))}</span></span><span class="marrow">${ICONS.arrow}</span></button>
       </div>
     </div>`;
   bindPhotoInput('profile-photo-input', 'profile');
@@ -3963,8 +3885,7 @@ async function renderProfile() {
   const photoBtn = $('#profile-photo-btn');
   if (photoBtn) photoBtn.addEventListener('click', () => { const inp = $('#profile-photo-input'); if (inp) inp.click(); });
   $('#menu-settings').addEventListener('click', () => { S.settingsSub = null; showView('settings'); });
-  $('#menu-help').addEventListener('click', () => showView('help'));
-  $('#menu-guide').addEventListener('click', () => showView('guide'));
+  $('#menu-helpguide').addEventListener('click', () => { S.helpGuideTab = 'guide'; showView('helpguide'); });
 }
 
 // ----------------------------------------------------------- Pengaturan ---
@@ -4346,6 +4267,31 @@ function renderWallet() {
   bindDateFilter(body, 'wallet', () => renderWallet());
 }
 
+// Ronde 15 (#3): tampilan gabungan "Bantuan & Panduan" — satu baris menu
+// Profil membuka satu view dengan dua sub-tab (Panduan | Bantuan). Kedua
+// isi dirender utuh oleh renderGuide()/renderHelp() yang sudah ada; di
+// sini hanya sub-tab + visibilitas yang diatur.
+function renderHelpGuide() {
+  const tabs = $('#helpguide-tabs');
+  if (tabs) {
+    tabs.innerHTML = `<div class="subtabs" role="tablist">
+      <button class="subtab" role="tab" data-hgtab="guide" aria-selected="${S.helpGuideTab === 'guide'}">${esc(t('guide'))}</button>
+      <button class="subtab" role="tab" data-hgtab="help" aria-selected="${S.helpGuideTab === 'help'}">${esc(t('helpGuideTabHelp'))}</button>
+    </div>`;
+    $$('[data-hgtab]', tabs).forEach((b) => {
+      b.addEventListener('click', () => { S.helpGuideTab = b.dataset.hgtab; renderHelpGuide(); });
+    });
+  }
+  const g = $('#helpguide-guide');
+  if (g) g.hidden = S.helpGuideTab !== 'guide';
+  const h = $('#helpguide-help');
+  if (h) h.hidden = S.helpGuideTab !== 'help';
+  // Render keduanya (yang tersembunyi tetap dirender supaya isi lengkap
+  // saat tab dibuka); petunjuk scroll tabel dihitung saat tab terlihat.
+  renderGuide();
+  renderHelp();
+}
+
 function renderHelp() {
   const body = $('#help-body');
   if (!body) return;
@@ -4354,7 +4300,7 @@ function renderHelp() {
   if (!(S.traders || []).length) {
     api.listTraders().then((rows) => {
       S.traders = rows || [];
-      if (S.view === 'help') renderHelp();
+      if (S.view === 'helpguide') renderHelp();
     }).catch(() => {});
   }
   const faqs = [1, 2, 3, 4, 5].map((n) => `<details class="more"><summary>${esc(t('helpFaq' + n + 'Q'))}<span aria-hidden="true">${ICONS.chevD}</span></summary><div class="more-body"><p>${esc(t('helpFaq' + n + 'A'))}</p></div></details>`).join('');
