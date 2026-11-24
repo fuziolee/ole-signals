@@ -482,13 +482,27 @@ begin
   values (v_actor, 'signal_create', v_signal.id, null, to_jsonb(v_signal));
 
   -- 10. Beri tahu follower trader ini (§6 blueprint).
+  -- B4-03: jangan bocorkan entry sinyal berbayar yang terkunci — follower
+  -- non-subscriber hanya mendapat pesan generik (prototipe
+  -- notifNewSigLocked). B4-04: pakai @username (bukan nama tampilan).
   insert into public.notifications (user_id, type, title, message, signal_id)
   select
     f.follower_id,
     'new_signal',
     'Sinyal baru dari trader yang Anda ikuti',
-    v_trader.trader_display_name || ' memposting sinyal '
-      || p_pair || ' ' || p_direction || ' @ ' || p_entry::text || '.',
+    case
+      when coalesce((select level from public.trader_progress where trader_id = v_actor), 1) >= 5
+        and coalesce(v_trader.subscription_price_usd, 0) > 0
+        and not exists (
+          select 1 from public.subscriptions s
+          where s.follower_id = f.follower_id
+            and s.trader_id = v_actor
+            and s.status = 'active'
+        )
+      then '@' || coalesce(v_trader.username, 'trader') || ' memposting sinyal baru (berlangganan untuk melihat detailnya).'
+      else '@' || coalesce(v_trader.username, 'trader') || ' memposting sinyal '
+        || p_pair || ' ' || p_direction || ' @ ' || p_entry::text || '.'
+    end,
     v_signal.id
   from public.follows f
   where f.trader_id = v_actor;
@@ -704,7 +718,8 @@ begin
     c.follower_id,
     'signal_edited',
     'Sinyal yang Anda salin diubah',
-    'Sinyal ' || p_pair || ' ' || p_direction || ' diubah oleh trader.'
+    'Sinyal ' || p_pair || ' ' || p_direction || ' diubah oleh @'
+      || coalesce((select username from public.traders where profile_id = v_actor), 'trader') || '.'
       || case when v_new_status = 'AKTIF'
               then ' Sinyal kini AKTIF dan terkunci.'
               else '' end,
@@ -782,7 +797,9 @@ begin
     'signal_cancelled',
     'Sinyal yang Anda salin dibatalkan',
     'Sinyal ' || v_new.pair || ' ' || v_new.direction
-      || ' dibatalkan oleh trader. Jangan eksekusi sinyal ini.',
+      || ' dibatalkan oleh @'
+      || coalesce((select username from public.traders where profile_id = v_actor), 'trader')
+      || '. Jangan eksekusi sinyal ini.',
     v_new.id
   from public.copies c
   where c.signal_id = v_new.id and c.follower_id <> v_actor;
