@@ -3080,7 +3080,6 @@ function traderIdentityCardHtml() {
         <div style="font-size:13px; color:var(--muted);">Level ${level} · ${esc(levelName(level, getLang()))} · ${subLabel}</div>
       </div>
       <button class="iconbtn" id="trader-share-btn" type="button" aria-label="${esc(t('shareTrader'))}">${ICONS.share}</button>
-      <label class="iconbtn" for="trader-photo-input" title="${esc(t('photoChangeTrader'))}" style="cursor:pointer;">${ICONS.camera}</label>
     </div>
     <div class="avatar-edit">
       <label class="btn" for="trader-photo-input">${esc(t('photoChangeTrader'))}</label>
