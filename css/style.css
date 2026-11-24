@@ -265,7 +265,7 @@ h1 { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
 .card p { margin: 0 0 10px; color: var(--muted); font-size: 13.5px; }
 .card p:last-child { margin-bottom: 0; }
 .empty {
-  text-align: center; color: var(--muted); padding: 44px 16px;
+  text-align: center; color: var(--muted); padding: 24px 16px;
   border: 1px dashed var(--line); border-radius: var(--radius); background: var(--panel);
 }
 .empty strong { display: block; color: var(--ink); font-size: 15px; margin-bottom: 4px; }
@@ -370,8 +370,12 @@ h1 { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
   .side-nav button:hover { color: var(--ink); background: var(--panel-2); }
   .side-nav button:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
   .bottom-nav { display: none; }
-  /* Hanya #app yang digeser (auth/verify tetap di tengah). */
-  #app { margin-left: 224px; padding-bottom: 32px; }
+  /* Hanya #app yang digeser (auth/verify tetap di tengah).
+     R20: konten dipusatkan di RUANG SISA sidebar, bukan menempel sidebar.
+     margin-left = sidebar + setengah sisa ruang: (W-836)/2 untuk sidebar
+     224px, (W-996)/2 untuk rel 64px; max() menjaga agar di layar sempit
+     konten tetap mulai tepat setelah sidebar. */
+  #app { margin-left: max(224px, calc((100vw - 836px) / 2)); padding-bottom: 32px; }
 }
 /* Lebar menengah: sidebar menyusut jadi rel ikon 64px. */
 @media (min-width: 900px) and (max-width: 1100px) {
@@ -379,7 +383,7 @@ h1 { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
   .side-nav .side-brand { display: none; }
   .side-nav button { padding: 10px; justify-content: center; }
   .side-nav button .lbl { display: none; }
-  #app { margin-left: 64px; }
+  #app { margin-left: max(64px, calc((100vw - 996px) / 2)); }
 }
 
 /* ---- feed 2 kolom (Ronde 15 #4) ---- */
@@ -498,7 +502,8 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
 .feed-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 14px; align-items: center; }
 /* Strip pair Beranda: satu baris, scroll horizontal jari/roda mouse saja
    (tanpa tombol geser ‹ ›); baris status terpisah di bawahnya. */
-.pair-strip { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; flex: 1 1 auto; flex-basis: 100%; min-width: 0; scrollbar-width: none; -ms-overflow-style: none; padding: 2px 0; -webkit-overflow-scrolling: touch; }
+.pair-strip { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; flex: 1 1 auto; flex-basis: 100%; min-width: 0; scrollbar-width: none; -ms-overflow-style: none; padding: 2px 0; -webkit-overflow-scrolling: touch; cursor: grab; } /* R20: bisa diseret mouse */
+.pair-strip.dragging { cursor: grabbing; }
 .pair-strip::-webkit-scrollbar { display: none; }
 .pair-strip .fchip { flex: none; }
 .feed-filters .filter-break { flex-basis: 100%; height: 0; }
@@ -675,8 +680,8 @@ table.board td.num, table.board th.num { text-align: right; }
 .calc { background: var(--panel-2); border-radius: 10px; padding: 10px 12px; font-size: 13px; margin: 12px 0; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .calc .sep { color: var(--muted); }
 
-/* Kartu trader di Cari (grid 3 kolom) */
-.traders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; } /* R16: kartu sama lebar — 1fr murni melebar mengikuti konten tombol terpanjang */
+/* Kartu trader di Cari (grid 2 kolom, R20 — dari 3 kolom) */
+.traders { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } /* R16: kartu sama lebar — 1fr murni melebar mengikuti konten tombol terpanjang */
 .tcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; }
 .tcard .head { display: flex; gap: 10px; align-items: center; }
 .tcard .avatar { width: 40px; height: 40px; font-size: 14px; }
