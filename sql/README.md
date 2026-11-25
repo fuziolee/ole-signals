@@ -25,6 +25,11 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
 | `11_demo_traders_delete.sql` | Hapus SEMUA data demo (trader, progress, sinyal, follows/subs/copies/notifikasi, profil, auth) tanpa menyentuh data lain. |
 | `12_traders_username_split.sql` | Ronde 6b: kolom `traders.username` (username trader terpisah dari username follower) + backfill dari `profiles.username` + NOT NULL + format CHECK + unique index + trigger nama dilindungi. **TERAPKAN DULU, baru terapkan ulang `03_functions.sql`, baru deploy frontend baru** (lihat urutan di bawah). |
 | `13_follower_username.sql` | Ronde 7 (D05): kolom cooldown (`profiles.username_changed_at`, `profiles.display_name_changed_at`, `traders.username_changed_at`) + `check_username` / `set_follower_username` / `set_profile_name` (validasi format/banned/reserved/taken + cooldown 1×/bulan server-side, kecuali akun demo) + **redefinisi `setup_trader_identity` dengan cooldown username trader**. Daftar kata terlarang di-port dari prototipe. **TERAPKAN SETELAH 12 (dan setelah 03); bila 03 diterapkan ulang sesudahnya, terapkan ulang 13** — kalau tidak, cooldown trader hilang. |
+| `14_shared_lock.sql` | Ronde 9 (cacat 4): kolom `signals.shared_at` + RPC `mark_signal_shared` + `update_signal` versi lengkap (menolak edit sinyal yang sudah dibagikan, kode `shared`). **TERAPKAN SEBELUM deploy frontend Ronde 9** — frontend Ronde 9 memanggil `mark_signal_shared` dan membaca `shared_at`; tanpa migrasi ini tombol bagikan tetap jalan (best-effort) tapi kunci server tidak aktif. |
+| `15_share_closed_only.sql` | Ronde 19: RPC `mark_signal_shared` versi baru — menolak berbagi sinyal yang belum selesai (status bukan WIN/LOSS) dengan kode `notclosed`; sinyal yang sudah dibagikan sebelum Ronde 19 tetap ok (grandfathered). **TERAPKAN SEBELUM deploy frontend Ronde 19.** Perhatian: bila `03_functions.sql` diterapkan ulang kapan pun SETELAH 15, terapkan ulang 15 sesudahnya — 03 menimpa `mark_signal_shared` versi ber-`notclosed` dengan versi lama. |
+| `r8-notif-fix.sql` | Ronde 8: `create_signal` / `update_signal` / `cancel_signal` + grants (perbaikan notifikasi: pesan generik untuk sinyal berbayar + @username). **PERHATIAN URUTAN:** file ini mendefinisikan ulang `update_signal` TANPA cek `shared_at` — bila diterapkan SETELAH `14_shared_lock.sql`, kunci shared hilang diam-diam. Terapkan r8 HANYA sebelum 14, atau terapkan ulang 14 sesudahnya. |
+| `16_audit_guards.sql` | Ronde 27 (audit pra-Fase 3, K-1 + T-3): perluas `guard_profile_kyc_columns()` agar menjaga `is_admin` (hanya service_role); trigger baru `guard_profile_cooldown_columns()` (cooldown username/nama 1×/bulan + kunci nama saat KYC terverifikasi + anti-utak-atik stempel) dan `guard_trader_guards()` (cooldown username trader + gerbang Level 5 / rentang Rp100.000–Rp10.000.000 / cooldown harga 1×/bulan + larangan mengangkat diri jadi demo). Hanya menambah/memperluas trigger — TIDAK mendefinisikan ulang RPC apa pun dari 03/13/14/15. **TERAPKAN SETELAH 01–15 + r8, SEBELUM verifikasi negatif live.** |
+| `17_profiles_public_view.sql` | Ronde 27 (audit pra-Fase 3, T-1): view `profiles_public` (kolom publik saja: id, username, display_name, avatar_url, region, created_at) + policy baca `profiles` menjadi owner-only (`profiles_select_own`) + revoke SELECT anon pada tabel dasar. Sesudah ini `kyc_*` + `is_admin` tidak lagi terbaca publik. **TERAPKAN SETELAH 16.** Frontend tidak membaca `profiles` publik (semua call site adalah baris milik sendiri — lihat `visual-diff/r27-inventory.md`), jadi tidak ada frontend yang bergantung pada migrasi ini. |
 
 ## Cara pakai (Supabase SQL Editor)
 
@@ -46,7 +51,22 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
    `set_profile_name` belum ada). Perhatian: bila `03_functions.sql`
    diterapkan ulang kapan pun SETELAH 13, terapkan ulang 13 sesudahnya —
    03 menimpa `setup_trader_identity` versi ber-cooldown dengan versi lama.
-5. Aktifkan **Email** provider di **Authentication → Providers**
+6. **Ronde 9 (migrasi 14):** terapkan `14_shared_lock.sql` (kolom
+   `signals.shared_at` + RPC `mark_signal_shared` + `update_signal` dengan
+   cek shared), **baru** deploy frontend Ronde 9. Tanpa migrasi ini,
+   `mark_signal_shared` belum ada (bagikan tetap jalan, best-effort) dan
+   `shared_at` belum bisa dibaca (kunci UI tidak aktif).
+7. **Ronde 19 (migrasi 15):** terapkan `15_share_closed_only.sql`
+   (`mark_signal_shared` menolak sinyal belum selesai, kode `notclosed`),
+   **baru** deploy frontend Ronde 19.
+8. **Ronde 27 (migrasi 16 + 17):** terapkan `16_audit_guards.sql`
+   (penjaga `is_admin` + cooldown username/nama/harga + gerbang Level 5),
+   lalu `17_profiles_public_view.sql` (view `profiles_public` + baca
+   `profiles` owner-only). **Baru** jalankan verifikasi negatif live
+   (PATCH `is_admin` sebagai akun tes HARUS ditolak; baca `profiles`
+   sebagai anon HARUS kosong/gagal; lihat `visual-diff/r27-defect-report.md`
+   § "Langkah deploy"). Tidak ada perubahan frontend di Ronde 27.
+7. Aktifkan **Email** provider di **Authentication → Providers**
    (email+password saja; Google OAuth TIDAK diaktifkan).
 
 Panggil dari frontend (Supabase JS):
@@ -133,13 +153,11 @@ pair quote-USD seperti XAUUSD/EURUSD tidak butuh konversi).
    (`recalc_trader_progress`) adalah Fase 3–4 (Edge Functions),
    bukan file ini. Kolom-kolomnya sudah disiapkan.
 5. **KYC:** kolom `kyc_*` di `profiles` hanya boleh DIUBAH oleh
-   service_role (webhook Zyphe) — dijaga trigger. Namun kolom itu
-   masih BISA DIBACA lewat SELECT publik pada `profiles` (kebijakan
-   RLS membaca profil bersifat publik). Ini bisa diterima karena
-   `kyc_reference` hanyalah ID sesi Zyphe (bukan kredensial) dan
-   `kyc_reject_reason` hanya teks alasan. Bila nanti diputuskan kedua
-   kolom itu harus rahasia, pindahkan ke tabel terpisah dengan RLS
-   owner-only.
+   service_role (webhook Zyphe) — dijaga trigger. Sejak migrasi 17
+   (Ronde 27), kolom itu juga TIDAK BISA DIBACA publik: baca `profiles`
+   owner-only, direktori publik lewat view `profiles_public` (kolom
+   publik saja). Sebelum migrasi 17, kolom KYC masih terbaca lewat
+   SELECT publik — itu temuan T-1 audit pra-Fase 3.
 6. **Username yang dilindungi** (admin/support/dll., termasuk varian
    leet seperti `4dm1n`) ditolak di database (aturan prototipe ronde 21).
 7. **Tabel pembayaran tidak dibuat:** `subscriptions` ada tapi tidak
