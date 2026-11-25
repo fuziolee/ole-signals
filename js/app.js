@@ -2220,10 +2220,11 @@ function openSignalDetail(id) {
     rowsHtml += drow(t('detFinal'), esc(fmtUsd0(sig.profit_usd)) + (finalParts.length ? ` · ${esc(finalParts.join(' · '))}` : ''));
   }
   rowsHtml += `</div>`;
-  // D37 (r12/F1): dialog Detail TIDAK lagi memakai kata "terkunci" — kata
-  // itu khusus untuk share lock ("Sudah dibagikan · terkunci"). PENDING =
-  // "Menunggu entry", AKTIF = "Entry tersentuh · dinilai sistem dari harga".
-  const lockNote = sig.status === 'PENDING' ? esc(t('detUnlocked')) : esc(t('detLockedNote'));
+  // D37 (r12/F1, r30b): PENDING tidak lagi menampilkan catatan apa pun —
+  // status PENDING sudah ada di pill. AKTIF/WIN/LOSS tetap menampilkan
+  // "Entry tersentuh · dinilai sistem dari harga" (penjelasan cara sistem
+  // menilai hasil, bukan label kunci).
+  const lockNote = sig.status === 'PENDING' ? '' : esc(t('detLockedNote'));
   const actions = [];
   // R19: "Unduh kartu (PNG)" hanya untuk sinyal selesai (WIN/LOSS) —
   // `done` sudah didefinisikan di atas (status WIN/LOSS). PENDING/AKTIF
@@ -2239,7 +2240,7 @@ function openSignalDetail(id) {
   openOverlay(`
     <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><span class="spacer"></span><span class="pill">Level ${level} · ${esc(levelName(level, getLang()))}</span>${verified}${statusPill(sig.status)}${editedBadge}</div>
     ${dupHtml}
-    <div class="sig-main"><span class="sig-pair sig-pair-lg">${pairHtml(sig.pair)}</span><span class="dir ${dirCls}">${esc(sig.direction)}</span><span class="spacer"></span><span class="det-lock-note">${lockNote}</span></div>
+    <div class="sig-main"><span class="sig-pair sig-pair-lg">${pairHtml(sig.pair)}</span><span class="dir ${dirCls}">${esc(sig.direction)}</span><span class="spacer"></span>${lockNote ? `<span class="det-lock-note">${lockNote}</span>` : ''}</div>
     ${rowsHtml}
     ${progHtml}
     ${actions.length ? `<div class="detail-actions">${actions.join('')}</div>` : ''}`);
@@ -2418,11 +2419,11 @@ function journalRowHtml(sig, opts = {}) {
   const d = decimalsForPair(sig.pair);
   const dirCls = sig.direction === 'BUY' ? 'buy' : 'sell';
   const resCls = sig.status === 'WIN' ? 'pips-pos' : 'pips-neg';
-  // D14: salinan follower — AKTIF menampilkan floating, PENDING
-  // "Menunggu entry"; hasil tertutup bertanda (D13).
+  // D14 (r30b): salinan follower — AKTIF menampilkan floating, PENDING
+  // "—" (belum ada hasil, pola Ronde 26); hasil tertutup bertanda (D13).
   let res;
   if (opts.isCopy && sig.status === 'PENDING') {
-    res = esc(t('jrnlWaiting'));
+    res = '—';
   } else if (opts.isCopy && sig.status === 'AKTIF') {
     const fl = floatingUsd(sig);
     res = esc(t('jrnlFloating', { amt: fl !== null ? fmtUsd0(fl) : '—' }));
