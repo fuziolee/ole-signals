@@ -73,6 +73,7 @@ const S = {
   walletRange: 'ALL',
   walletCustom: { from: '', to: '' },
   secPage: null, // sub-halaman Kata sandi: null | 'pw' | 'email'
+  profileSub: null, // R25: sub-halaman Profil: null | 'kyc' | 'detail'
   wdAdd: false, // form tambah Akun Penarikan sedang dibuka
   followFilter: 'ALL',
   followerRange: 'ALL', // filter tanggal Riwayat follower (Sinyal)
@@ -461,6 +462,9 @@ function bindFollowSubscribe(root) {
         await paintFollowerCount(traderId);
         const name = traderHandle(traderOf({ trader_id: traderId }));
         toast(t(nowFollowed ? 'toastFollowed' : 'toastUnfollowed', { name }));
+        // R25: segarkan "Sinyal dari trader yang kamu ikuti" bila halaman
+        // Ruang Kerja → Pengikut → Sinyal sedang dibuka (tanpa reload).
+        if (S.view === 'office' && S.officeRole === 'follower' && S.officeFollowerTab === 'sinyal') renderOfficeFollowerTab();
       } catch (err) {
         toast(t('errNetwork'), true);
       } finally {
@@ -759,7 +763,8 @@ export function confirmDialog(title, body, yesLabel) {
   });
 }
 
-// Ronde 22: satu jalur keluar dipakai sidebar, Profil (HP), dan Pengaturan.
+// Ronde 22: satu jalur keluar dipakai sidebar dan Profil (HP).
+// (R25: jalur keluar dari dalam Pengaturan dihapus.)
 async function doLogout() {
   const yes = await confirmDialog(t('confirmLogoutTitle'), '', t('yesLogout'));
   if (!yes) return;
@@ -845,7 +850,7 @@ function showView(name) {
   if (name === 'trader') renderTraderProfile();
   if (name === 'office') renderOffice();
   if (name === 'wallet') renderWallet();
-  if (name === 'profile') renderProfile();
+  if (name === 'profile') { S.profileSub = null; renderProfile(); }
   if (name === 'helpguide') renderHelpGuide();
   if (name === 'settings') renderSettings();
   renderRightPanel(); // Ronde 22: panel kanan ikut segar di tiap halaman.
@@ -1310,6 +1315,9 @@ async function copySignalText(id) {
     }
   }
   toast(t('toastCopied', { pair: sig.pair }) + (already ? t('toastCopiedAlready') : t('toastCopiedNew')));
+  // R25: bila halaman Ruang Kerja → Pengikut → Sinyal sedang dibuka,
+  // segarkan daftar Salinan aktif dari state lokal (tanpa reload).
+  if (S.view === 'office' && S.officeRole === 'follower' && S.officeFollowerTab === 'sinyal') renderOfficeFollowerTab();
   return true;
 }
 
@@ -2238,7 +2246,7 @@ function statsGridHtml(s) {
     + `<div class="stat-cell"><div class="num mono">${s.avgR === null ? '—' : esc(fmtR(s.avgR))}</div><div class="lbl">${esc(t('stAvgR'))}</div></div>`
     + `<div class="stat-cell"><div class="num mono ${sk.longestWin ? 'pips-pos' : ''}">${sk.longestWin || '—'}</div><div class="lbl">${esc(t('stStreakWinLong'))}</div></div>`
     + `<div class="stat-cell"><div class="num mono ${sk.longestLose ? 'pips-neg' : ''}">${sk.longestLose || '—'}</div><div class="lbl">${esc(t('stStreakLoseLong'))}</div></div>`
-    + `<div class="stat-cell"><div class="num mono pips-neg">${s.drawdown.usd > 0 ? '-' + esc(fmtUsd(s.drawdown.usd)) : '—'}</div><div class="lbl">${esc(t('stMaxDD'))}${s.drawdown.usd > 0 ? ` (${s.drawdown.pct.toFixed(1)}%)` : ''}</div></div>`
+    + `<div class="stat-cell"><div class="num mono ${s.drawdown.usd > 0 ? 'pips-neg' : ''}">${s.drawdown.usd > 0 ? '-' + esc(fmtUsd(s.drawdown.usd)) : '—'}</div><div class="lbl">${esc(t('stMaxDD'))}${s.drawdown.usd > 0 ? ` (${s.drawdown.pct.toFixed(1)}%)` : ''}</div></div>`
     + `<div class="stat-cell"><div class="num mono">${fmtRf(s.recovery)}</div><div class="lbl">${esc(t('stRecovery'))}</div></div>`
     + `<div class="stat-cell"><div class="num mono">${fmtHold(s.avgHold)}</div><div class="lbl">${esc(t('stHoldAvg'))}</div></div>`
     + `<div class="stat-cell"><div class="num mono">${s.rr === null ? '—' : '1:' + s.rr.toFixed(1)}</div><div class="lbl">${esc(t('stRRAvg'))}</div></div>`
@@ -2349,7 +2357,7 @@ function journalRowHtml(sig, opts = {}) {
     if (sig.status === 'AKTIF') {
       extraBtns += `<button class="iconbtn" type="button" disabled title="${esc(t('jrnlNoDeleteActive'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.trash}</button>`;
     } else {
-      extraBtns += `<button class="iconbtn trashbtn" type="button" data-uncopy="${esc(opts.copyId)}" aria-label="${esc(t('cancel'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.trash}</button>`;
+      extraBtns += `<button class="iconbtn trashbtn" type="button" data-uncopy="${esc(opts.copyId)}" aria-label="${esc(t('uncopyBtn'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.trash}</button>`;
     }
   }
   return `<div class="hist-row"><span class="p mono">${esc(sig.pair)}</span>`
@@ -3232,8 +3240,8 @@ async function renderRightPanel() {
     + `<div class="rp-hide-row"><span class="t">${esc(t('rpHideBalance'))}</span><button class="rp-switch" id="rp-hide-switch" type="button" role="switch" aria-checked="${__rpHideBalance ? 'true' : 'false'}" aria-label="${esc(t('rpHideBalance'))}"></button></div>`
     + `<h4>${esc(t('rpStats'))}</h4>`
     + row(t('stWinRate'), t('rpClosedSub', { n: st.closed }), has ? `${st.wr.toFixed(0)}%` : '—')
-    + row(t('stTotalRNet'), '', has ? fmtR(st.totalR) : '—', st.totalR >= 0 ? 'pips-pos' : 'pips-neg')
-    + row(t('stTotalProfitUSD'), '', has ? fmtUsd(st.totalUSD) : '—', st.totalUSD >= 0 ? 'pips-pos' : 'pips-neg')
+    + row(t('stTotalRNet'), '', has ? fmtR(st.totalR) : '—', has && st.totalR > 0 ? 'pips-pos' : has && st.totalR < 0 ? 'pips-neg' : '')
+    + row(t('stTotalProfitUSD'), '', has ? fmtUsd(st.totalUSD) : '—', has && st.totalUSD > 0 ? 'pips-pos' : has && st.totalUSD < 0 ? 'pips-neg' : '')
     + row(t('stMaxDDShort'), '', has ? `−${fmtUsd(st.drawdown.usd)}` : '—', st.drawdown.usd > 0 ? 'pips-neg' : '')
     + row(t('rpTotalSignals'), t('stTotalSignalsOpen', { n: st.active }), String(st.totalSignals))
     + row(t('stProfitFactor'), '', has ? fmtPf(st.pf) : '—')
@@ -3301,9 +3309,9 @@ function signalFormHtml(editing) {
       <div id="sf-risk"></div>
       <div class="err" id="sf-err" style="color:var(--sell); font-size:13px; min-height:1.2em; margin-bottom:8px;"></div>
       <div class="row">
-        <button class="btn primary" type="submit" id="sf-submit" style="flex:1;"${needUsername ? ' disabled' : ''}><span aria-hidden="true">${ICONS.lock}</span>${editing ? esc(t('submitEdit')) : esc(t('postSignal'))}</button>
+        <button class="btn primary compact" type="submit" id="sf-submit"${needUsername ? ' disabled' : ''}><span aria-hidden="true">${ICONS.lock}</span>${editing ? esc(t('submitEdit')) : esc(t('postSignal'))}</button>
       </div>
-      ${editing ? `<div class="row"><button class="btn" type="button" id="sf-cancel-edit" style="flex:1;">${esc(t('cancelEdit'))}</button></div>` : ''}
+      ${editing ? `<div class="row"><button class="btn compact" type="button" id="sf-cancel-edit">${esc(t('cancelEdit'))}</button></div>` : ''}
     </form>
   </div>`;
 }
@@ -3750,7 +3758,7 @@ function renderOfficeTraderTab(editing = null) {
           ${resetRow(t('resetRule'), t('resetOnceMonth'))}
           ${resetRow(t('resetLast'), '—')}
           ${resetRow(t('resetNext'), t('resetNow'))}
-          <div style="margin-top:12px;"><button class="btn primary" type="button" disabled>${esc(t('resetBtn'))}</button></div>
+          <div style="margin-top:12px;"><button class="btn primary compact" type="button" disabled>${esc(t('resetBtn'))}</button></div>
           <p class="note">${esc(t('resetSoonNote'))}</p>
         </div>`
       + statsSectionHtml(st, 'officeStatsTitle');
@@ -4071,20 +4079,12 @@ function openKycFlow() {
 // -------------------------------------------------------------- Profil ---
 // R24: susunan mengikuti preview yang disetujui (Pratinjau_Klik_Hidup.html):
 // kepala profil (avatar + nama + "@username · Wilayah") lalu baris-baris
-// menu (.prow): Verifikasi KYC + Detail akun (lipat, panel di bawah baris),
-// Pengaturan, Bantuan & Panduan. Status KYC TIDAK hilang — jadi baris
-// pertama dengan panel lipat berisi isi kartu KYC lama. Baris Keluar tetap
+// menu (.prow): Verifikasi KYC + Detail akun, Pengaturan, Bantuan & Panduan.
+// Status KYC TIDAK hilang — jadi baris pertama. Baris Keluar tetap
 // hanya <900px (class logout-mobile). Pengaturan adalah sub-halaman sendiri
 // (view-settings), bukan tumpukan kartu di sini.
-// R24: baris Profil yang bisa dilipat (KYC + Detail akun).
-function toggleProw(btnId, panelId) {
-  const btn = document.getElementById(btnId);
-  const panel = document.getElementById(panelId);
-  if (!btn || !panel) return;
-  const open = panel.hidden;
-  panel.hidden = !open;
-  btn.setAttribute('aria-expanded', String(open));
-}
+// R25: Verifikasi KYC + Detail akun juga sub-halaman (S.profileSub),
+// bukan panel lipat — klik baris masuk ke dalam, tombol kembali ke Profil.
 async function renderProfile() {
   const body = $('#profile-body');
   const p = S.profile || {};
@@ -4096,6 +4096,29 @@ async function renderProfile() {
   // D63: ID akun SM-XXXX-XXXX (4 + 4 karakter dari UUID tanpa tanda hubung).
   const uidHex = String(S.user?.id || '').replace(/-/g, '').toUpperCase();
   const uid = 'SM-' + uidHex.slice(0, 4) + '-' + uidHex.slice(4, 8);
+  // R25: sub-halaman Profil — klik baris KYC / Detail akun masuk ke dalam
+  // (seperti Pengaturan), bukan membuka panel ke bawah.
+  if (S.profileSub === 'kyc' || S.profileSub === 'detail') {
+    const isKyc = S.profileSub === 'kyc';
+    const kycBody = `<div class="kyc-row">${kycVerified
+      ? `<span class="stchip ok">${esc(t('kycVerified'))}</span>${p.kyc_full_name ? `<span>${esc(p.kyc_full_name)}</span>` : ''}${p.kyc_reference ? `<span class="kyc-ref mono">${esc(t('kycRef'))} ${esc(p.kyc_reference)}</span>` : ''}`
+      : kycStatus === 'rejected'
+        ? `<span class="stchip bad">${esc(t('kycRejected'))}</span>${p.kyc_reject_reason ? `<span>${esc(t('kycRejectReason', { reason: p.kyc_reject_reason }))}</span>` : ''}<button class="btn" type="button" id="kyc-start-btn">${esc(t('kycRetry'))}</button>`
+        : `<span style="color:var(--muted);">${esc(t('kycNotVerified'))}</span><button class="btn" type="button" id="kyc-start-btn">${esc(t('kycVerifyBtn'))}</button>`}</div>`
+      + `<p>${esc(t('kycHint'))}</p>`
+      + (kycVerified ? `<p>${esc(t('kycNameLocked'))}</p><p class="note">${esc(t('kycDocsNote'))}</p>` : '');
+    const detailBody = `<div class="menurow"><span class="grow"><span class="t">${esc(t('uid'))}</span><span class="d">${esc(uid)}</span></span></div>`
+      + `<div class="menurow"><span class="grow"><span class="t">${esc(t('profileName'))}</span><span class="d">${esc(p.display_name || '—')}</span></span></div>`
+      + `<div class="menurow"><span class="grow"><span class="t">${esc(t('username'))}</span><span class="d">${username}</span></span></div>`
+      + `<div class="menurow"><span class="grow"><span class="t">${esc(t('region'))}</span><span class="d">Indonesia</span></span></div>`;
+    body.innerHTML = `<button class="btn backbtn" id="profile-sub-back" type="button">${esc(t('backProfile'))}</button>`
+      + `<div class="page-head"><h2>${esc(isKyc ? t('kycTitle') : t('accountDetail'))}</h2></div>`
+      + `<div class="subcard">${isKyc ? kycBody : detailBody}</div>`;
+    $('#profile-sub-back').addEventListener('click', () => { S.profileSub = null; renderProfile(); });
+    const kycBtn = $('#kyc-start-btn');
+    if (kycBtn) kycBtn.addEventListener('click', () => openKycFlow());
+    return;
+  }
   body.innerHTML = `
     <div class="profile-head">
       ${avatarImg(displayName, S.user.id, S.photoDraft.profile ? null : (S.photoUploadPreview.profile || p.avatar_url), 'avatar-lg')}
@@ -4108,23 +4131,8 @@ async function renderProfile() {
       ${p.avatar_url && !S.photoDraft.profile && !S.photoUploadDraft.profile ? `<button class="iconbtn trashbtn" id="profile-photo-del" type="button" aria-label="${esc(t('photoRemove'))}" title="${esc(t('photoRemove'))}">${ICONS.trash}</button>` : ''}
     </div>
     ${S.photoUploadDraft.profile || S.photoDraft.profile ? `<div class="avatar-edit" style="margin-top:10px;">${S.photoDraft.profile ? `<span class="note">${esc(t('photoRemoveDraft'))}</span>` : ''}<button class="btn primary" id="profile-photo-done" type="button">${esc(t('doneBtn'))}</button><button class="btn" id="profile-photo-cancel" type="button">${esc(t('cancel'))}</button></div>` : ''}
-    <button type="button" class="prow" id="prow-kyc" aria-expanded="false"><span class="ic">${ICONS.lock}</span><span class="lbl">${esc(t('kycTitle'))}<span class="sub">${esc(kycSub)}</span></span><span class="ch">${ICONS.chevR}</span></button>
-    <div class="prow-panel" id="panel-kyc" hidden>
-      <div class="kyc-row">${kycVerified
-        ? `<span class="stchip ok">${esc(t('kycVerified'))}</span>${p.kyc_full_name ? `<span>${esc(p.kyc_full_name)}</span>` : ''}${p.kyc_reference ? `<span class="kyc-ref mono">${esc(t('kycRef'))} ${esc(p.kyc_reference)}</span>` : ''}`
-        : kycStatus === 'rejected'
-          ? `<span class="stchip bad">${esc(t('kycRejected'))}</span>${p.kyc_reject_reason ? `<span>${esc(t('kycRejectReason', { reason: p.kyc_reject_reason }))}</span>` : ''}<button class="btn" type="button" id="kyc-start-btn">${esc(t('kycRetry'))}</button>`
-          : `<span style="color:var(--muted);">${esc(t('kycNotVerified'))}</span><button class="btn" type="button" id="kyc-start-btn">${esc(t('kycVerifyBtn'))}</button>`}</div>
-      <p>${esc(t('kycHint'))}</p>
-      ${kycVerified ? `<p>${esc(t('kycNameLocked'))}</p><p class="note">${esc(t('kycDocsNote'))}</p>` : ''}
-    </div>
-    <button type="button" class="prow" id="prow-detail" aria-expanded="false"><span class="ic">${ICONS.user}</span><span class="lbl">${esc(t('accountDetail'))}<span class="sub">${esc(t('profileDetailSub'))}</span></span><span class="ch">${ICONS.chevR}</span></button>
-    <div class="prow-panel" id="panel-detail" hidden>
-      <div class="menurow"><span class="grow"><span class="t">${esc(t('uid'))}</span><span class="d">${esc(uid)}</span></span></div>
-      <div class="menurow"><span class="grow"><span class="t">${esc(t('profileName'))}</span><span class="d">${esc(p.display_name || '—')}</span></span></div>
-      <div class="menurow"><span class="grow"><span class="t">${esc(t('username'))}</span><span class="d">${username}</span></span></div>
-      <div class="menurow"><span class="grow"><span class="t">${esc(t('region'))}</span><span class="d">Indonesia</span></span></div>
-    </div>
+    <button type="button" class="prow" id="prow-kyc"><span class="ic">${ICONS.lock}</span><span class="lbl">${esc(t('kycTitle'))}<span class="sub">${esc(kycSub)}</span></span><span class="ch">${ICONS.chevR}</span></button>
+    <button type="button" class="prow" id="prow-detail"><span class="ic">${ICONS.user}</span><span class="lbl">${esc(t('accountDetail'))}<span class="sub">${esc(t('profileDetailSub'))}</span></span><span class="ch">${ICONS.chevR}</span></button>
     <button type="button" class="prow" id="menu-settings"><span class="ic">${ICONS.sliders}</span><span class="lbl">${esc(t('settings'))}<span class="sub">${esc(t('profileSettingsSub'))}</span></span><span class="ch">${ICONS.chevR}</span></button>
     <button type="button" class="prow" id="menu-helpguide"><span class="ic">${ICONS.book}</span><span class="lbl">${esc(t('menuHelpGuide'))}<span class="sub">${esc(t('menuHelpGuideDesc'))}</span></span><span class="ch">${ICONS.chevR}</span></button>
     <button type="button" class="prow danger logout-mobile" id="menu-logout"><span class="ic">${ICONS.logout}</span><span class="lbl">${esc(t('logout'))}</span></button>`;
@@ -4169,17 +4177,15 @@ async function renderProfile() {
       renderProfile();
     });
   }
-  const kycBtn = $('#kyc-start-btn');
-  if (kycBtn) kycBtn.addEventListener('click', () => openKycFlow());
   const photoBtn = $('#profile-photo-btn');
   if (photoBtn) photoBtn.addEventListener('click', () => { const inp = $('#profile-photo-input'); if (inp) inp.click(); });
   $('#menu-settings').addEventListener('click', () => { S.settingsSub = null; showView('settings'); });
   $('#menu-helpguide').addEventListener('click', () => { S.helpGuideTab = 'guide'; showView('helpguide'); });
   $('#menu-logout').addEventListener('click', doLogout);
   const prowKyc = $('#prow-kyc');
-  if (prowKyc) prowKyc.addEventListener('click', () => toggleProw('prow-kyc', 'panel-kyc'));
+  if (prowKyc) prowKyc.addEventListener('click', () => { S.profileSub = 'kyc'; renderProfile(); });
   const prowDetail = $('#prow-detail');
-  if (prowDetail) prowDetail.addEventListener('click', () => toggleProw('prow-detail', 'panel-detail'));
+  if (prowDetail) prowDetail.addEventListener('click', () => { S.profileSub = 'detail'; renderProfile(); });
 }
 
 // ----------------------------------------------------------- Pengaturan ---
@@ -4206,13 +4212,11 @@ function renderSettings() {
     + `<div class="page-head"><h2>${esc(t('settings'))}</h2></div>`
     + rows.map(([key, title, desc]) =>
     `<div class="subcard"><button type="button" class="menurow" data-setsub="${key}"><span class="grow"><span class="t">${esc(title)}</span>${desc ? `<span class="d">${esc(desc)}</span>` : ''}</span><span class="marrow">${ICONS.arrow}</span></button></div>`
-  ).join('')
-    + `<div class="subcard"><button type="button" class="menurow danger" id="set-logout"><span class="grow"><span class="t">${esc(t('logout'))}</span></span><span class="marrow">${ICONS.arrow}</span></button></div>`;
+  ).join('');
   $('#set-back-profile').addEventListener('click', () => showView('profile'));
   $$('[data-setsub]', body).forEach((b) => {
     b.addEventListener('click', () => { S.settingsSub = b.dataset.setsub; S.secPage = null; S.wdAdd = false; renderSettings(); });
   });
-  $('#set-logout').addEventListener('click', doLogout);
 }
 function settingsBackButton() {
   return `<button class="btn backbtn" id="set-sub-back" type="button">${esc(t('backShort'))}</button>`;
