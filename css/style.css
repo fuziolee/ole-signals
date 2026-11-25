@@ -1113,6 +1113,12 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
   .right-panel { order: -1; padding: 10px 17px; border-bottom: 1px solid var(--line); }
   .right-panel .rp-top { margin-bottom: 0; }
   .right-panel #rp-body { display: none; }
+  /* R33: ikon ganti mode disembunyikan di HP — isi panel tidak terlihat di
+     sini, jadi ikon itu tidak mengubah apa pun yang tampak (tombol mati);
+     mode tetap tersimpan dan berlaku saat kembali ke desktop. Avatar
+     kembali memakai margin-left:auto supaya tetap di kanan sendiri. */
+  .right-panel #rp-mode-btn { display: none; }
+  .right-panel .rp-avatar { margin-left: auto; }
   .side-nav { display: none; }
 }
 
@@ -1129,8 +1135,15 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
 .rp-top { display: flex; align-items: center; gap: 9px; margin-bottom: 24px; }
 .rp-top .notif-wrap { margin-left: 0; }
 .rp-bell { background: var(--panel); box-shadow: 0 1px 4px rgba(20, 20, 30, .05); }
-.rp-avatar { margin-left: auto; width: 40px; height: 40px; font-size: 14px; }
+.rp-avatar { margin-left: 0; width: 40px; height: 40px; font-size: 14px; }
 .rp-avatar .avatar { width: 40px; height: 40px; font-size: 14px; }
+/* R33: ikon ganti mode panel (Trader/Follower) — satu tombol kecil di
+   sebelah avatar, gaya .bellbtn. margin-left:auto memindahkan "dorongan ke
+   kanan" dari avatar ke tombol ini, sehingga tombol + avatar menempel
+   berpasangan di kanan dan lonceng tetap di kiri. Mode Follower ditandai
+   warna aksen (ikon + border biru langit) supaya mode aktif terlihat sekilas. */
+.rp-mode-btn { margin-left: auto; }
+.rp-mode-btn[data-mode="follower"] { color: var(--teal); border-color: var(--teal); }
 /* Panel notifikasi: fixed agar tidak terpotong kolom yang bisa di-scroll. */
 .right-panel .notif-panel { position: fixed; top: 118px; right: max(38px, calc((100vw - 1280px) / 2 + 22px)); }
 @media (max-width: 1099px) {
