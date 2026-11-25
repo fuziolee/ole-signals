@@ -3316,7 +3316,7 @@ function signalFormHtml(editing) {
   const needUsername = !S.trader?.username;
   return `<div class="card">
     <h2>${esc(editing ? t('formTitleEdit') : t('formTitleNew'))}</h2>
-    <div class="risk-note">${t('formRisk')}</div>
+    <div class="risk-note"><span>${t('formRisk')}</span></div>
     ${needUsername ? `<div class="risk-note" role="alert"><span><strong>${esc(t('postUsernameWarnTitle'))}</strong> ${esc(t('postUsernameWarn'))} <button type="button" class="linkbtn" id="sf-username-cta">${esc(t('postUsernameWarnCta'))}</button></span></div>` : ''}
     <form id="sig-form">
       <div class="fgrid">
