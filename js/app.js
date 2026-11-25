@@ -917,6 +917,13 @@ $('#notif-bell').addEventListener('click', (e) => {
   setNotifPanel(!S.notifOpen);
 });
 $('#rp-avatar').addEventListener('click', () => showView('profile'));
+// R33: ikon ganti mode panel kanan (Trader ⇄ Follower) — satu klik, mode
+// disimpan (ole-rp-mode) lalu panel dirender ulang; tanpa daftar salinan.
+$('#rp-mode-btn').addEventListener('click', () => {
+  __rpMode = __rpMode === 'follower' ? 'trader' : 'follower';
+  try { localStorage.setItem('ole-rp-mode', __rpMode); } catch (e) { /* abaikan */ }
+  renderRightPanel();
+});
 $('#side-logout').addEventListener('click', () => doLogout());
 $('#side-promo-go').addEventListener('click', () => showView('office'));
 // Ronde 22: ripple saat ditekan (preview) — satu span .ripple yang
@@ -3302,6 +3309,25 @@ function balanceCardHtml() {
 // fallback-nya sama seperti kartu itu (saldo awal $10.000).
 let __rpHideBalance = false;
 try { __rpHideBalance = localStorage.getItem('ole-hide-balance') === '1'; } catch (e) { /* abaikan */ }
+// R33: mode panel kanan — 'trader' (default) atau 'follower'. Persist di
+// localStorage (pola sama seperti ole-hide-balance) supaya tidak kembali
+// ke Trader tiap pindah halaman / reload.
+let __rpMode = 'trader';
+try { __rpMode = localStorage.getItem('ole-rp-mode') === 'follower' ? 'follower' : 'trader'; } catch (e) { /* abaikan */ }
+// Ikon mode (gaya feather seperti lonceng: stroke, 24x24). Ikon MENUNJUKKAN
+// mode aktif: grafik garis = Akun Trader, dua lembar salinan = Akun Follower.
+const RP_ICON_TRADER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>';
+const RP_ICON_FOLLOWER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+function paintRpModeBtn() {
+  const b = $('#rp-mode-btn');
+  if (!b) return;
+  const follower = __rpMode === 'follower';
+  b.setAttribute('data-mode', __rpMode);
+  const label = follower ? t('rpSwitchToTrader') : t('rpSwitchToFollower');
+  b.setAttribute('aria-label', label);
+  b.setAttribute('title', label);
+  b.innerHTML = follower ? RP_ICON_FOLLOWER : RP_ICON_TRADER;
+}
 async function renderRightPanel() {
   const body = $('#rp-body');
   const avBtn = $('#rp-avatar');
@@ -3313,33 +3339,62 @@ async function renderRightPanel() {
     avBtn.innerHTML = avatarImg(name, S.user.id, S.photoUploadPreview.profile || p.avatar_url, 'avatar-sm');
   }
   await ensureAllSignals();
-  const p = progressOf(S.trader);
-  const balance = p ? Number(p.balance_usd) : START_BALANCE_USD;
-  const cumProfit = balance - START_BALANCE_USD;
-  const pctStart = ((balance - START_BALANCE_USD) / START_BALANCE_USD) * 100;
-  const balTxt = __rpHideBalance ? '$ ••••••••' : fmtUsd(balance);
-  const subTxt = S.trader
-    ? `${cumProfit >= 0 ? '↑' : '↓'} ${esc(fmtUsd(Math.abs(cumProfit)))} · ${ds(pctStart.toFixed(2))}% <span>${esc(t('balPctStart'))} ${esc(fmtUsd(START_BALANCE_USD))}</span>`
-    : esc(t('rpNoTrader'));
-  // Statistik dari sinyal pengguna sendiri; avgHold dihitung dari
+  // R33: ikon ganti mode dicat ulang di tiap render (ikon + label mengikuti
+  // mode aktif; mode Follower juga ditandai warna aksen via data-mode).
+  paintRpModeBtn();
+  let list;
+  let balLabel;
+  let statsTitle;
+  if (__rpMode === 'follower') {
+    // Mode Follower — jalur yang SAMA persis dengan tab Jurnal
+    // (renderOfficeFollowerTab): salinan pengguna → computeStats.
+    // Saldo simulasi = $10.000 + total profit jurnal salinan.
+    list = S.myCopies
+      .map((c) => one(c.signals))
+      .filter(Boolean)
+      .map((s) => ({ ...s, traders: s.traders || {} }));
+    balLabel = `${esc(t('rpBalance'))} · ${esc(t('rpAccountFollower'))}`;
+    statsTitle = t('rpStatsFollower');
+  } else {
+    list = signalsOfTrader(S.user.id);
+    balLabel = `${esc(t('rpBalance'))} · ${esc(t('rpAccountTrader'))}`;
+    statsTitle = t('rpStats');
+  }
+  // Statistik dari daftar sinyal mode aktif; avgHold dihitung dari
   // holding_minutes sinyal tertutup (computeStats mengembalikan null
   // untuk avgHold karena settlement belum menulisnya dengan andal —
   // bila tidak ada holding_minutes yang tercatat, tampil "—").
-  const mine = signalsOfTrader(S.user.id);
-  const st = computeStats(mine);
-  const closed = mine.filter((s) => s.status === 'WIN' || s.status === 'LOSS');
+  const st = computeStats(list);
+  const closed = list.filter((s) => s.status === 'WIN' || s.status === 'LOSS');
   const holds = closed
     .map((s) => s.holding_minutes)
     .filter((v) => v !== null && v !== undefined && Number.isFinite(Number(v)))
     .map((v) => Number(v));
   const avgHold = holds.length ? holds.reduce((a, b) => a + b, 0) / holds.length : null;
   const has = st.closed > 0;
+  let balance;
+  let subTxt;
+  if (__rpMode === 'follower') {
+    balance = START_BALANCE_USD + st.totalUSD;
+    const cumProfit = balance - START_BALANCE_USD;
+    const pctStart = ((balance - START_BALANCE_USD) / START_BALANCE_USD) * 100;
+    subTxt = `${cumProfit >= 0 ? '↑' : '↓'} ${esc(fmtUsd(Math.abs(cumProfit)))} · ${ds(pctStart.toFixed(2))}% <span>${esc(t('balPctStart'))} ${esc(fmtUsd(START_BALANCE_USD))}</span>`;
+  } else {
+    const p = progressOf(S.trader);
+    balance = p ? Number(p.balance_usd) : START_BALANCE_USD;
+    const cumProfit = balance - START_BALANCE_USD;
+    const pctStart = ((balance - START_BALANCE_USD) / START_BALANCE_USD) * 100;
+    subTxt = S.trader
+      ? `${cumProfit >= 0 ? '↑' : '↓'} ${esc(fmtUsd(Math.abs(cumProfit)))} · ${ds(pctStart.toFixed(2))}% <span>${esc(t('balPctStart'))} ${esc(fmtUsd(START_BALANCE_USD))}</span>`
+      : esc(t('rpNoTrader'));
+  }
+  const balTxt = __rpHideBalance ? '$ ••••••••' : fmtUsd(balance);
   const row = (label, sub, val, valCls = '') => `<div class="rp-stat-row"><div><div class="n">${esc(label)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ''}</div><div class="v"><div class="a ${valCls}">${esc(val)}</div></div></div>`;
-  body.innerHTML = `<div class="rp-bal-label">${esc(t('rpBalance'))}</div>`
+  body.innerHTML = `<div class="rp-bal-label">${balLabel}</div>`
     + `<div class="rp-bal-num" id="rp-bal-num">${esc(balTxt)}</div>`
     + `<div class="rp-bal-sub">${subTxt}</div>`
     + `<div class="rp-hide-row"><span class="t">${esc(t('rpHideBalance'))}</span><button class="rp-switch" id="rp-hide-switch" type="button" role="switch" aria-checked="${__rpHideBalance ? 'true' : 'false'}" aria-label="${esc(t('rpHideBalance'))}"></button></div>`
-    + `<h4>${esc(t('rpStats'))}</h4>`
+    + `<h4>${esc(statsTitle)}</h4>`
     + row(t('stWinRate'), t('rpClosedSub', { n: st.closed }), has ? `${st.wr.toFixed(0)}%` : '—')
     + row(t('stTotalRNet'), '', has ? fmtR(st.totalR) : '—', has && st.totalR > 0 ? 'pips-pos' : has && st.totalR < 0 ? 'pips-neg' : '')
     + row(t('stTotalProfitUSD'), '', has ? fmtUsd(st.totalUSD) : '—', has && st.totalUSD > 0 ? 'pips-pos' : has && st.totalUSD < 0 ? 'pips-neg' : '')
