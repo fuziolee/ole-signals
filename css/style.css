@@ -1099,12 +1099,20 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
   .right-panel { grid-column: 2; border-top: 1px solid var(--line); }
   .bottom-nav { display: none; }
 }
-/* --- HP <900px: satu halaman, panel kanan di bawah konten --- */
+/* --- HP <900px: satu halaman; Ronde 32: isi panel kanan (Saldo +
+   Statistik) disembunyikan, .rp-top naik jadi bar atas (lonceng +
+   avatar) di atas konten. Bar TIDAK sticky — ikut scroll halaman:
+   sticky tidak bisa jalan di dalam .app yang overflow:hidden, dan
+   bar tidak boleh menutupi konten saat scroll. Lonceng sekarang ada
+   di atas (dulu di ujung bawah halaman), avatar tetap menuju Profil.
+   Saldo/statistik tetap bisa dibuka lewat Ruang Kerja → Trader. --- */
 @media (max-width: 899px) {
   body { padding: 0; }
-  .app { margin: 0; border-radius: 0; box-shadow: none; min-height: 100vh; }
+  .app { margin: 0; border-radius: 0; box-shadow: none; min-height: 100vh; display: flex; flex-direction: column; }
   main { padding: 14px 17px 110px; }
-  .right-panel { padding: 22px 17px 110px; }
+  .right-panel { order: -1; padding: 10px 17px; border-bottom: 1px solid var(--line); }
+  .right-panel .rp-top { margin-bottom: 0; }
+  .right-panel #rp-body { display: none; }
   .side-nav { display: none; }
 }
 
