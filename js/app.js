@@ -3545,7 +3545,9 @@ function usernameFormHtml(kind) {
   const cur = isTrader ? (S.trader?.username || '') : (S.profile?.username || '');
   if (!ui.draft && set) { ui.draft = cur; }
   const warn = isTrader ? t('usernameWarnTrader') : t('usernameWarnFollower');
-  const note = `<div class="risk-note"><span>${esc(warn)}</span></div>`;
+  // R28: peringatan "wajib dibuat" hanya bila username BELUM ada. Bila
+  // sudah ada (form ubah), peringatan itu sudah tidak berlaku.
+  const note = set ? '' : `<div class="risk-note"><span>${esc(warn)}</span></div>`;
   if (ui.pending) {
     return note + `<p class="lead-sm"><b>@${esc(ui.pending)}</b> — ${esc(set ? t('usernameChangeTo') : t('usernameSetTo'))}</p>`
       + `<div class="detail-actions"><button type="button" class="btn primary" data-uconfirm="${kind}">${esc(set ? t('usernameYesChange') : t('usernameYesSet'))}</button><button type="button" class="btn" data-uback="${kind}">${esc(t('back'))}</button></div>`;
@@ -3577,6 +3579,13 @@ function bindUsernameForm(root, kind, onDone) {
       paintUsernameStatus(kind, root);
       clearTimeout(ui.timer);
       if (!v) return;
+      // R28: nama yang sama dengan username saat ini TIDAK dicek
+      // ketersediaannya — server memang menjawab "tersedia" untuk nama
+      // sendiri (taken check mengecualikan diri), tapi menampilkan itu
+      // menyesatkan: tidak ada yang berubah untuk diubah. Status dibiarkan
+      // kosong dan tombol tetap nonaktif (usernameCanSubmit).
+      const cur = kind === 'trader' ? (S.trader?.username || '') : (S.profile?.username || '');
+      if (v === cur) return;
       ui.timer = setTimeout(async () => {
         try {
           const r = await api.checkUsername(kind, v);
@@ -3594,6 +3603,11 @@ function bindUsernameForm(root, kind, onDone) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!ui.draft) return;
+      // R28: jangan tampilkan langkah konfirmasi untuk nama yang sama
+      // dengan username saat ini (tombol sudah nonaktif, ini jaring
+      // pengaman bila form tersubmit lewat jalan lain).
+      const cur = kind === 'trader' ? (S.trader?.username || '') : (S.profile?.username || '');
+      if (ui.draft === cur) return;
       try {
         const r = await api.checkUsername(kind, ui.draft);
         if (!r.ok) {
