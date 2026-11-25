@@ -67,6 +67,7 @@ const S = {
   traderProfileFrom: 'search',
   traderProfileRange: 'ALL',
   traderProfileCustom: { from: '', to: '' },
+  monthYear: null, // R29: tahun terpilih tabel Profit Per Month (null = default: tahun terbaru berdata)
   officeRange: 'ALL',
   officeCustom: { from: '', to: '' },
   walletTab: 'tx',
@@ -2304,17 +2305,76 @@ function chartCardHtml(s) {
     : `<div class="empty" style="padding:24px 12px;"><strong>${esc(t('stChartEmpty'))}</strong></div>`;
   return `<div class="chart-card"><h3>${esc(t('stChartTitle'))}</h3><div class="sub">${esc(t('stChartSub'))}</div>${inner}</div>`;
 }
-function monthTableHtml(months) {
-  const body = months.length ? months.map((e) => {
-    const mName = new Date(e.year, e.month, 1).toLocaleString(getLang() === 'en' ? 'en-US' : 'id-ID', { month: 'long', year: 'numeric' });
-    return `<tr><td class="mono" style="font-weight:700">${esc(mName)}</td>`
-      + `<td class="num mono ${e.profit >= 0 ? 'pips-pos' : 'pips-neg'}">${esc(fmtUsd(e.profit, true))}</td>`
-      + `<td class="num mono ${e.pips >= 0 ? 'pips-pos' : 'pips-neg'}">${e.pips >= 0 ? '+' : ''}${Math.round(e.pips)}</td>`
-      + `<td class="num mono">${e.trades}</td>`
-      + `<td class="num mono">${e.wr === null ? '—' : ds(e.wr.toFixed(1)) + '%'}</td></tr>`;
-  }).join('') : `<tr><td colspan="5" style="color:var(--muted)">${esc(t('ppmNoTrades'))}</td></tr>`;
+// R29: tahun terpilih untuk tabel Profit Per Month (state global S.monthYear).
+// Daftar tahun = tahun-tahun yang ada di s.months (urut naik). Default =
+// tahun terbaru yang ada datanya; bila tidak ada data sama sekali, tahun
+// berjalan. Bila tahun yang tersimpan tidak ada di data (mis. pindah
+// permukaan ke trader lain), dijepit ke tahun terbaru yang ada.
+function resolveMonthYear(months) {
+  const years = [...new Set((months || []).map((e) => e.year))].sort((a, b) => a - b);
+  const nowYear = new Date().getFullYear();
+  if (years.length === 0) { S.monthYear = nowYear; return { years: [], year: nowYear }; }
+  if (S.monthYear === null || !years.includes(S.monthYear)) S.monthYear = years[years.length - 1];
+  return { years, year: S.monthYear };
+}
+function monthNameShort(year, month) {
+  return new Date(year, month, 1).toLocaleString(getLang() === 'en' ? 'en-US' : 'id-ID', { month: 'short' });
+}
+function monthTableHtml(months, surface) {
+  const { years, year } = resolveMonthYear(months);
+  const now = new Date();
+  // Tahun lampau: Januari s.d. Desember. Tahun berjalan: Januari s.d.
+  // bulan berjalan (bulan depan tidak tampil).
+  const lastMonth = year < now.getFullYear() ? 11 : now.getMonth();
+  const byKey = {};
+  for (const e of months || []) byKey[e.year + '-' + e.month] = e;
+  const rows = [];
+  for (let m = 0; m <= lastMonth; m++) rows.push(byKey[year + '-' + m] || null);
+  // Ringkasan tahunan: total, rata-rata per bulan yang ditampilkan, bulan
+  // terbaik/terburuk di antara bulan yang ada trade-nya. Tanpa trade: "—".
+  const withTrades = rows.filter(Boolean);
+  const has = withTrades.length > 0;
+  const total = withTrades.reduce((a, e) => a + e.profit, 0);
+  const avg = has ? total / rows.length : null;
+  let best = null, worst = null;
+  for (const e of withTrades) {
+    if (!best || e.profit > best.profit) best = e;
+    if (!worst || e.profit < worst.profit) worst = e;
+  }
+  const profitCls = (v) => (v > 0 ? 'pips-pos' : v < 0 ? 'pips-neg' : '');
+  const sumCell = (label, val, cls) => `<div class="stat-cell"><div class="num mono ${cls}">${val}</div><div class="lbl">${esc(label)}</div></div>`;
+  const summary = `<div class="pstats" style="margin-top:12px">`
+    + sumCell(t('ppmSumTotal'), has ? esc(fmtUsd(total)) : '—', has ? profitCls(total) : '')
+    + sumCell(t('ppmSumAvg'), has ? esc(fmtUsd(avg)) : '—', has ? profitCls(avg) : '')
+    + sumCell(t('ppmSumBest') + (best ? ' · ' + monthNameShort(best.year, best.month) : ''), best ? esc(fmtUsd(best.profit)) : '—', best ? profitCls(best.profit) : '')
+    + sumCell(t('ppmSumWorst') + (worst ? ' · ' + monthNameShort(worst.year, worst.month) : ''), worst ? esc(fmtUsd(worst.profit)) : '—', worst ? profitCls(worst.profit) : '')
+    + `</div>`;
+  const body = (months || []).length === 0
+    ? `<tr><td colspan="5" style="color:var(--muted)">${esc(t('ppmNoTrades'))}</td></tr>`
+    : rows.map((e, m) => {
+        const mName = new Date(year, m, 1).toLocaleString(getLang() === 'en' ? 'en-US' : 'id-ID', { month: 'long', year: 'numeric' });
+        // R26: bulan tanpa trade tertutup tampil "—" (bukan $0.00).
+        if (!e) return `<tr><td class="mono" style="font-weight:700">${esc(mName)}</td><td class="num mono">—</td><td class="num mono">—</td><td class="num mono">0</td><td class="num mono">—</td></tr>`;
+        return `<tr><td class="mono" style="font-weight:700">${esc(mName)}</td>`
+          + `<td class="num mono ${e.profit >= 0 ? 'pips-pos' : 'pips-neg'}">${esc(fmtUsd(e.profit))}</td>`
+          + `<td class="num mono ${e.pips >= 0 ? 'pips-pos' : 'pips-neg'}">${e.pips >= 0 ? '+' : ''}${Math.round(e.pips)}</td>`
+          + `<td class="num mono">${e.trades}</td>`
+          + `<td class="num mono">${e.wr === null ? '—' : ds(e.wr.toFixed(1)) + '%'}</td></tr>`;
+      }).join('');
+  const yearOpts = years.length ? years.map((y) => [y, String(y)]) : [[year, String(year)]];
   return `<div class="chart-card"><h3>${esc(t('stMonthTitle'))}</h3><div class="sub">${esc(t('stMonthSub'))}</div>`
+    + `<div class="field" style="max-width:180px;margin:12px 0 0"><label>${esc(t('ppmYearLabel'))}</label>${dropdownHtml('month-year-' + surface, yearOpts, year)}</div>`
+    + summary
     + `<div class="board-wrap" style="box-shadow:none"><table class="board"><thead><tr><th>${esc(t('stThMonth'))}</th><th class="num">${esc(t('stThProfit'))}</th><th class="num">${esc(t('stThPips'))}</th><th class="num">${esc(t('stThTrades'))}</th><th class="num">${esc(t('stThWR'))}</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
+}
+// R29: ikat pemilih tahun tabel Profit Per Month; ganti tahun → render ulang permukaan.
+function bindMonthYear(surface, rerender) {
+  bindDropdown('month-year-' + surface);
+  const hidden = document.getElementById('month-year-' + surface);
+  if (hidden) hidden.addEventListener('change', () => {
+    S.monthYear = Number(hidden.value) || null;
+    rerender();
+  });
 }
 function pairTableHtml(s, subKey = 'stPairSub') {
   const rows = s.perPair.filter((e) => e.trades > 0);
@@ -2338,14 +2398,14 @@ function pairTableHtml(s, subKey = 'stPairSub') {
   return `<div class="chart-card"><h3>${esc(t('stPairTitle'))}</h3><div class="sub">${esc(t(subKey))}<span class="estbadge">${esc(t('estBadge'))}</span> <button class="guidelink" type="button" data-guide="risk">${esc(t('sigDetail'))} ${ICONS.arrow}</button></div>`
     + `<div class="board-wrap" style="box-shadow:none"><table class="board"><thead><tr><th>${esc(t('stThPair'))}</th><th class="num">${esc(t('stThTrades'))}</th><th class="num">${esc(t('stThWR'))}</th><th class="num">${esc(t('stThProfit'))}</th><th class="num">${esc(t('stThPF'))}</th><th class="num">${esc(t('stThTotalR'))}</th><th class="num">${esc(t('stThAvgR'))}</th><th class="num">${esc(t('stThAvgSL'))}</th><th class="num">${esc(t('stThAvgTP'))}</th><th class="num">${esc(t('stThStreak'))}</th><th class="num">${esc(t('stThMaxDD'))}</th><th class="num">${esc(t('stThRecovery'))}</th><th class="num">${esc(t('stThHold'))}</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
-function statsSectionHtml(s, titleKey, subKey = null, afterGridHtml = '') {
+function statsSectionHtml(s, titleKey, subKey = null, afterGridHtml = '', monthSurface = 'jurnal') {
   return `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t(titleKey))}</h2>`
     + (subKey ? `<p class="sub">${esc(t(subKey))}</p>` : '')
     + (s.closed === 0 ? `<div class="empty"><strong>${esc(t('stNoTrades'))}</strong></div>` : '')
     + statsGridHtml(s)
     + afterGridHtml
     + chartCardHtml(s)
-    + monthTableHtml(s.months)
+    + monthTableHtml(s.months, monthSurface)
     + pairTableHtml(s);
 }
 export function fmtDateShort(iso) {
@@ -3105,8 +3165,9 @@ function renderTraderProfileBody(traderId) {
     box.innerHTML = (st.closed === 0 ? `<div class="empty"><strong>${esc(t('stNoTrades'))}</strong></div>` : '')
       + statsGridHtml(st)
       + chartCardHtml(st)
-      + monthTableHtml(st.months)
+      + monthTableHtml(st.months, 'profile')
       + pairTableHtml(st, 'stPairSubAbove');
+    bindMonthYear('profile', () => renderTraderProfileBody(traderId));
     updateBoardScrollHints(box);
     return;
   }
@@ -3821,7 +3882,7 @@ function renderOfficeTraderTab(editing = null) {
           <div style="margin-top:12px;"><button class="btn primary compact" type="button" disabled>${esc(t('resetBtn'))}</button></div>
           <p class="note">${esc(t('resetSoonNote'))}</p>
         </div>`
-      + statsSectionHtml(st, 'officeStatsTitle');
+      + statsSectionHtml(st, 'officeStatsTitle', null, '', 'office');
     bindPhotoInput('trader-photo-input', 'trader');
     const trShare = $('#trader-share-btn');
     if (trShare) {
@@ -3872,6 +3933,7 @@ function renderOfficeTraderTab(editing = null) {
     }
     const balGuide = $('#bal-guide-link');
     if (balGuide) balGuide.addEventListener('click', () => openGuideSection('level'));
+    bindMonthYear('office', () => renderOfficeTraderTab());
     updateBoardScrollHints(box);
     return;
   }
@@ -4019,7 +4081,8 @@ function renderOfficeFollowerTab() {
     // 0 trade tertutup, statsSectionHtml sudah menampilkan "Belum ada
     // trade tertutup." sendiri. Isi Jurnal (statistik, chart, tabel
     // bulanan, tabel per-pair) tidak berubah.
-    box.innerHTML = statsSectionHtml(st, 'officeJournalStatsTitle', null, floatNote);
+    box.innerHTML = statsSectionHtml(st, 'officeJournalStatsTitle', null, floatNote, 'jurnal');
+    bindMonthYear('jurnal', () => renderOfficeFollowerTab());
     updateBoardScrollHints(box);
     return;
   }
