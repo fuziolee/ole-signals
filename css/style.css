@@ -217,7 +217,6 @@ button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visib
 .guidelink svg { width: 16px; height: 16px; flex: none; }
 .btn svg { width: 16px; height: 16px; flex: none; }
 .pill svg { width: 12px; height: 12px; vertical-align: -1px; }
-.lock svg { width: 12px; height: 12px; vertical-align: -1px; }
 .menurow .marrow { display: inline-flex; align-items: center; }
 .menurow .marrow svg { width: 16px; height: 16px; display: block; }
 .guide-sec .guide-sec-chev svg { width: 16px; height: 16px; display: block; }
@@ -926,10 +925,9 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
 /* ---- ronde 7: dekoratif + komponen baru (port prototipe) ---- */
 /* D58: tag emas XAUUSD */
 .sig-pair .goldtag, .goldtag { color: var(--gold); }
-/* D10: lencana langganan + label kunci + flag duplikat */
+/* D10: lencana langganan + flag duplikat (label kunci kartu dihapus R30) */
 .subbadge { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 8px; background: var(--gold-bg); color: var(--gold); }
 .subbadge.free { background: var(--panel-2); color: var(--muted); }
-.lock { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
 .dup-flag { font-size: 12.5px; color: var(--gold); background: var(--gold-bg); border-radius: 8px; padding: 6px 10px; margin-top: 8px; }
 .lvlbadge { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 8px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line-2); white-space: nowrap; }
 /* D10/D64: avatar + nama sebagai tombol profil */
