@@ -88,7 +88,7 @@ const S = {
   searchDraft: null,
   searchPfHidden: 0,
   feedFilter: { pair: 'ALL', status: 'ALL' },
-  guideOpen: loadGuideOpen(),
+  guideSub: null, // R30: sub-halaman Panduan: null = daftar, id = detail seksi
   helpGuideTab: 'guide', // sub-tab tampilan gabungan: 'guide' | 'help'
   editingId: null,
   editingVersion: null,
@@ -902,7 +902,16 @@ $$('#search-tabs [data-stab]').forEach((b) => {
     renderSearch();
   });
 });
-$('#btn-helpguide-back').addEventListener('click', () => showView('profile'));
+$('#btn-helpguide-back').addEventListener('click', () => {
+  // R30: di halaman detail Panduan, tombol kembali mengarah ke daftar
+  // Panduan dulu; di daftar, kembali ke Profil.
+  if (S.view === 'helpguide' && S.helpGuideTab === 'guide' && S.guideSub) {
+    S.guideSub = null;
+    renderHelpGuide();
+    return;
+  }
+  showView('profile');
+});
 $('#notif-bell').addEventListener('click', (e) => {
   e.stopPropagation();
   setNotifPanel(!S.notifOpen);
@@ -1109,19 +1118,6 @@ function pairHtml(pair) {
   // D58: XAUUSD memakai tag emas seperti prototipe.
   return pair === 'XAUUSD' ? `<span class="goldtag">${esc(pair)}</span>` : esc(pair);
 }
-function lockLabelHtml(sig, mine) {
-  // D10: PENDING = "Menunggu entry" / milik sendiri "Belum terkunci ·
-  // bisa diubah"; AKTIF/selesai = "Terkunci".
-  // R9-4: PENDING yang sudah dibagikan ikut terkunci (tidak bisa diubah) —
-  // labelnya menjelaskan alasannya.
-  if (sig.status === 'PENDING') {
-    if (mine && sig.shared_at) {
-      return `<span class="lock">${ICONS.lock} ${esc(t('lockShared'))}</span>`;
-    }
-    return `<span class="lock">${esc(mine ? t('lockUnlockedOwn') : t('lockWaiting'))}</span>`;
-  }
-  return `<span class="lock">${ICONS.lock} ${esc(t('locked'))}</span>`;
-}
 function signalCardHtml(sig) {
   const tr = traderOf(sig);
   const name = traderHandle(tr); // publik: hanya @username (ronde 5)
@@ -1239,7 +1235,7 @@ function signalCardHtml(sig) {
   const editedBadge = (sig.version && Number(sig.version) > 1)
     ? ` <span class="pill edited">${esc(t('editedBadge'))}</span>` : '';
   return `<article class="sig ${dirCls}" data-sig="${esc(sig.id)}" tabindex="0" role="button">
-    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><div class="right"><span class="lvlbadge">Level ${level} · ${esc(levelName(level, getLang()))}</span>${verified} ${subBadgeHtml(sig.trader_id)}${lockLabelHtml(sig, mine)}${statusPill(sig.status)}${editedBadge}</div></div>
+    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><div class="right"><span class="lvlbadge">Level ${level} · ${esc(levelName(level, getLang()))}</span>${verified} ${subBadgeHtml(sig.trader_id)}${statusPill(sig.status)}${editedBadge}</div></div>
     ${dupHtml}
     <div class="sig-head">
       <span class="sig-pair sig-pair-lg">${pairHtml(sig.pair)}</span>
@@ -3052,14 +3048,11 @@ function renderBoardList() {
   });
 }
 function openGuideSection(id) {
-  if (!S.guideOpen.includes(id)) { S.guideOpen.push(id); saveGuideOpen(); }
-  // Ronde 15 (#3): Panduan kini tab di dalam tampilan gabungan.
+  // R30: Panduan drill-in — buka langsung halaman detail seksi itu.
+  // Id tidak dikenal -> renderGuide jatuh kembali ke daftar.
+  S.guideSub = id || null;
   S.helpGuideTab = 'guide';
   showView('helpguide');
-  setTimeout(() => {
-    const sec = document.getElementById('guide-' + id);
-    if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 60);
 }
 
 // Profil trader sebagai HALAMAN PENUH (seperti prototipe), bukan modal.
@@ -4303,7 +4296,7 @@ async function renderProfile() {
   const photoBtn = $('#profile-photo-btn');
   if (photoBtn) photoBtn.addEventListener('click', () => { const inp = $('#profile-photo-input'); if (inp) inp.click(); });
   $('#menu-settings').addEventListener('click', () => { S.settingsSub = null; showView('settings'); });
-  $('#menu-helpguide').addEventListener('click', () => { S.helpGuideTab = 'guide'; showView('helpguide'); });
+  $('#menu-helpguide').addEventListener('click', () => { S.guideSub = null; S.helpGuideTab = 'guide'; showView('helpguide'); });
   $('#menu-logout').addEventListener('click', doLogout);
   const prowKyc = $('#prow-kyc');
   if (prowKyc) prowKyc.addEventListener('click', () => { S.profileSub = 'kyc'; renderProfile(); });
@@ -4698,6 +4691,9 @@ function renderHelpGuide() {
       b.addEventListener('click', () => { S.helpGuideTab = b.dataset.hgtab; renderHelpGuide(); });
     });
   }
+  // R30: label tombol kembali mengikuti konteks — di halaman detail
+  // Panduan, tombol kembali mengarah ke daftar Panduan.
+  syncHelpGuideBack();
   const g = $('#helpguide-guide');
   if (g) g.hidden = S.helpGuideTab !== 'guide';
   const h = $('#helpguide-help');
@@ -4706,6 +4702,16 @@ function renderHelpGuide() {
   // saat tab dibuka); petunjuk scroll tabel dihitung saat tab terlihat.
   renderGuide();
   renderHelp();
+}
+
+// R30: label tombol kembali tampilan Bantuan & Panduan mengikuti konteks
+// (daftar -> "Kembali ke Profil", detail seksi -> "Kembali ke Panduan").
+// Dipanggil dari renderHelpGuide() DAN renderGuide() — perubahan guideSub
+// terjadi lewat renderGuide() (klik baris / tombol kembali detail), jadi
+// sinkronisasi hanya di renderHelpGuide() tidak cukup.
+function syncHelpGuideBack() {
+  const hgBack = $('#btn-helpguide-back span');
+  if (hgBack) hgBack.textContent = (S.helpGuideTab === 'guide' && S.guideSub) ? t('backGuide') : t('backProfile');
 }
 
 function renderHelp() {
@@ -4771,33 +4777,73 @@ function renderHelp() {
 }
 
 // -------------------------------------------------------------- Panduan ---
-// Struktur mengikuti prototipe: seksi-seksi lengkap yang bisa
-// dibuka-tutup (details/summary). Kartu "Aturan inti" dihapus (U1) —
-// aturan lengkap sudah ada di dalam seksi-seksi Panduan.
-// Isi yang mengandung HTML (<p>, <strong>) dirender via innerHTML dari
-// kamus tepercaya (BUKAN esc()) — pola yang sama seperti prototipe.
+// R30: Panduan drill-in (pola R25 S.profileSub) — daftar 9 baris seksi;
+// klik baris masuk ke halaman detail seksi itu, tombol kembali ke daftar.
+// Kartu "Aturan inti" dihapus (U1) — aturan lengkap sudah ada di dalam
+// seksi-seksi Panduan.
+// Isi yang mengandung HTML (<p>, <strong>, <ul>) dirender via innerHTML
+// dari kamus tepercaya (BUKAN esc()) — pola yang sama seperti prototipe.
 const GUIDE_GLOSS = [['Entry', 'entry'], ['Stop Loss (SL)', 'sl'], ['Take Profit (TP)', 'tp'], ['Status sinyal', 'status'], ['Level', 'level'], ['Risiko', 'risk'], ['Saldo simulasi', 'balance'], ['Ikuti vs Langganan', 'sub'], ['Terverifikasi', 'verified'], ['Peringkat', 'board'], ['R-multiple (R)', 'r'], ['Recovery Factor', 'rf'], ['Drawdown', 'dd'], ['Compounding', 'comp'], ['Profit Factor', 'pf'], ['Win rate', 'wr'], ['R:R (risk : reward)', 'rr'], ['Pips', 'pips'], ['Streak', 'streak'], ['Holding period', 'hold'], ['Lot', 'lot'], ['Floating', 'floating']];
 
-// Seksi Panduan yang terbuka disimpan supaya tetap terbuka setelah reload.
-function loadGuideOpen() {
-  try {
-    const v = JSON.parse(localStorage.getItem('ole-guide-open') || '[]');
-    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
-  } catch (e) { return []; }
-}
-function saveGuideOpen() {
-  try { localStorage.setItem('ole-guide-open', JSON.stringify(S.guideOpen)); } catch (e) { /* abaikan */ }
-}
+// R30: daftar 9 seksi Panduan (urutan sama seperti accordion lama).
+const GUIDE_SECS = [
+  { id: 'signal', titleKey: 'guideSecSignal' },
+  { id: 'level', titleKey: 'guideSecLevel' },
+  { id: 'board', titleKey: 'guideSecBoard' },
+  { id: 'risk', titleKey: 'guideSecRisk' },
+  { id: 'subs', titleKey: 'guideSecSubs' },
+  { id: 'share', titleKey: 'guideSecShare' },
+  { id: 'reset', titleKey: 'guideSecReset' },
+  { id: 'acct', titleKey: 'guideSecAcct' },
+  { id: 'gloss', titleKey: 'guideSecGloss' },
+];
 
-function guideSectionHtml(id, title, bodyHtml) {
-  const open = S.guideOpen.includes(id) ? ' open' : '';
-  return `<details class="card guide-sec" id="guide-${id}"${open}><summary class="guide-sec-sum"><h3>${esc(title)}</h3><span class="guide-sec-chev" aria-hidden="true">${ICONS.chevD}</span></summary><div class="more-body">${bodyHtml}</div></details>`;
+// R30: isi tiap seksi Panduan — pindah utuh dari accordion ke halaman
+// detail. Key isi yang berupa HTML mandiri (<p>/<ul>/<ol>) dirender tanpa
+// pembungkus <p> tambahan; key teks polos dibungkus <p> di sini.
+function guideSectionBody(id) {
+  if (id === 'signal') {
+    const flow = `<div class="flow" role="img" aria-label="PENDING → ${esc(t('flowLocked'))} → WIN / LOSS">`
+      + `<span class="fstep"><b>PENDING</b><i>${esc(t('flowPendingSub'))}</i></span><span class="farr" aria-hidden="true">${ICONS.arrow}</span>`
+      + `<span class="fstep"><b>${esc(t('flowLocked'))}</b><i>${esc(t('flowLockedSub'))}</i></span><span class="farr" aria-hidden="true">${ICONS.arrow}</span>`
+      + `<span class="fstep win"><b>WIN / LOSS</b><i>${esc(t('flowResultSub'))}</i></span></div>`;
+    return flow + `<p>${t('heroDetail1')}</p><p>${t('heroDetail2')}</p><p>${t('formLockDetail')}</p><p>${t('guideRRRule')}</p><p>${t('guideExpiry')}</p>` + t('guideDupRule');
+  }
+  if (id === 'level') {
+    // Tangga pangkat lengkap (dihitung dari rumus tangga tetap $10.000).
+    let ladderRows = '';
+    for (let ln = 1; ln <= 24; ln++) {
+      const refLn = levelRef(ln);
+      ladderRows += `<tr><td class="lvlcell mono">L${ln}</td><td class="rankname">${esc(levelName(ln, getLang()))}</td>`
+        + `<td class="num mono">${esc(fmtUsdTable(refLn))}</td><td class="num mono">${esc(fmtUsdTable(refLn - START_BALANCE_USD))}</td>`
+        + `<td>${ln === 1 ? esc(t('ladStart')) : esc(t('ladRStep'))}</td></tr>`;
+    }
+    const ladder = `<p>${t('ladIntro')}</p>`
+      + `<div class="lvltable-wrap"><table class="lvltable"><thead><tr><th>${esc(t('ladColLevel'))}</th><th>${esc(t('ladColRank'))}</th><th class="num">${esc(t('ladColRef'))}</th><th class="num">${esc(t('ladColProfit'))}</th><th>${esc(t('ladColR'))}</th></tr></thead><tbody>${ladderRows}</tbody></table></div>`
+      + `<p>${t('ladBeyond', { a: levelName(25, getLang()), b: levelName(26, getLang()) })}</p>`;
+    return ladder + t('boardD2') + t('boardD3') + t('boardD4') + t('lvlRulesDetail') + t('lvlRulesDetail2')
+      + `<p>${t('guideOverRiskRule')}</p>` + t('boardD7') + `<p>${t('guideRefFixed')}</p><p>${t('guideMinTrades')}</p>`;
+  }
+  if (id === 'board') return t('boardD1');
+  if (id === 'risk') return t('guideRisk1') + t('guideRisk2') + t('guideRisk3');
+  if (id === 'subs') {
+    return t('boardD6') + t('boardD5') + t('guideVerified') + t('guideShareSplit')
+      + `<p>${t('guidePriceChange')}</p><p>${t('guideWithdrawName')}</p>` + t('guideWithdraw') + `<p>${t('guideKycWithdraw')}</p>`;
+  }
+  if (id === 'share') return t('guideShareBody');
+  if (id === 'reset') return t('guideResetBody') + `<p>${t('guideInactivity')}</p>`;
+  if (id === 'acct') return t('guideAcctRules') + t('guideKycRules');
+  if (id === 'gloss') {
+    return `<p style="margin:0 0 10px;">${esc(t('guideGlossSub'))}</p><div class="gloss-grid">`
+      + GUIDE_GLOSS.map(([label, g]) => `<div class="gloss-item"><b>${esc(label)}</b><span>${esc(t('gloss_' + g))}</span></div>`).join('') + '</div>';
+  }
+  return '';
 }
 
 // Petunjuk scroll tabel pangkat di layar kecil: bayangan tepi kanan hanya
 // bila tabel benar-benar lebih lebar dari wadahnya (di layar lebar tidak muncul).
 function updateLvlTableScrollHint() {
-  const wrap = document.querySelector('#guide-level .lvltable-wrap');
+  const wrap = document.querySelector('#guide-sections .lvltable-wrap');
   if (!wrap) return;
   wrap.classList.toggle('scrollable', wrap.scrollWidth > wrap.clientWidth + 1);
 }
@@ -4809,56 +4855,32 @@ function updateBoardScrollHints(root = document) {
   });
 }
 window.addEventListener('resize', () => {
-  const lvlSec = $('#guide-level');
-  if (lvlSec && lvlSec.open) updateLvlTableScrollHint();
+  updateLvlTableScrollHint();
   updateBoardScrollHints();
 });
 
 function renderGuide() {
   const secs = $('#guide-sections');
   if (!secs) return;
-  const flow = `<div class="flow" role="img" aria-label="PENDING → ${esc(t('flowLocked'))} → WIN / LOSS">`
-    + `<span class="fstep"><b>PENDING</b><i>${esc(t('flowPendingSub'))}</i></span><span class="farr" aria-hidden="true">${ICONS.arrow}</span>`
-    + `<span class="fstep"><b>${esc(t('flowLocked'))}</b><i>${esc(t('flowLockedSub'))}</i></span><span class="farr" aria-hidden="true">${ICONS.arrow}</span>`
-    + `<span class="fstep win"><b>WIN / LOSS</b><i>${esc(t('flowResultSub'))}</i></span></div>`;
-  // Tangga pangkat lengkap (dihitung dari rumus tangga tetap $10.000).
-  let ladderRows = '';
-  for (let ln = 1; ln <= 24; ln++) {
-    const refLn = levelRef(ln);
-    ladderRows += `<tr><td class="lvlcell mono">L${ln}</td><td class="rankname">${esc(levelName(ln, getLang()))}</td>`
-      + `<td class="num mono">${esc(fmtUsdTable(refLn))}</td><td class="num mono">${esc(fmtUsdTable(refLn - START_BALANCE_USD))}</td>`
-      + `<td>${ln === 1 ? esc(t('ladStart')) : esc(t('ladRStep'))}</td></tr>`;
-  }
-  const ladder = `<p>${t('ladIntro')}</p>`
-    + `<div class="lvltable-wrap"><table class="lvltable"><thead><tr><th>${esc(t('ladColLevel'))}</th><th>${esc(t('ladColRank'))}</th><th class="num">${esc(t('ladColRef'))}</th><th class="num">${esc(t('ladColProfit'))}</th><th>${esc(t('ladColR'))}</th></tr></thead><tbody>${ladderRows}</tbody></table></div>`
-    + `<p>${t('ladBeyond', { a: levelName(25, getLang()), b: levelName(26, getLang()) })}</p>`;
-  const glossGrid = `<p style="margin:0 0 10px;">${esc(t('guideGlossSub'))}</p><div class="gloss-grid">`
-    + GUIDE_GLOSS.map(([label, g]) => `<div class="gloss-item"><b>${esc(label)}</b><span>${esc(t('gloss_' + g))}</span></div>`).join('') + '</div>';
-  secs.innerHTML =
-    guideSectionHtml('signal', t('guideSecSignal'),
-      flow + `<p>${t('heroDetail1')}</p><p>${t('heroDetail2')}</p><p>${t('formLockDetail')}</p><p>${t('guideRRRule')}</p><p>${t('guideExpiry')}</p><p>${t('guideDupRule')}</p>`)
-    + guideSectionHtml('level', t('guideSecLevel'),
-      ladder + `<p>${t('boardD2')}</p><p>${t('boardD3')}</p><p>${t('boardD4')}</p>` + t('lvlRulesDetail') + t('lvlRulesDetail2') + `<p>${t('guideOverRiskRule')}</p><p>${t('boardD7')}</p><p>${t('guideRefFixed')}</p><p>${t('guideMinTrades')}</p>`)
-    + guideSectionHtml('board', t('guideSecBoard'), `<p>${t('boardD1')}</p>`)
-    + guideSectionHtml('risk', t('guideSecRisk'), t('guideRisk1') + t('guideRisk2') + t('guideRisk3'))
-    + guideSectionHtml('subs', t('guideSecSubs'),
-      `<p>${t('boardD6')}</p><p>${t('boardD5')}</p>` + t('guideVerified') + t('guideShareSplit')
-      + `<p>${esc(t('guidePriceChange'))}</p><p>${esc(t('guideWithdrawName'))}</p>` + t('guideWithdraw') + `<p>${esc(t('guideKycWithdraw'))}</p>`)
-    + guideSectionHtml('share', t('guideSecShare'), t('guideShareBody'))
-    + guideSectionHtml('reset', t('guideSecReset'), `<p>${esc(t('guideResetBody'))}</p><p>${esc(t('guideInactivity'))}</p>`)
-    + guideSectionHtml('acct', t('guideSecAcct'), `<p>${esc(t('guideAcctRules'))}</p><p>${esc(t('guideKycRules'))}</p>`)
-    + guideSectionHtml('gloss', t('guideSecGloss'), glossGrid);
-  // Ingat seksi yang terbuka supaya tetap terbuka saat kembali ke Panduan.
-  $$('#guide-sections details').forEach((d) => {
-    d.addEventListener('toggle', () => {
-      const id = d.id.replace('guide-', '');
-      S.guideOpen = S.guideOpen.filter((x) => x !== id);
-      if (d.open) S.guideOpen.push(id);
-      saveGuideOpen();
+  syncHelpGuideBack();
+  // R30: halaman detail — isi seksi pindah utuh ke sini.
+  if (S.guideSub) {
+    const sec = GUIDE_SECS.find((s) => s.id === S.guideSub);
+    if (sec) {
+      secs.innerHTML = `<button class="btn backbtn" id="guide-sub-back" type="button">${esc(t('backGuide'))}</button>`
+        + `<div class="page-head"><h2>${esc(t(sec.titleKey))}</h2></div>`
+        + `<div class="card guide-sec"><div class="more-body">${guideSectionBody(sec.id)}</div></div>`;
+      $('#guide-sub-back').addEventListener('click', () => { S.guideSub = null; renderGuide(); });
       updateLvlTableScrollHint();
-    });
+      return;
+    }
+    S.guideSub = null;
+  }
+  // Daftar 9 baris seksi (gaya .prow seperti menu Profil).
+  secs.innerHTML = GUIDE_SECS.map((s) => `<button type="button" class="prow" data-guide-sec="${s.id}"><span class="lbl">${esc(t(s.titleKey))}</span><span class="ch">${ICONS.chevR}</span></button>`).join('');
+  $$('#guide-sections [data-guide-sec]').forEach((b) => {
+    b.addEventListener('click', () => { S.guideSub = b.dataset.guideSec; renderGuide(); });
   });
-  updateLvlTableScrollHint();
 }
 
 // ------------------------------------------------------- verifikasi /v/ ---
