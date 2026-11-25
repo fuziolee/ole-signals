@@ -39,6 +39,10 @@ const ICONS = {
   chevR: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
   arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>',
   copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  // R24: ikon baris Profil (SVG dari file preview yang disetujui).
+  sliders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7.5h9"/><path d="M17.5 7.5H20"/><circle cx="15" cy="7.5" r="2.2"/><path d="M4 16.5h3.5"/><path d="M12 16.5h8"/><circle cx="9.5" cy="16.5" r="2.2"/></svg>',
+  book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5Z"/><path d="M4 18V5.5"/><path d="M20 18H6.5A2.5 2.5 0 0 0 4 20.5"/></svg>',
+  logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3"/><path d="m16 16.5 5-4.5-5-4.5"/><path d="M21 12H9.5"/></svg>',
 };
 
 // ---------------------------------------------------------------- state ---
@@ -2372,10 +2376,15 @@ function bindJournalRows(root) {
     b.addEventListener('click', async () => {
       try {
         const copyId = b.dataset.uncopy;
+        // R24 item 5: konfirmasi dulu sebelum hapus — penghapusan langsung
+        // tanpa dialog pernah jadi laporan user (09:05 WIB).
+        const copy = S.myCopies.find((c) => c.id === copyId);
+        const sig = copy ? findSignal(copy.signal_id) : null;
+        const yes = await confirmDialog(t('confirmUncopyTitle'), t('confirmUncopyBody', { sig: sig ? `${sig.pair} ${sig.direction} ${sig.entry}` : '—' }), t('yesDelete'));
+        if (!yes) return;
         // Ronde 8b (a): hapus salinan dari state lokal SEBELUM render
         // ulang — kalau tidak, kartu sinyal tetap menampilkan
         // "Sudah disalin" karena S.copiedIds masih berisi id sinyalnya.
-        const copy = S.myCopies.find((c) => c.id === copyId);
         await api.uncopy(copyId);
         if (copy) S.copiedIds.delete(copy.signal_id);
         S.myCopies = S.myCopies.filter((c) => c.id !== copyId);
@@ -2685,8 +2694,53 @@ function renderSearchList() {
   bindFollowSubscribe(list);
 }
 
-function searchFilterOptions(values, current) {
-  return values.map(([v, label]) => `<option value="${v}"${String(current) === String(v) ? ' selected' : ''}>${esc(label)}</option>`).join('');
+// R24: dropdown kustom pengganti <select> native — picker OS tidak bisa
+// di-style, jadi nilai disimpan di <input type="hidden" id> yang sama dan
+// tampilannya dirender sebagai tombol pil + popup opsi (bahasa R22/R23).
+// Kode lama yang membaca $('#id').value tetap bekerja; saat opsi dipilih,
+// dropdown mengeset hidden value lalu me-dispatch event change + input,
+// sehingga listener lama (filter Cari, refreshRiskBox form) tetap menyala.
+function dropdownHtml(id, options, current) {
+  const cur = options.find(([v]) => String(v) === String(current)) || options[0] || ['', ''];
+  const curV = String(cur[0]);
+  return `<input type="hidden" id="${id}" value="${esc(curV)}">`
+    + `<div class="dd" data-dd="${id}"><button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="dd-val">${esc(cur[1])}</span><span class="dd-chev">${ICONS.chevD}</span></button>`
+    + `<div class="dd-pop" role="listbox" hidden>${options.map(([v, l, dis]) => `<button type="button" class="dd-opt" role="option" data-v="${esc(String(v))}" data-lbl="${esc(l)}" aria-selected="${String(v) === curV}"${dis ? ' disabled' : ''}><span>${esc(l)}</span><span class="dd-check">${ICONS.check}</span></button>`).join('')}</div></div>`;
+}
+function closeAllDropdowns() {
+  document.querySelectorAll('.dd-pop').forEach((p) => { p.hidden = true; });
+  document.querySelectorAll('.dd-btn').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+}
+function bindDropdown(id) {
+  const wrap = document.querySelector(`[data-dd="${id}"]`);
+  if (!wrap) return;
+  const btn = wrap.querySelector('.dd-btn');
+  const pop = wrap.querySelector('.dd-pop');
+  const hidden = document.getElementById(id);
+  if (!btn || !pop || !hidden) return;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = pop.hidden;
+    closeAllDropdowns();
+    if (willOpen) { pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); }
+  });
+  pop.querySelectorAll('.dd-opt').forEach((opt) => {
+    opt.addEventListener('click', () => {
+      const v = opt.dataset.v;
+      hidden.value = v;
+      wrap.querySelector('.dd-val').textContent = opt.dataset.lbl;
+      pop.querySelectorAll('.dd-opt').forEach((o) => o.setAttribute('aria-selected', String(o === opt)));
+      closeAllDropdowns();
+      hidden.dispatchEvent(new Event('input', { bubbles: true }));
+      hidden.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+}
+// Sekali saja (di boot): klik di luar / Escape menutup popup dropdown.
+if (!window.__ddGlobalBound) {
+  window.__ddGlobalBound = true;
+  document.addEventListener('click', (e) => { if (!e.target.closest('.dd')) closeAllDropdowns(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAllDropdowns(); });
 }
 function renderSearchControls() {
   const controls = $('#search-controls');
@@ -2697,22 +2751,21 @@ function renderSearchControls() {
   const d = S.searchDraft;
   // B2-09: 11 pair (sama dengan form + is_allowed_pair + strip feed).
   const pairs = ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'GBPJPY', 'AUDUSD', 'USDCHF', 'NZDUSD', 'USDCAD', 'EURJPY', 'EURGBP'];
-  const pairOpts = `<option value="ALL">${esc(t('optAllPairs'))}</option>` + pairs.map((p) => `<option value="${p}"${d.pair === p ? ' selected' : ''}>${p}</option>`).join('');
-  const topPairOpts = `<option value="ALL">${esc(t('optAllPairs'))}</option>` + pairs.map((p) => `<option value="${p}"${d.topPair === p ? ' selected' : ''}>${p}</option>`).join('');
+  const pairOptions = [['ALL', t('optAllPairs')], ...pairs.map((p) => [p, p])];
   controls.innerHTML = `<div class="search-grid">
     <div class="field"><label>${esc(t('searchNameLabel'))}</label><input id="search-q" type="search" placeholder="${esc(t('searchPh'))}" value="${esc(d.q)}" aria-label="${esc(t('searchPh'))}" /></div>
-    <div class="field"><label>${esc(t('searchFilterPair'))}</label><select id="search-pair">${pairOpts}</select></div>
-    <div class="field"><label>${esc(t('searchFilterTopPair'))}</label><select id="search-top-pair">${topPairOpts}</select></div>
-    <div class="field"><label>${esc(t('sortBy'))}</label><select id="search-sort">${searchFilterOptions([
+    <div class="field"><label>${esc(t('searchFilterPair'))}</label>${dropdownHtml('search-pair', pairOptions, d.pair)}</div>
+    <div class="field"><label>${esc(t('searchFilterTopPair'))}</label>${dropdownHtml('search-top-pair', pairOptions, d.topPair)}</div>
+    <div class="field"><label>${esc(t('sortBy'))}</label>${dropdownHtml('search-sort', [
       ['wr', t('sortWr')], ['profit', t('sortProfit')], ['followers', t('sortFollowers')], ['rf', t('sortRf')],
       ['totalr', t('sortTotalR')], ['level', t('sortLevel')],
-    ], d.sort)}</select></div>
-    <div class="field"><label>${esc(t('searchFilterWrMin'))}</label><select id="search-wr-min">${searchFilterOptions([[0, t('feedFilterAll')], [50, '≥ 50%'], [55, '≥ 55%'], [60, '≥ 60%'], [65, '≥ 65%']], d.wrMin)}</select></div>
-    <div class="field"><label>${esc(t('searchFilterRrMin'))}</label><select id="search-rr-min">${searchFilterOptions([[0, t('feedFilterAll')], [1.5, '≥ 1:1,5'], [2, '≥ 1:2'], [2.5, '≥ 1:2,5']], d.rrMin)}</select></div>
-    <div class="field"><label>${esc(t('searchFilterPfMin'))}</label><select id="search-pf-min">${searchFilterOptions([[0, t('feedFilterAll')], [1, '≥ 1,0'], [1.5, '≥ 1,5'], [2, '≥ 2,0'], [3, '≥ 3,0']], d.pfMin)}</select></div>
-    <div class="field"><label>${esc(t('searchFilterLevelMin'))}</label><select id="search-level-min">${searchFilterOptions([[1, t('optAllLevels')], [2, `≥ Level 2 · ${levelName(2, getLang())}`], [3, `≥ Level 3 · ${levelName(3, getLang())}`], [4, `≥ Level 4 · ${levelName(4, getLang())}`], [5, `≥ Level 5 · ${levelName(5, getLang())}`]], d.levelMin)}</select></div>
-    <div class="field"><label>${esc(t('searchFilterPrice'))}</label><select id="search-price">${searchFilterOptions([['all', t('feedFilterAll')], ['free', t('searchPriceFree')], ['paid', t('searchPricePaid')]], d.price)}</select></div>
-    <div class="field"><label>${esc(t('searchFilterRfMin'))}</label><select id="search-rf-min">${searchFilterOptions([[0, t('feedFilterAll')], [3, '≥ 3x'], [5, '≥ 5x'], [8, '≥ 8x']], d.rfMin)}</select></div>
+    ], d.sort)}</div>
+    <div class="field"><label>${esc(t('searchFilterWrMin'))}</label>${dropdownHtml('search-wr-min', [[0, t('feedFilterAll')], [50, '≥ 50%'], [55, '≥ 55%'], [60, '≥ 60%'], [65, '≥ 65%']], d.wrMin)}</div>
+    <div class="field"><label>${esc(t('searchFilterRrMin'))}</label>${dropdownHtml('search-rr-min', [[0, t('feedFilterAll')], [1.5, '≥ 1:1,5'], [2, '≥ 1:2'], [2.5, '≥ 1:2,5']], d.rrMin)}</div>
+    <div class="field"><label>${esc(t('searchFilterPfMin'))}</label>${dropdownHtml('search-pf-min', [[0, t('feedFilterAll')], [1, '≥ 1,0'], [1.5, '≥ 1,5'], [2, '≥ 2,0'], [3, '≥ 3,0']], d.pfMin)}</div>
+    <div class="field"><label>${esc(t('searchFilterLevelMin'))}</label>${dropdownHtml('search-level-min', [[1, t('optAllLevels')], [2, `≥ Level 2 · ${levelName(2, getLang())}`], [3, `≥ Level 3 · ${levelName(3, getLang())}`], [4, `≥ Level 4 · ${levelName(4, getLang())}`], [5, `≥ Level 5 · ${levelName(5, getLang())}`]], d.levelMin)}</div>
+    <div class="field"><label>${esc(t('searchFilterPrice'))}</label>${dropdownHtml('search-price', [['all', t('feedFilterAll')], ['free', t('searchPriceFree')], ['paid', t('searchPricePaid')]], d.price)}</div>
+    <div class="field"><label>${esc(t('searchFilterRfMin'))}</label>${dropdownHtml('search-rf-min', [[0, t('feedFilterAll')], [3, '≥ 3x'], [5, '≥ 5x'], [8, '≥ 8x']], d.rfMin)}</div>
   </div>
   <div class="search-actions">
     <button class="btn primary btn-go" id="search-apply" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> ${esc(t('searchBtn'))}</button>
@@ -2737,6 +2790,9 @@ function renderSearchControls() {
   ['search-pair', 'search-top-pair', 'search-sort', 'search-wr-min', 'search-rr-min', 'search-pf-min', 'search-level-min', 'search-price', 'search-rf-min'].forEach((id) => {
     $('#' + id).addEventListener('change', () => { readDraft(); applySearchDraft(); });
   });
+  // R24: dropdown kustom — klik opsi me-dispatch 'change' pada hidden input
+  // di atas, jadi filter tetap menyaring langsung seperti select lama.
+  ['search-pair', 'search-top-pair', 'search-sort', 'search-wr-min', 'search-rr-min', 'search-pf-min', 'search-level-min', 'search-price', 'search-rf-min'].forEach(bindDropdown);
   let searchDebounce = null;
   $('#search-q').addEventListener('input', () => {
     clearTimeout(searchDebounce);
@@ -2820,7 +2876,7 @@ function boardCardHtml(row, rank) {
     <div class="board-stats">
       <div class="bs"><b class="${st.totalUSD >= 0 ? 'pips-pos' : 'pips-neg'}">${esc(fmtUsd(st.totalUSD, true))}</b><small>${esc(t('thProfit'))}</small></div>
       <div class="bs"><b>${esc(fmtR(st.totalR))}</b><small>${esc(t('stTotalRNet'))}</small></div>
-      <div class="bs"><b>${st.drawdown.usd > 0 ? '-' + esc(fmtUsd(st.drawdown.usd)) + ` (${ds(st.drawdown.pct.toFixed(1))}%)` : '—'}</b><small>${esc(t('thMaxDD'))}</small></div>
+      <div class="bs"><b class="${st.drawdown.usd > 0 ? 'pips-neg' : ''}">${st.drawdown.usd > 0 ? '-' + esc(fmtUsd(st.drawdown.usd)) + ` (${ds(st.drawdown.pct.toFixed(1))}%)` : '—'}</b><small>${esc(t('thMaxDD'))}</small></div>
       <div class="bs"><b>${fmtPf(st.pf)}</b><small>${esc(t('thPF'))}</small></div>
       <div class="bs"><b>${fmtRf(st.recovery)}</b><small>${esc(t('thRecovery'))}</small></div>
       <div class="bs"><b>${st.totalSignals}</b><small>${esc(t('thSignals'))}</small></div>
@@ -3178,7 +3234,7 @@ async function renderRightPanel() {
     + row(t('stWinRate'), t('rpClosedSub', { n: st.closed }), has ? `${st.wr.toFixed(0)}%` : '—')
     + row(t('stTotalRNet'), '', has ? fmtR(st.totalR) : '—', st.totalR >= 0 ? 'pips-pos' : 'pips-neg')
     + row(t('stTotalProfitUSD'), '', has ? fmtUsd(st.totalUSD) : '—', st.totalUSD >= 0 ? 'pips-pos' : 'pips-neg')
-    + row(t('stMaxDDShort'), '', has ? `−${fmtUsd(st.drawdown.usd)}` : '—')
+    + row(t('stMaxDDShort'), '', has ? `−${fmtUsd(st.drawdown.usd)}` : '—', st.drawdown.usd > 0 ? 'pips-neg' : '')
     + row(t('rpTotalSignals'), t('stTotalSignalsOpen', { n: st.active }), String(st.totalSignals))
     + row(t('stProfitFactor'), '', has ? fmtPf(st.pf) : '—')
     + row(t('stRecovery'), '', has ? fmtRf(st.recovery) : '—')
@@ -3200,7 +3256,6 @@ async function renderRightPanel() {
 
 function signalFormHtml(editing) {
   const sig = editing || null;
-  const pairOpts = PAIRS.map((p) => `<option value="${p}"${sig && sig.pair === p ? ' selected' : ''}>${p}</option>`).join('');
   // R9-6: username trader wajib dibuat sebelum posting (prototipe
   // paintPostUsernameWarn) — banner + tombol submit dinonaktifkan supaya
   // pengguna tidak mengisi form dengan sia-sia.
@@ -3213,7 +3268,7 @@ function signalFormHtml(editing) {
       <div class="fgrid">
         <div class="field">
           <label for="sf-pair">${esc(t('formPairLbl'))}</label>
-          <select id="sf-pair">${pairOpts}</select>
+          ${dropdownHtml('sf-pair', PAIRS.map((p) => [p, p]), sig ? sig.pair : null)}
         </div>
         <div class="field">
           <label>${esc(t('direction'))}</label>
@@ -3328,6 +3383,7 @@ function bindSignalForm(editing) {
   ['sf-pair', 'sf-entry', 'sf-sl', 'sf-tp', 'sf-lot'].forEach((id) => {
     $('#' + id).addEventListener('input', refreshRiskBox);
   });
+  bindDropdown('sf-pair'); // R24: klik opsi me-dispatch 'input' → refreshRiskBox
   refreshRiskBox();
   const cancelEdit = $('#sf-cancel-edit');
   if (cancelEdit) {
@@ -3604,14 +3660,14 @@ function traderIdentityCardHtml() {
         <div style="font-size:13px; color:var(--muted);">Level ${level} · ${esc(levelName(level, getLang()))} · ${subLabel}</div>
       </div>
       <button class="iconbtn" id="trader-share-btn" type="button" aria-label="${esc(t('shareTrader'))}">${ICONS.share}</button>
-      <label class="iconbtn" for="trader-photo-input" title="${esc(t('photoChangeTrader'))}" style="cursor:pointer;">${ICONS.camera}</label>
-    </div>
-    <div class="avatar-edit">
       <input type="file" id="trader-photo-input" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+      <label class="iconbtn" for="trader-photo-input" title="${esc(t('photoChangeTrader'))}" style="cursor:pointer;">${ICONS.camera}</label>
       ${avUrl && !uploadDraft ? `<button class="iconbtn trashbtn" id="trader-photo-del" type="button" aria-label="${esc(t('photoRemoveTrader'))}" title="${esc(t('photoRemoveTrader'))}">${ICONS.trash}</button>` : ''}
-      ${draftDel ? `<span class="note">${esc(t('photoRemoveDraft'))}</span>` : ''}
-      ${uploadDraft || draftDel ? `<button class="btn primary" id="trader-photo-done" type="button">${esc(t('doneBtn'))}</button><button class="btn" id="trader-photo-cancel" type="button">${esc(t('cancel'))}</button>` : ''}
     </div>
+    ${draftDel || uploadDraft ? `<div class="avatar-edit">
+      ${draftDel ? `<span class="note">${esc(t('photoRemoveDraft'))}</span>` : ''}
+      <button class="btn primary" id="trader-photo-done" type="button">${esc(t('doneBtn'))}</button><button class="btn" id="trader-photo-cancel" type="button">${esc(t('cancel'))}</button>
+    </div>` : ''}
   </div>`;
 }
 
@@ -4013,9 +4069,22 @@ function openKycFlow() {
 }
 
 // -------------------------------------------------------------- Profil ---
-// Struktur mengikuti prototipe: kepala profil + kartu KYC + Detail akun +
-// baris menu (Pengaturan, Bantuan, Panduan, Keluar). Pengaturan adalah
-// sub-halaman sendiri (view-settings), bukan tumpukan kartu di sini.
+// R24: susunan mengikuti preview yang disetujui (Pratinjau_Klik_Hidup.html):
+// kepala profil (avatar + nama + "@username · Wilayah") lalu baris-baris
+// menu (.prow): Verifikasi KYC + Detail akun (lipat, panel di bawah baris),
+// Pengaturan, Bantuan & Panduan. Status KYC TIDAK hilang — jadi baris
+// pertama dengan panel lipat berisi isi kartu KYC lama. Baris Keluar tetap
+// hanya <900px (class logout-mobile). Pengaturan adalah sub-halaman sendiri
+// (view-settings), bukan tumpukan kartu di sini.
+// R24: baris Profil yang bisa dilipat (KYC + Detail akun).
+function toggleProw(btnId, panelId) {
+  const btn = document.getElementById(btnId);
+  const panel = document.getElementById(panelId);
+  if (!btn || !panel) return;
+  const open = panel.hidden;
+  panel.hidden = !open;
+  btn.setAttribute('aria-expanded', String(open));
+}
 async function renderProfile() {
   const body = $('#profile-body');
   const p = S.profile || {};
@@ -4023,6 +4092,7 @@ async function renderProfile() {
   const displayName = p.display_name || p.username || S.user?.email || '—';
   const kycStatus = p.kyc_status || 'none';
   const kycVerified = kycStatus === 'verified';
+  const kycSub = kycVerified ? t('kycVerified') : kycStatus === 'rejected' ? t('kycRejected') : t('kycNotVerified');
   // D63: ID akun SM-XXXX-XXXX (4 + 4 karakter dari UUID tanpa tanda hubung).
   const uidHex = String(S.user?.id || '').replace(/-/g, '').toUpperCase();
   const uid = 'SM-' + uidHex.slice(0, 4) + '-' + uidHex.slice(4, 8);
@@ -4031,14 +4101,15 @@ async function renderProfile() {
       ${avatarImg(displayName, S.user.id, S.photoDraft.profile ? null : (S.photoUploadPreview.profile || p.avatar_url), 'avatar-lg')}
       <div class="profile-id">
         <div class="profile-name">${esc(displayName)}</div>
+        <div class="profile-user">${username} · Indonesia</div>
       </div>
       <button class="iconbtn" id="profile-photo-btn" type="button" aria-label="${esc(t('photoChange'))}">${ICONS.camera}</button>
       <input type="file" id="profile-photo-input" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
       ${p.avatar_url && !S.photoDraft.profile && !S.photoUploadDraft.profile ? `<button class="iconbtn trashbtn" id="profile-photo-del" type="button" aria-label="${esc(t('photoRemove'))}" title="${esc(t('photoRemove'))}">${ICONS.trash}</button>` : ''}
     </div>
     ${S.photoUploadDraft.profile || S.photoDraft.profile ? `<div class="avatar-edit" style="margin-top:10px;">${S.photoDraft.profile ? `<span class="note">${esc(t('photoRemoveDraft'))}</span>` : ''}<button class="btn primary" id="profile-photo-done" type="button">${esc(t('doneBtn'))}</button><button class="btn" id="profile-photo-cancel" type="button">${esc(t('cancel'))}</button></div>` : ''}
-    <div class="subcard kyc-card">
-      <h3>${esc(t('kycTitle'))}</h3>
+    <button type="button" class="prow" id="prow-kyc" aria-expanded="false"><span class="ic">${ICONS.lock}</span><span class="lbl">${esc(t('kycTitle'))}<span class="sub">${esc(kycSub)}</span></span><span class="ch">${ICONS.chevR}</span></button>
+    <div class="prow-panel" id="panel-kyc" hidden>
       <div class="kyc-row">${kycVerified
         ? `<span class="stchip ok">${esc(t('kycVerified'))}</span>${p.kyc_full_name ? `<span>${esc(p.kyc_full_name)}</span>` : ''}${p.kyc_reference ? `<span class="kyc-ref mono">${esc(t('kycRef'))} ${esc(p.kyc_reference)}</span>` : ''}`
         : kycStatus === 'rejected'
@@ -4047,20 +4118,16 @@ async function renderProfile() {
       <p>${esc(t('kycHint'))}</p>
       ${kycVerified ? `<p>${esc(t('kycNameLocked'))}</p><p class="note">${esc(t('kycDocsNote'))}</p>` : ''}
     </div>
-    <div class="subcard">
-      <h3>${esc(t('accountDetail'))}</h3>
-      <div class="detail-menu">
-        <div class="menurow"><span class="grow"><span class="t">${esc(t('uid'))}</span><span class="d">${esc(uid)}</span></span></div>
-        <div class="menurow"><span class="grow"><span class="t">${esc(t('profileName'))}</span><span class="d">${esc(p.display_name || '—')}</span></span></div>
-        <div class="menurow"><span class="grow"><span class="t">${esc(t('username'))}</span><span class="d">${username}</span></span></div>
-        <div class="menurow"><span class="grow"><span class="t">${esc(t('region'))}</span><span class="d">Indonesia</span></span></div>
-      </div>
-      <div class="detail-menu">
-        <button type="button" class="menurow" id="menu-settings"><span class="grow"><span class="t">${esc(t('settings'))}</span></span><span class="marrow">${ICONS.arrow}</span></button>
-        <button type="button" class="menurow" id="menu-helpguide"><span class="grow"><span class="t">${esc(t('menuHelpGuide'))}</span><span class="d">${esc(t('menuHelpGuideDesc'))}</span></span><span class="marrow">${ICONS.arrow}</span></button>
-        <button type="button" class="menurow danger logout-mobile" id="menu-logout"><span class="grow"><span class="t">${esc(t('logout'))}</span></span><span class="marrow">${ICONS.arrow}</span></button>
-      </div>
-    </div>`;
+    <button type="button" class="prow" id="prow-detail" aria-expanded="false"><span class="ic">${ICONS.user}</span><span class="lbl">${esc(t('accountDetail'))}<span class="sub">${esc(t('profileDetailSub'))}</span></span><span class="ch">${ICONS.chevR}</span></button>
+    <div class="prow-panel" id="panel-detail" hidden>
+      <div class="menurow"><span class="grow"><span class="t">${esc(t('uid'))}</span><span class="d">${esc(uid)}</span></span></div>
+      <div class="menurow"><span class="grow"><span class="t">${esc(t('profileName'))}</span><span class="d">${esc(p.display_name || '—')}</span></span></div>
+      <div class="menurow"><span class="grow"><span class="t">${esc(t('username'))}</span><span class="d">${username}</span></span></div>
+      <div class="menurow"><span class="grow"><span class="t">${esc(t('region'))}</span><span class="d">Indonesia</span></span></div>
+    </div>
+    <button type="button" class="prow" id="menu-settings"><span class="ic">${ICONS.sliders}</span><span class="lbl">${esc(t('settings'))}<span class="sub">${esc(t('profileSettingsSub'))}</span></span><span class="ch">${ICONS.chevR}</span></button>
+    <button type="button" class="prow" id="menu-helpguide"><span class="ic">${ICONS.book}</span><span class="lbl">${esc(t('menuHelpGuide'))}<span class="sub">${esc(t('menuHelpGuideDesc'))}</span></span><span class="ch">${ICONS.chevR}</span></button>
+    <button type="button" class="prow danger logout-mobile" id="menu-logout"><span class="ic">${ICONS.logout}</span><span class="lbl">${esc(t('logout'))}</span></button>`;
   bindPhotoInput('profile-photo-input', 'profile');
   const photoDel = $('#profile-photo-del');
   if (photoDel) {
@@ -4109,6 +4176,10 @@ async function renderProfile() {
   $('#menu-settings').addEventListener('click', () => { S.settingsSub = null; showView('settings'); });
   $('#menu-helpguide').addEventListener('click', () => { S.helpGuideTab = 'guide'; showView('helpguide'); });
   $('#menu-logout').addEventListener('click', doLogout);
+  const prowKyc = $('#prow-kyc');
+  if (prowKyc) prowKyc.addEventListener('click', () => toggleProw('prow-kyc', 'panel-kyc'));
+  const prowDetail = $('#prow-detail');
+  if (prowDetail) prowDetail.addEventListener('click', () => toggleProw('prow-detail', 'panel-detail'));
 }
 
 // ----------------------------------------------------------- Pengaturan ---
@@ -4523,19 +4594,18 @@ function renderHelp() {
   }
   const faqs = [1, 2, 3, 4, 5].map((n) => `<details class="more"><summary>${esc(t('helpFaq' + n + 'Q'))}<span aria-hidden="true">${ICONS.chevD}</span></summary><div class="more-body"><p>${esc(t('helpFaq' + n + 'A'))}</p></div></details>`).join('');
   // D22: diri sendiri dikeluarkan dari select laporan.
-  const traders = (S.traders || []).filter((tr) => tr.profile_id !== S.user?.id).map((tr) => {
+  const traderOpts = (S.traders || []).filter((tr) => tr.profile_id !== S.user?.id).map((tr) => {
     // Publik: opsi laporan hanya @username, tanpa nama profil (ronde 5).
-    const label = traderHandle(tr);
-    return `<option value="${esc(tr.profile_id)}">${esc(label)}</option>`;
-  }).join('');
-  const reasons = [1, 2, 3, 4].map((n) => `<option>${esc(t('helpReportReason' + n))}</option>`).join('');
+    return [tr.profile_id, traderHandle(tr)];
+  });
+  const reasonOpts = [1, 2, 3, 4].map((n) => { const l = t('helpReportReason' + n); return [l, l]; });
   body.innerHTML = `<div class="risk-note"><span><b>${esc(t('helpScamTitle'))}</b> ${esc(t('helpScamBody'))}</span></div>`
     + `<h3 class="section">${esc(t('helpFaqTitle'))}</h3>${faqs}`
     + `<h3 class="section">${esc(t('helpReportTitle'))}</h3>`
     + `<p class="note" style="margin-bottom:10px;">${esc(t('helpReportLocalNote'))}</p>`
     + `<form class="subcard" id="help-report-form" novalidate><div class="wal-grid">
-        <div class="field"><label for="rp-trader">${esc(t('helpReportTrader'))}</label><select id="rp-trader">${traders || `<option disabled>${esc(t('helpReportPick'))}</option>`}</select></div>
-        <div class="field"><label for="rp-reason">${esc(t('helpReportReason'))}</label><select id="rp-reason">${reasons}</select></div>
+        <div class="field"><label for="rp-trader">${esc(t('helpReportTrader'))}</label>${dropdownHtml('rp-trader', traderOpts.length ? traderOpts : [['', t('helpReportPick'), true]], traderOpts.length ? traderOpts[0][0] : '')}</div>
+        <div class="field"><label for="rp-reason">${esc(t('helpReportReason'))}</label>${dropdownHtml('rp-reason', reasonOpts, reasonOpts[0][0])}</div>
       </div>
       <div class="field"><label for="rp-desc">${esc(t('helpReportDesc'))}</label><textarea id="rp-desc" maxlength="500" rows="3"></textarea></div>
       <div class="form-err" id="rp-err" role="alert"></div>
@@ -4569,6 +4639,8 @@ function renderHelp() {
     toast(t('helpReportSaved'));
     renderHelp();
   });
+  bindDropdown('rp-trader'); // R24
+  bindDropdown('rp-reason');
 }
 
 // -------------------------------------------------------------- Panduan ---
