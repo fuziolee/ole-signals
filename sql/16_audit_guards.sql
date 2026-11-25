@@ -194,8 +194,7 @@ begin
        and old.username_changed_at > now() - interval '1 month'
        and not v_is_demo then
       v_next := (old.username_changed_at + interval '1 month')::date;
-      raise exception 'Username hanya bisa diubah 1× sebulan. Bisa diubah lagi pada '
-        || to_char(v_next, 'YYYY-MM-DD') || '.'
+      raise exception 'Username hanya bisa diubah 1× sebulan. Bisa diubah lagi pada %.', to_char(v_next, 'YYYY-MM-DD')
         using errcode = '42501';
     end if;
     if old.username is not null and not v_is_demo then
@@ -226,8 +225,7 @@ begin
        and old.display_name_changed_at > now() - interval '1 month'
        and not v_is_demo then
       v_next := (old.display_name_changed_at + interval '1 month')::date;
-      raise exception 'Nama profil hanya bisa diubah 1× sebulan. Bisa diubah lagi pada '
-        || to_char(v_next, 'YYYY-MM-DD') || '.'
+      raise exception 'Nama profil hanya bisa diubah 1× sebulan. Bisa diubah lagi pada %.', to_char(v_next, 'YYYY-MM-DD')
         using errcode = '42501';
     end if;
     if old.display_name is not null and not v_is_demo then
@@ -307,8 +305,7 @@ begin
          and old.username_changed_at > now() - interval '1 month'
          and not v_is_demo then
         v_next := (old.username_changed_at + interval '1 month')::date;
-        raise exception 'Username hanya bisa diubah 1× sebulan. Bisa diubah lagi pada '
-          || to_char(v_next, 'YYYY-MM-DD') || '.'
+        raise exception 'Username hanya bisa diubah 1× sebulan. Bisa diubah lagi pada %.', to_char(v_next, 'YYYY-MM-DD')
           using errcode = '42501';
       end if;
       if old.username is not null and not v_is_demo then
@@ -362,8 +359,7 @@ begin
          and old.subscription_price_changed_at > now() - interval '1 month'
          and not v_is_demo then
         v_next := (old.subscription_price_changed_at + interval '1 month')::date;
-        raise exception 'Harga langganan hanya bisa diubah 1× sebulan. Bisa diubah lagi pada '
-          || to_char(v_next, 'YYYY-MM-DD') || '.'
+        raise exception 'Harga langganan hanya bisa diubah 1× sebulan. Bisa diubah lagi pada %.', to_char(v_next, 'YYYY-MM-DD')
           using errcode = '42501';
       end if;
       -- (d) STEMPEL: lolos + non-demo -> stempel paksa now().
