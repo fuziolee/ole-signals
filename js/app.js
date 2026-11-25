@@ -433,6 +433,39 @@ async function paintFollowerCount(traderId) {
   const tp = $('#tp-followers');
   if (tp) tp.textContent = txt;
 }
+
+// Ronde 26: tulis ulang SEMUA angka pengikut yang sedang tampil dari
+// S.followerCounts (tanpa query baru) — dipakai sesudah hitungan dimuat
+// ulang, supaya kartu yang ter-paint dari cache lama ikut benar. Kunci yang
+// tidak ada (gagal dimuat) tampil "—", bukan angka basi.
+function paintAllFollowerCounts() {
+  $$('.tcard[data-trader] .fol').forEach((el) => {
+    const card = el.closest('.tcard');
+    const id = card && card.dataset.trader;
+    const n = id ? S.followerCounts[id] : undefined;
+    el.textContent = n === undefined ? '—' : t('followersCount', { n });
+  });
+}
+
+// Ronde 26: muat ulang hitungan dari DB lalu cat ulang tampilannya. Dipanggil
+// otomatis bila daftar menampilkan "—" (hitungan belum diketahui) — mis.
+// sesudah kegagalan sesaat — supaya angka pulih sendiri tanpa perlu
+// buka-tutup menu. Dibatasi 1×/10 detik supaya tidak membanjiri DB saat
+// filter sering berubah; paintAll hanya mengubah teks, bukan re-render.
+let __folRefreshLast = 0;
+let __folRefreshRunning = false;
+async function refreshFollowerCounts() {
+  if (__folRefreshRunning) return;
+  const now = Date.now();
+  if (now - __folRefreshLast < 10000) return;
+  __folRefreshLast = now;
+  __folRefreshRunning = true;
+  try {
+    const counts = await Promise.all(S.traders.map((tr) => api.countFollowers(tr.profile_id).catch(() => null)));
+    S.traders.forEach((tr, i) => { if (counts[i] !== null && counts[i] !== undefined) S.followerCounts[tr.profile_id] = counts[i]; });
+    paintAllFollowerCounts();
+  } finally { __folRefreshRunning = false; }
+}
 // Ronde 8b (a): perbarui SEMUA tombol Salin untuk sinyal yang sama di
 // seluruh tampilan (feed, Ruang Kerja) — bukan hanya yang diklik.
 function paintCopyButtons(signalId) {
@@ -1010,10 +1043,15 @@ async function handleSession(session, event = 'INITIAL_SESSION') {
   try { S.traders = await api.listTraders(); } catch (e) { S.traders = []; }
   try { S.mySubs = await api.listMySubscriptions(S.user.id); } catch (e) { S.mySubs = []; }
   try {
-    const counts = await Promise.all(S.traders.map((tr) => api.countFollowers(tr.profile_id).catch(() => 0)));
-    S.followerCounts = {};
-    S.traders.forEach((tr, i) => { S.followerCounts[tr.profile_id] = counts[i]; });
-  } catch (e) { S.followerCounts = {}; }
+    // R26: kegagalan hitungan BUKAN 0. `.catch(() => 0)` lama menelan error
+    // lalu meng-cache "0 Pengikut" palsu (terbukti probe r26: sekali gagal,
+    // kartu menampilkan "0 Pengikut" sampai siklus follow). Nilai lama yang
+    // baik dipertahankan; kunci yang gagal tetap tidak ada sehingga kartu
+    // menampilkan "—" (jujur: belum diketahui, bukan 0).
+    const counts = await Promise.all(S.traders.map((tr) => api.countFollowers(tr.profile_id).catch(() => null)));
+    S.traders.forEach((tr, i) => { if (counts[i] !== null && counts[i] !== undefined) S.followerCounts[tr.profile_id] = counts[i]; });
+    paintAllFollowerCounts();
+  } catch (e) { /* abaikan — nilai lama dipertahankan */ }
   try { S.prices = await api.getPrices(); } catch (e) { S.prices = new Map(); }
   try { S.demoIds = new Set(await api.listDemoTraderIds()); } catch (e) { S.demoIds = new Set(); }
   await loadNotifications();
@@ -2237,12 +2275,16 @@ function openSignalDetail(id) {
 function statsGridHtml(s) {
   const wr = s.wr === null ? '—' : ds(s.wr.toFixed(1)) + '%';
   const sk = s.streaks;
+  // R26: definisi "ada trade tertutup" sama dengan panel kanan
+  // (renderRightPanel: has = st.closed > 0). Tanpa trade tertutup, Total
+  // Profit + Total R menampilkan "—" netral, bukan 0 hijau.
+  const has = (s.closed || 0) > 0;
   return `<div class="pstats">`
     + `<div class="stat-cell"><div class="num mono">${wr}</div><div class="lbl">${esc(t('stWinRate'))}</div></div>`
     + `<div class="stat-cell"><div class="num mono">${s.totalSignals}</div><div class="lbl">${esc(t('stTotalSignalsOpen', { n: s.active }))}</div></div>`
-    + `<div class="stat-cell"><div class="num mono ${s.totalUSD >= 0 ? 'pips-pos' : 'pips-neg'}">${esc(fmtUsd(s.totalUSD, true))}</div><div class="lbl">${esc(t('stTotalProfit'))} ${esc(fmtPipsSigned(s.totalPips))}</div></div>`
+    + `<div class="stat-cell"><div class="num mono ${has && s.totalUSD > 0 ? 'pips-pos' : has && s.totalUSD < 0 ? 'pips-neg' : ''}">${has ? esc(fmtUsd(s.totalUSD, true)) : '—'}</div><div class="lbl">${esc(t('stTotalProfit'))} ${esc(fmtPipsSigned(s.totalPips))}</div></div>`
     + `<div class="stat-cell"><div class="num mono">${fmtPf(s.pf)}</div><div class="lbl">${esc(t('stProfitFactor'))}</div></div>`
-    + `<div class="stat-cell"><div class="num mono ${s.totalR >= 0 ? 'pips-pos' : 'pips-neg'}">${esc(fmtR(s.totalR))}</div><div class="lbl">${esc(t('stTotalR'))}</div></div>`
+    + `<div class="stat-cell"><div class="num mono ${has && s.totalR > 0 ? 'pips-pos' : has && s.totalR < 0 ? 'pips-neg' : ''}">${has ? esc(fmtR(s.totalR)) : '—'}</div><div class="lbl">${esc(t('stTotalR'))}</div></div>`
     + `<div class="stat-cell"><div class="num mono">${s.avgR === null ? '—' : esc(fmtR(s.avgR))}</div><div class="lbl">${esc(t('stAvgR'))}</div></div>`
     + `<div class="stat-cell"><div class="num mono ${sk.longestWin ? 'pips-pos' : ''}">${sk.longestWin || '—'}</div><div class="lbl">${esc(t('stStreakWinLong'))}</div></div>`
     + `<div class="stat-cell"><div class="num mono ${sk.longestLose ? 'pips-neg' : ''}">${sk.longestLose || '—'}</div><div class="lbl">${esc(t('stStreakLoseLong'))}</div></div>`
@@ -2700,6 +2742,9 @@ function renderSearchList() {
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
   });
   bindFollowSubscribe(list);
+  // R26: bila ada kartu yang hitungannya belum diketahui ("—"), coba muat
+  // ulang di latar belakang (dibatasi 1×/10 detik) lalu cat ulang.
+  if ([...list.querySelectorAll('.tcard .fol')].some((el) => el.textContent.trim() === '—')) refreshFollowerCounts();
 }
 
 // R24: dropdown kustom pengganti <select> native — picker OS tidak bisa
@@ -2851,9 +2896,10 @@ async function renderSearch() {
     S.myFollows = follows;
     S.mySubs = subs;
     try {
-      const counts = await Promise.all(S.traders.map((tr) => api.countFollowers(tr.profile_id).catch(() => 0)));
-      S.followerCounts = {};
-      S.traders.forEach((tr, i) => { S.followerCounts[tr.profile_id] = counts[i]; });
+      // R26: lihat catatan di handleSession — kegagalan bukan 0.
+      const counts = await Promise.all(S.traders.map((tr) => api.countFollowers(tr.profile_id).catch(() => null)));
+      S.traders.forEach((tr, i) => { if (counts[i] !== null && counts[i] !== undefined) S.followerCounts[tr.profile_id] = counts[i]; });
+      paintAllFollowerCounts();
     } catch (e) { /* abaikan */ }
   } catch (e) {
     list.innerHTML = `<div class="empty"><strong>${esc(t('errNetwork'))}</strong></div>`;
