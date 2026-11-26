@@ -37,6 +37,7 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
 | `22_entry_type.sql` | **Ronde 35:** kolom `signals.entry_type` (`limit`/`stop`, default `'limit'`, CHECK) + fungsi `public.infer_entry_type(direction, entry, price)` (BUY entry > harga → stop, ≤ → limit; SELL entry < harga → stop, ≥ → limit; sama persis → limit; tanpa harga → limit) + `signal_to_jsonb` / `create_signal` / `update_signal` versi penyebut-risiko-acuan-level (lihat 03) + `settle_signals` versi cabang-aktivasi-per-jenis (lihat 18). **TERAPKAN SEBELUM 23. Di database baru, terapkan 22 SEBELUM 03/18 versi saat ini** (lihat peringatan urutan di bawah). |
 | `23_reset_stats.sql` | **Ronde 35:** kolom `trader_progress.last_reset_at` + `reset_cooldown_until` + `subscriptions.status` ditambah `'paused'` + `copies.signal_snapshot jsonb` + FK `copies.signal_id` diubah ke `ON DELETE SET NULL` (dan `signal_id` jadi nullable) + RPC `public.reset_trader_stats()` (SECURITY DEFINER: cek jeda → kode `resetcooldown`/`resettoosoon`; akun demo bebas jeda; snapshot salinan SEBELUM hapus sinyal; hapus SEMUA sinyal trader; jeda langganan aktif; reset progress ke L1/$10.000/R0/DD0; stempel `last_reset_at` + `reset_cooldown_until` = +1 bulan (NULL untuk demo); notifikasi trader + pelanggan dijeda + penyalin, tipe `'reset'`; audit `'trader_reset'`; kembalikan `{ok, deleted, paused, cooldown_until, refund_pending: true}` — pengembalian prorata DITUNDA bersama fase pembayaran, tidak ada yang ditulis ke dompet mana pun) + helper `public.trader_in_reset_cooldown(trader_id)` + trigger `guard_trader_reset_cooldown` pada `traders` (tolak ubah harga langganan selama jeda, 42501, demo bebas, bypass sistem) + `create_signal` / `update_signal` versi TERBARU (dengan penegakan jeda, kode `resetcooldown`) — **23 menggantikan versi create/update dari 22.** **TERAPKAN SETELAH 22.** |
 | `24_r35_tests.sql` | **Ronde 35 (tes saja, bukan migrasi):** R35-RISK-01..06 (batas 1% ref level), R35-ENTRY-00..07 (inferensi + create/update), R35-SET-01..08 (matriks aktivasi per jenis + penutupan satu putaran via gap + grandfather `'limit'`), R35-RESET-01..08 (jalur sukses / penolakan jeda / pengecualian demo / backstop `resettoosoon`), pola 04/19 (tabel temp `test_results`, satu tes gagal tidak menghentikan yang lain). Jalankan di scratch SETELAH 22 + 23 (dan setelah 03/18 versi saat ini). Hasil Ronde 35: **37/37 PASS** di Postgres 16.15 scratch. **JANGAN jalankan di live apa adanya** — SETUP memakai harga tetap + UUID uji; `settle_signals()` di dalamnya memproses sinyal terbuka. |
+| `25_drop_balance_check.sql` | **Ronde 35 susulan (diputuskan user 26 Nov 2026 17:18 WIB):** cabut CHECK `balance_usd >= 0` di `trader_progress` (blok DO: cari constraint lewat nama standar `trader_progress_balance_usd_check` ATAU definisi `balance_usd >= (0)` — definisi di `pg_get_constraintdef` tertulis `CHECK ((balance_usd >= (0)::numeric))`, jadi pola tanpa kurung TIDAK cocok; pelajaran dari tes scratch). CHECK lain (`level >= 1`, `trades >= 0`, `max_drawdown >= 0`) TIDAK disentuh. Idempotent. Diuji scratch: saldo −$500 tersimpan sesudah migrasi; `level = 0` tetap ditolak. |
 
 ## Cara pakai (Supabase SQL Editor)
 
@@ -100,6 +101,16 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
     adalah R7-USERNAME — bentrok LAMA antara tes 04 dan guard R27:
     tes itu membalik `is_demo` langsung, yang memang ditolak guard
     sejak migrasi 16; bukan regresi R35).
+11. **Ronde 35 susulan — cabut CHECK saldo negatif (migrasi 25,
+    diputuskan user 26 Nov 2026 17:18 WIB "Kerjakan 1,3,4"):**
+    terapkan `25_drop_balance_check.sql` (mencabut CHECK
+    `balance_usd >= 0` di `trader_progress`; CHECK lain di tabel yang
+    sama TIDAK disentuh). Idempotent (no-op bila sudah dicabut).
+    Diuji di scratch Postgres 16: sebelum migrasi saldo −$500 ditolak
+    CHECK; sesudahnya tersimpan; `level = 0` tetap ditolak CHECK
+    `level >= 1`. Setelah dicabut, saldo negatif bisa tersimpan dan
+    settlement tidak lagi gagal di CHECK; reset statistik tetap jadi
+    jalan keluar saldo terlalu minus.
 11. **Aturan risiko (Ronde 35, keputusan user 26 Nov 2026):** risiko
     maks 1% dari SALDO ACUAN LEVEL ref(L) = $10.000 × 1,05^(L−1),
     BUKAN saldo simulasi aktual. ref tidak pernah turun; yang
