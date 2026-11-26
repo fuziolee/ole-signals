@@ -189,7 +189,6 @@ const STR = {
     profileTitle: 'Profil',
     // Profil: Detail akun + keamanan.
     accountDetail: 'Detail akun',
-    profileDetailSub: 'Nama, username, wilayah',
     profileName: 'Nama profil',
     region: 'Wilayah',
     uid: 'UID',
@@ -202,7 +201,6 @@ const STR = {
     secEmailHint: 'Kode verifikasi 6 digit akan dikirim ke email baru. Email berubah setelah kode dikonfirmasi.',
     secEmailSoon: 'Ubah email menyusul — butuh alur konfirmasi email.',
     settings: 'Pengaturan',
-    profileSettingsSub: 'Akun, penarikan, keamanan',
     theme: 'Tampilan',
     themeAuto: 'Otomatis',
     themeLight: 'Terang',
@@ -214,7 +212,6 @@ const STR = {
     helpGuideTitle: 'Bantuan & Panduan',
     helpGuideSub: 'Semua penjelasan lengkap aplikasi ada di sini — tampilan utama hanya menampilkan ringkasan singkatnya.',
     menuHelpGuide: 'Bantuan & Panduan',
-    menuHelpGuideDesc: 'Cara level, aturan sinyal, tanya jawab',
     helpGuideTabHelp: 'Bantuan',
     // Panduan lengkap (port prototipe).
     guideSecSignal: 'Siklus sinyal & penguncian',
@@ -890,7 +887,6 @@ const STR = {
     profileTitle: 'Profile',
     // Profil: Detail akun + keamanan.
     accountDetail: 'Account details',
-    profileDetailSub: 'Name, username, region',
     profileName: 'Profile name',
     region: 'Region',
     uid: 'UID',
@@ -903,7 +899,6 @@ const STR = {
     secEmailHint: 'A 6-digit verification code will be sent to the new email. The email changes once the code is confirmed.',
     secEmailSoon: 'Changing email is coming — it needs an email confirmation flow.',
     settings: 'Settings',
-    profileSettingsSub: 'Account, withdrawal, security',
     theme: 'Appearance',
     themeAuto: 'Automatic',
     themeLight: 'Light',
@@ -915,7 +910,6 @@ const STR = {
     helpGuideTitle: 'Help & Guide',
     helpGuideSub: 'Every full explanation in the app lives here — the main views only show the short summaries.',
     menuHelpGuide: 'Help & Guide',
-    menuHelpGuideDesc: 'How levels work, signal rules, FAQ',
     helpGuideTabHelp: 'Help',
     // Panduan lengkap (port prototipe).
     guideSecSignal: 'Signal lifecycle & locking',

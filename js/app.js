@@ -4364,12 +4364,12 @@ async function renderProfile() {
     </div>
     ${S.photoUploadDraft.profile || S.photoDraft.profile ? `<div class="avatar-edit" style="margin-top:10px;">${S.photoDraft.profile ? `<span class="note">${esc(t('photoRemoveDraft'))}</span>` : ''}<button class="btn primary" id="profile-photo-done" type="button">${esc(t('doneBtn'))}</button><button class="btn" id="profile-photo-cancel" type="button">${esc(t('cancel'))}</button></div>` : ''}
     <button type="button" class="prow" id="prow-kyc"><span class="ic">${ICONS.lock}</span><span class="lbl">${esc(t('kycTitle'))}<span class="sub">${esc(kycSub)}</span></span><span class="ch">${ICONS.chevR}</span></button>
-    <button type="button" class="prow" id="prow-detail"><span class="ic">${ICONS.user}</span><span class="lbl">${esc(t('accountDetail'))}<span class="sub">${esc(t('profileDetailSub'))}</span></span><span class="ch">${ICONS.chevR}</span></button>
+    <button type="button" class="prow" id="prow-detail"><span class="ic">${ICONS.user}</span><span class="lbl">${esc(t('accountDetail'))}</span><span class="ch">${ICONS.chevR}</span></button>
     <button type="button" class="prow" id="prow-appearance"><span class="ic">${ICONS.sun}</span><span class="lbl">${esc(t('theme'))}</span><span class="ch">${ICONS.chevR}</span></button>
     <button type="button" class="prow" id="prow-notifications"><span class="ic">${ICONS.bell}</span><span class="lbl">${esc(t('setNotif'))}</span><span class="ch">${ICONS.chevR}</span></button>
     <button type="button" class="prow" id="prow-language"><span class="ic">${ICONS.globe}</span><span class="lbl">${esc(t('language'))}</span><span class="ch">${ICONS.chevR}</span></button>
-    <button type="button" class="prow" id="menu-settings"><span class="ic">${ICONS.sliders}</span><span class="lbl">${esc(t('settings'))}<span class="sub">${esc(t('profileSettingsSub'))}</span></span><span class="ch">${ICONS.chevR}</span></button>
-    <button type="button" class="prow" id="menu-helpguide"><span class="ic">${ICONS.book}</span><span class="lbl">${esc(t('menuHelpGuide'))}<span class="sub">${esc(t('menuHelpGuideDesc'))}</span></span><span class="ch">${ICONS.chevR}</span></button>
+    <button type="button" class="prow" id="menu-settings"><span class="ic">${ICONS.sliders}</span><span class="lbl">${esc(t('settings'))}</span><span class="ch">${ICONS.chevR}</span></button>
+    <button type="button" class="prow" id="menu-helpguide"><span class="ic">${ICONS.book}</span><span class="lbl">${esc(t('menuHelpGuide'))}</span><span class="ch">${ICONS.chevR}</span></button>
     <button type="button" class="prow danger logout-mobile" id="menu-logout"><span class="ic">${ICONS.logout}</span><span class="lbl">${esc(t('logout'))}</span></button>`;
   bindPhotoInput('profile-photo-input', 'profile');
   const photoDel = $('#profile-photo-del');
