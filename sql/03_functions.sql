@@ -54,6 +54,7 @@ as $func$
     'direction', s.direction, 'entry', s.entry,
     'stop_loss', s.stop_loss, 'take_profit', s.take_profit,
     'lot_size', s.lot_size, 'status', s.status,
+    'entry_type', s.entry_type,
     'version', s.version,
     'created_at', s.created_at, 'expires_at', s.expires_at,
     'activated_at', s.activated_at, 'closed_at', s.closed_at,
@@ -347,7 +348,9 @@ declare
   v_open_count integer;
   v_rr numeric;
   v_risk_usd numeric;
-  v_balance numeric;
+  v_ref_balance numeric;
+  v_entry_type text;
+  v_price numeric;
 begin
   -- 0. Harus login.
   if v_actor is null then
@@ -365,7 +368,11 @@ begin
 
   -- 2. Kunci per-trader (serialisasi tulis sinyal trader ini).
   select * into v_progress from public.lock_trader_progress(v_actor);
-  v_balance := v_progress.balance_usd;
+  -- Ronde 35: penyebut risiko adalah SALDO ACUAN LEVEL ref(level),
+  -- bukan saldo simulasi aktual. ref tidak pernah turun (hanya naik
+  -- ikut level); saldo simulasi yang naik/turun tidak memengaruhi
+  -- batas risiko per trade.
+  v_ref_balance := public.level_ref(v_progress.level);
 
   -- 3. Idempotensi (AC-GEN-05 / T-09): kunci yang sama mengembalikan
   --    sinyal yang sudah dibuat, bukan membuat duplikat.
@@ -442,11 +449,12 @@ begin
     );
   end if;
 
-  -- 7. Risiko maksimal 1% saldo per trade (AC-EDIT-03).
+  -- 7. Risiko maksimal 1% SALDO ACUAN LEVEL per trade (AC-EDIT-03,
+  --    diubah Ronde 35 — dulu 1% saldo simulasi aktual).
   --    Risiko > 1% adalah LARANGAN posting (§5), bukan penurunan level.
-  if v_balance is null or v_balance <= 0 then
+  if v_ref_balance is null or v_ref_balance <= 0 then
     return public.api_error(
-      'risk', 'Saldo simulasi Anda tidak mencukupi untuk memposting sinyal.'
+      'risk', 'Saldo acuan level tidak tersedia untuk memposting sinyal.'
     );
   end if;
   v_risk_usd := abs(p_entry - p_stop_loss) * p_lot
@@ -457,13 +465,21 @@ begin
       'Harga konversi untuk ' || p_pair || ' belum tersedia. Coba lagi sebentar.'
     );
   end if;
-  if v_risk_usd / v_balance > 0.01 then
+  if v_risk_usd / v_ref_balance > 0.01 then
     return public.api_error(
       'risk',
-      'Risiko trade ini melebihi 1% saldo (maks. 1% per trade). '
+      'Risiko trade ini melebihi 1% saldo acuan level (maks. 1% per trade). '
       || 'Perkecil lot atau perketat stop loss.'
     );
   end if;
+
+  -- 7b. Jenis entry (Ronde 35): disimpulkan dari entry vs harga live
+  --     saat posting — BUY di atas harga = stop, di bawah = limit
+  --     (sama persis = limit); SELL sebaliknya. Tanpa harga di tabel
+  --     prices, fallback 'limit' (settlement mengaktifkan saat harga
+  --     masuk, dengan cabang limit).
+  select price into v_price from public.prices where pair = p_pair;
+  v_entry_type := public.infer_entry_type(p_direction, p_entry, v_price);
 
   -- 8. Simpan. Jam server (created_at/expires_at default now() + 3 hari).
   --    Deteksi duplikasi dua lapis (§5) BELUM di sini: kolom duplicate_of /
@@ -471,10 +487,10 @@ begin
   --    Fase 2 (butuh tabel pip per pair) — lihat README.
   insert into public.signals
     (trader_id, pair, direction, entry, stop_loss, take_profit, lot_size,
-     idempotency_key)
+     entry_type, idempotency_key)
   values
     (v_actor, p_pair, p_direction, p_entry, p_stop_loss, p_take_profit,
-     p_lot, p_idempotency_key)
+     p_lot, v_entry_type, p_idempotency_key)
   returning * into v_signal;
 
   -- 9. Log audit (AC-GEN-06).
@@ -555,8 +571,9 @@ declare
   v_open_count integer;
   v_rr numeric;
   v_risk_usd numeric;
-  v_balance numeric;
+  v_ref_balance numeric;
   v_price numeric;
+  v_entry_type text;
   v_new_status text := 'PENDING';
 begin
   if v_actor is null then
@@ -565,7 +582,9 @@ begin
 
   -- Kunci per-trader dulu (serialisasi), lalu kunci baris sinyal.
   select * into v_progress from public.lock_trader_progress(v_actor);
-  v_balance := v_progress.balance_usd;
+  -- Ronde 35: penyebut risiko adalah SALDO ACUAN LEVEL ref(level)
+  -- (bukan saldo simulasi aktual) — lihat create_signal.
+  v_ref_balance := public.level_ref(v_progress.level);
 
   select * into v_old
   from public.signals
@@ -586,6 +605,16 @@ begin
       'notpending',
       'Sinyal sudah tidak dapat diubah (status: ' || v_old.status
       || '). Buka ulang sinyal dari daftar.'
+    );
+  end if;
+
+  -- R9-4: sinyal yang sudah dibagikan terkunci dari edit — isi yang
+  -- dibagikan tidak boleh diganti setelah dibagikan. (Batalkan tetap bisa
+  -- lewat cancel_signal; itu menarik sinyal, bukan mengubah isinya.)
+  if v_old.shared_at is not null then
+    return public.api_error(
+      'shared',
+      'Sinyal ini sudah dibagikan, jadi tidak bisa diubah lagi.'
     );
   end if;
 
@@ -654,10 +683,10 @@ begin
     );
   end if;
 
-  -- Risiko maksimal 1% saldo per trade.
-  if v_balance is null or v_balance <= 0 then
+  -- Risiko maksimal 1% SALDO ACUAN LEVEL per trade (Ronde 35).
+  if v_ref_balance is null or v_ref_balance <= 0 then
     return public.api_error(
-      'risk', 'Saldo simulasi Anda tidak mencukupi untuk mengubah sinyal.'
+      'risk', 'Saldo acuan level tidak tersedia untuk mengubah sinyal.'
     );
   end if;
   v_risk_usd := abs(p_entry - p_stop_loss) * p_lot
@@ -668,25 +697,31 @@ begin
       'Harga konversi untuk ' || p_pair || ' belum tersedia. Coba lagi sebentar.'
     );
   end if;
-  if v_risk_usd / v_balance > 0.01 then
+  if v_risk_usd / v_ref_balance > 0.01 then
     return public.api_error(
       'risk',
-      'Risiko trade ini melebihi 1% saldo (maks. 1% per trade). '
+      'Risiko trade ini melebihi 1% saldo acuan level (maks. 1% per trade). '
       || 'Perkecil lot atau perketat stop loss.'
     );
   end if;
 
   -- AC-EDIT-07: bila entry baru sudah tersentuh harga saat ini, sinyal
   -- langsung menjadi AKTIF dan terkunci.
-  -- ASUMSI (konfirmasi di Fase 3, saat settle-signals ditulis): entry
-  -- dianggap tersentuh bila harga saat ini sudah melewatinya ke arah
-  -- trade — BUY: harga <= entry (limit beli); SELL: harga >= entry
-  -- (limit jual). Bila tidak ada harga di tabel prices, sinyal tetap
-  -- PENDING dan settlement akan mengaktifkannya saat harga masuk.
+  -- Ronde 35: jenis entry disimpulkan ulang dari entry baru vs harga saat
+  -- ini (infer_entry_type) dan cabang sentuhan mengikuti jenisnya —
+  -- LIMIT: BUY harga <= entry, SELL harga >= entry; STOP: BUY harga
+  -- >= entry, SELL harga <= entry. Bila tidak ada harga di tabel prices,
+  -- sinyal tetap PENDING dan settlement akan mengaktifkannya saat harga
+  -- masuk.
   select price into v_price from public.prices where pair = p_pair;
+  v_entry_type := public.infer_entry_type(p_direction, p_entry, v_price);
   if v_price is not null then
-    if (p_direction = 'BUY' and v_price <= p_entry)
-       or (p_direction = 'SELL' and v_price >= p_entry) then
+    if (v_entry_type = 'limit'
+        and ((p_direction = 'BUY' and v_price <= p_entry)
+          or (p_direction = 'SELL' and v_price >= p_entry)))
+       or (v_entry_type = 'stop'
+        and ((p_direction = 'BUY' and v_price >= p_entry)
+          or (p_direction = 'SELL' and v_price <= p_entry))) then
       v_new_status := 'AKTIF';
     end if;
   end if;
@@ -700,6 +735,7 @@ begin
     stop_loss = p_stop_loss,
     take_profit = p_take_profit,
     lot_size = p_lot,
+    entry_type = v_entry_type,
     status = v_new_status,
     activated_at = case when v_new_status = 'AKTIF' then now()
                         else v_old.activated_at end,
@@ -810,6 +846,46 @@ begin
 end;
 $func$;
 
+-- ============================================================================
+-- mark_signal_shared — POST /signals/{id}/share (R9-4)
+-- Menandai sinyal sebagai sudah dibagikan (set shared_at). Setelah ditandai,
+-- update_signal menolak edit (kode 'shared') — isi yang dibagikan tidak
+-- boleh diganti setelah dibagikan. Idempotent: memanggil dua kali tetap
+-- sukses. Hanya pemilik sinyal yang boleh menandai.
+-- ============================================================================
+create or replace function public.mark_signal_shared(p_signal_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $func$
+declare
+  v_actor uuid := auth.uid();
+  v_old public.signals%rowtype;
+begin
+  if v_actor is null then
+    return public.api_error('invalid', 'Anda harus masuk terlebih dahulu.');
+  end if;
+
+  select * into v_old
+  from public.signals
+  where id = p_signal_id
+  for update;
+  if not found then
+    return public.api_error('invalid', 'Sinyal tidak ditemukan.');
+  end if;
+  if v_old.trader_id <> v_actor then
+    return public.api_error('invalid', 'Sinyal tidak ditemukan.');
+  end if;
+
+  if v_old.shared_at is null then
+    update public.signals set shared_at = now() where id = p_signal_id;
+  end if;
+
+  return jsonb_build_object('ok', true, 'code', 'ok');
+end;
+$func$;
+
 -- ---------------------------------------------------------------------------
 -- Hak eksekusi RPC: hanya pengguna login (authenticated). Publik anon
 -- tidak boleh memanggil fungsi tulis. Fungsi bantu (api_error,
@@ -824,6 +900,9 @@ grant execute on function public.update_signal(uuid, text, text, numeric, numeri
 
 revoke execute on function public.cancel_signal(uuid) from public;
 grant execute on function public.cancel_signal(uuid) to authenticated;
+
+revoke execute on function public.mark_signal_shared(uuid) from public;
+grant execute on function public.mark_signal_shared(uuid) to authenticated;
 
 revoke execute on function public.setup_trader_identity(text, text, text) from public;
 grant execute on function public.setup_trader_identity(text, text, text) to authenticated;

@@ -11,19 +11,23 @@
 --  * Sentuhan level (polling 15 menit, satu harga fetch per pair per
 --    putaran): level dianggap TERSENTUH bila harga hasil fetch SUDAH
 --    mencapai/melewatinya — SAMA PERSIS dengan aturan edit AC-EDIT-07
---    (migrasi 14): BUY aktif bila harga <= entry; SELL aktif bila harga
---    >= entry. AKTIF: BUY WIN bila harga >= TP, LOSS bila harga <= SL;
---    SELL WIN bila harga <= TP, LOSS bila harga >= SL. Satu harga tidak
---    bisa menyentuh TP dan SL sekaligus (SL < entry < TP untuk BUY,
+--    (migrasi 14). Cabang mengikuti signals.entry_type (Ronde 35):
+--    LIMIT — BUY aktif bila harga <= entry, SELL bila harga >= entry;
+--    STOP — BUY aktif bila harga >= entry, SELL bila harga <= entry.
+--    AKTIF: BUY WIN bila harga >= TP, LOSS bila harga <= SL; SELL WIN
+--    bila harga <= TP, LOSS bila harga >= SL. Satu harga tidak bisa
+--    menyentuh TP dan SL sekaligus (SL < entry < TP untuk BUY,
 --    TP < entry < SL untuk SELL), jadi tidak ada ambiguitas.
 --  * Aktivasi + penutupan dalam SATU putaran: bila harga fetch sudah
 --    melewati entry DAN TP/SL sekaligus (gap), sinyal diaktifkan lalu
 --    langsung ditutup di putaran yang sama (activated_at = closed_at =
 --    now(), holding_minutes = 0) — harga terbukti melewati kedua level.
---    Dalam praktik ini SELALU sisi SL (satu harga tidak bisa sekaligus
+--    Untuk LIMIT ini SELALU sisi SL (satu harga tidak bisa sekaligus
 --    <= entry DAN >= TP untuk BUY, atau >= entry DAN <= TP untuk SELL)
---    — jadi penutupan satu putaran selalu LOSS. Diuji F3-13 (gap-down)
---    dan F3-12 (varian SELL).
+--    — jadi penutupan satu putaran limit selalu LOSS (diuji F3-13 dan
+--    F3-12). Untuk STOP, gap yang sama BISA menutup WIN dalam satu
+--    putaran: BUY stop aktif saat harga >= entry dan TP > entry, jadi
+--    harga >= TP sekaligus mengaktifkan + menutup WIN (diuji R35).
 --  * close_price = level TP (WIN) / SL (LOSS) — bukan harga fetch.
 --    Alasan: TP adalah limit order (terisi di TP), SL adalah stop;
 --    dan aturan §5 menetapkan win R = rasio TP:SL. Memakai harga fetch
@@ -325,8 +329,12 @@ begin
      and pr.fetched_at >= v_now - v_fresh
     where s.status = 'PENDING'
       and s.expires_at > v_now
-      and ((s.direction = 'BUY' and pr.price <= s.entry)
-        or (s.direction = 'SELL' and pr.price >= s.entry))
+      and (((s.entry_type = 'limit')
+            and ((s.direction = 'BUY' and pr.price <= s.entry)
+              or (s.direction = 'SELL' and pr.price >= s.entry)))
+        or ((s.entry_type = 'stop')
+            and ((s.direction = 'BUY' and pr.price >= s.entry)
+              or (s.direction = 'SELL' and pr.price <= s.entry))))
     order by s.created_at
     for update of s skip locked
   loop

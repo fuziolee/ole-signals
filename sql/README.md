@@ -33,6 +33,10 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
 | `18_fase3_settlement.sql` | **Fase 3:** `settle_signals()` (SECURITY DEFINER, hanya service_role) — kedaluwarsa PENDING → EXPIRED, aktivasi PENDING → AKTIF, penutupan AKTIF → WIN/LOSS (profit_usd/profit_pips/r_value/holding_minutes, close_price = level TP/SL) + `recalc_trader_progress()` (level inkremental: tangga tetap ref(L) = $10.000 × 1,05^(L−1); naik butuh AND saldo + R + 5 trade; saldo/peak/max DD dihitung ulang penuh dari sinyal tertutup) + tabel `settlement_runs` (ringkasan tiap putaran) + `quote_to_usd`/`contract_size`/`pip_size` (dipindah dari 03 ke sini agar settlement tidak bergantung pada urutan 03) + grants service_role. Harga basi (> 30 menit) TIDAK PERNAH menutup sinyal. **TERAPKAN SETELAH 01–17. TIDAK ADA perubahan frontend di Fase 3.** |
 | `19_fase3_tests.sql` | **Fase 3 (tes saja, bukan migrasi):** F3-01..F3-13 + SETUP + CLEANUP, pola 04 (tabel temp `test_results`, satu tes gagal tidak menghentikan yang lain). Jalankan di SQL Editor SETELAH 18. **PERHATIAN:** `settle_signals()` memproses SEMUA sinyal terbuka — jalankan hanya bila harga live tidak menyentuh sinyal demo/sungguhan, atau saat pasar tutup (lihat header file). |
 | `20_fase3_cron.sql` | **Fase 3 (jadwal):** pg_cron `fetch-prices-15min` (*/15) → `net.http_post` ke Edge Function `fetch-prices` dengan anon key. **TERAPKAN SETELAH 18 + deploy kedua Edge Function.** Ganti placeholder `<ANON_KEY>` dengan anon key dari `js/config.js` sebelum menjalankan. |
+| `21_fase3_prices_grant.sql` | **Fase 3 (perbaikan izin):** GRANT tulis tabel `prices` ke service_role (sql/02 hanya memberi SELECT ke anon/authenticated — invoke pertama gagal 500 karenanya). **TERAPKAN SEBELUM invoke Edge Function pertama.** |
+| `22_entry_type.sql` | **Ronde 35:** kolom `signals.entry_type` (`limit`/`stop`, default `'limit'`, CHECK) + fungsi `public.infer_entry_type(direction, entry, price)` (BUY entry > harga → stop, ≤ → limit; SELL entry < harga → stop, ≥ → limit; sama persis → limit; tanpa harga → limit) + `signal_to_jsonb` / `create_signal` / `update_signal` versi penyebut-risiko-acuan-level (lihat 03) + `settle_signals` versi cabang-aktivasi-per-jenis (lihat 18). **TERAPKAN SEBELUM 23. Di database baru, terapkan 22 SEBELUM 03/18 versi saat ini** (lihat peringatan urutan di bawah). |
+| `23_reset_stats.sql` | **Ronde 35:** kolom `trader_progress.last_reset_at` + `reset_cooldown_until` + `subscriptions.status` ditambah `'paused'` + `copies.signal_snapshot jsonb` + FK `copies.signal_id` diubah ke `ON DELETE SET NULL` (dan `signal_id` jadi nullable) + RPC `public.reset_trader_stats()` (SECURITY DEFINER: cek jeda → kode `resetcooldown`/`resettoosoon`; akun demo bebas jeda; snapshot salinan SEBELUM hapus sinyal; hapus SEMUA sinyal trader; jeda langganan aktif; reset progress ke L1/$10.000/R0/DD0; stempel `last_reset_at` + `reset_cooldown_until` = +1 bulan (NULL untuk demo); notifikasi trader + pelanggan dijeda + penyalin, tipe `'reset'`; audit `'trader_reset'`; kembalikan `{ok, deleted, paused, cooldown_until, refund_pending: true}` — pengembalian prorata DITUNDA bersama fase pembayaran, tidak ada yang ditulis ke dompet mana pun) + helper `public.trader_in_reset_cooldown(trader_id)` + trigger `guard_trader_reset_cooldown` pada `traders` (tolak ubah harga langganan selama jeda, 42501, demo bebas, bypass sistem) + `create_signal` / `update_signal` versi TERBARU (dengan penegakan jeda, kode `resetcooldown`) — **23 menggantikan versi create/update dari 22.** **TERAPKAN SETELAH 22.** |
+| `24_r35_tests.sql` | **Ronde 35 (tes saja, bukan migrasi):** R35-RISK-01..06 (batas 1% ref level), R35-ENTRY-00..07 (inferensi + create/update), R35-SET-01..08 (matriks aktivasi per jenis + penutupan satu putaran via gap + grandfather `'limit'`), R35-RESET-01..08 (jalur sukses / penolakan jeda / pengecualian demo / backstop `resettoosoon`), pola 04/19 (tabel temp `test_results`, satu tes gagal tidak menghentikan yang lain). Jalankan di scratch SETELAH 22 + 23 (dan setelah 03/18 versi saat ini). Hasil Ronde 35: **37/37 PASS** di Postgres 16.15 scratch. **JANGAN jalankan di live apa adanya** — SETUP memakai harga tetap + UUID uji; `settle_signals()` di dalamnya memproses sinyal terbuka. |
 
 ## Cara pakai (Supabase SQL Editor)
 
@@ -78,7 +82,38 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
    `19_fase3_tests.sql` di SQL Editor (baca peringatan di header file
    itu dulu — jangan jalankan saat harga live menyentuh sinyal demo).
    Tidak ada perubahan frontend di Fase 3.
-7. Aktifkan **Email** provider di **Authentication → Providers**
+10. **Ronde 35 (migrasi 22 + 23):** terapkan `22_entry_type.sql`,
+    lalu `23_reset_stats.sql`, **baru** deploy frontend Ronde 35.
+    **PERINGATAN URUTAN (cacat D-R35-5):** `03_functions.sql` dan
+    `18_fase3_settlement.sql` versi SAAT INI sudah mengandung
+    `entry_type` (disinkronkan dengan 22) — file `03` versi saat ini
+    GAGAL di database baru yang belum punya kolom `signals.entry_type`
+    (`signal_to_jsonb` bahasa SQL divalidasi penuh saat CREATE, baris
+    66). Di database LIVE hal ini tidak berpengaruh (03 diterapkan
+    jauh sebelum 22; yang diterapkan live hanya 22 → 23). Di database
+    BARU: terapkan 22 dulu, baru 03/18 versi saat ini — atau terapkan
+    03/18 dari riwayat git dulu, lalu 22, lalu 03/18 saat ini.
+    Verifikasi Ronde 35: rantai penuh (01, 02, 03-dari-HEAD, 09, 12,
+    13, 14, 15, 16, 17, 18-dari-HEAD, 21, 22, 03-saat-ini,
+    18-saat-ini, 23) + `24_r35_tests.sql` **37/37 PASS** di Postgres
+    16.15 scratch; `04_verify_tests.sql` 27/28 (satu-satunya gagal
+    adalah R7-USERNAME — bentrok LAMA antara tes 04 dan guard R27:
+    tes itu membalik `is_demo` langsung, yang memang ditolak guard
+    sejak migrasi 16; bukan regresi R35).
+11. **Aturan risiko (Ronde 35, keputusan user 26 Nov 2026):** risiko
+    maks 1% dari SALDO ACUAN LEVEL ref(L) = $10.000 × 1,05^(L−1),
+    BUKAN saldo simulasi aktual. ref tidak pernah turun; yang
+    naik/turun hanya saldo simulasi. Risiko di bawah maks bebas dipilih
+    trader per trade. **TIDAK ADA pengaman baru:** pengaman risiko ≤
+    sisa saldo dan pengaman 2% saldo aktual DITOLAK user (26 Nov
+    13:54 WIB) — jangan implementasikan. Saldo simulasi adalah angka
+    jurnal: boleh minus, ditampilkan apa adanya. CHECK
+    `balance_usd >= 0` (01_schema.sql:149) masih ada — pencabutannya
+    menunggu konfirmasi user; sementara itu, bila saldo jatuh di bawah
+    $0, `recalc_trader_progress` gagal di CHECK dan sinyal terkait
+    tetap AKTIF sampai trader reset statistik (jalan keluar yang
+    disepakati).
+12. Aktifkan **Email** provider di **Authentication → Providers**
    (email+password saja; Google OAuth TIDAK diaktifkan).
 
 Panggil dari frontend (Supabase JS):
