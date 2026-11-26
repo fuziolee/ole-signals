@@ -59,7 +59,6 @@ const S = {
   prevPrices: new Map(), // R37b: harga SEBELUM gerakan terakhir per pair (sticky; pembanding panah ticker; kosong = tanpa panah)
   view: 'home',
   officeTab: 'ALL',
-  officeRole: 'trader',
   officeTraderTab: 'sinyal',
   traderProfileTab: 'sinyal',
   traderProfileFilter: 'ALL',
@@ -468,7 +467,7 @@ async function refreshFollowerCounts() {
   } finally { __folRefreshRunning = false; }
 }
 // Ronde 8b (a): perbarui SEMUA tombol Salin untuk sinyal yang sama di
-// seluruh tampilan (feed, Ruang Kerja) — bukan hanya yang diklik.
+// seluruh tampilan (feed, Trader/Follower) — bukan hanya yang diklik.
 function paintCopyButtons(signalId) {
   const copied = S.copiedIds.has(signalId);
   $$(`[data-act="copy"][data-sig="${CSS.escape(signalId)}"]`).forEach((b) => {
@@ -497,8 +496,8 @@ function bindFollowSubscribe(root) {
         const name = traderHandle(traderOf({ trader_id: traderId }));
         toast(t(nowFollowed ? 'toastFollowed' : 'toastUnfollowed', { name }));
         // R25: segarkan "Sinyal dari trader yang kamu ikuti" bila halaman
-        // Ruang Kerja → Pengikut sedang dibuka (tanpa reload).
-        if (S.view === 'office' && S.officeRole === 'follower') renderOfficeFollowerTab();
+        // menu Follower sedang dibuka (tanpa reload).
+        if (S.view === 'office-follower') renderOfficeFollowerTab();
       } catch (err) {
         toast(t('errNetwork'), true);
       } finally {
@@ -618,11 +617,14 @@ async function loadNotifications() {
   paintNotifBadge();
 }
 function paintNotifBadge() {
-  const badge = $('#notif-badge');
-  if (!badge) return;
+  // R38: DUA lonceng (sidebar web + strip atas HP) — kedua badge memakai
+  // angka unread yang sama; selector #notif-badge saja akan membuat badge
+  // HP tertinggal.
   const unread = S.notifs.filter((n) => !n.is_read).length;
-  badge.hidden = unread === 0;
-  badge.textContent = String(unread);
+  $$('.bellbadge').forEach((badge) => {
+    badge.hidden = unread === 0;
+    badge.textContent = String(unread);
+  });
 }
 function notifTypeLabel(type) {
   const map = {
@@ -693,11 +695,37 @@ function setNotifPanel(open) {
   S.notifOpen = open;
   const panel = $('#notif-panel');
   const bell = $('#notif-bell');
-  // B4-09: aria-expanded pada lonceng (prototipe).
+  const bellHp = $('#notif-bell-hp');
+  // B4-09: aria-expanded pada lonceng (prototipe) — kedua lonceng.
   if (bell) bell.setAttribute('aria-expanded', String(open));
+  if (bellHp) bellHp.setAttribute('aria-expanded', String(open));
   if (!panel) return;
   panel.hidden = !open;
-  if (open) renderNotifPanel();
+  if (open) {
+    positionNotifPanel();
+    renderNotifPanel();
+  }
+}
+// R38: panel notifikasi SATU, position:fixed, anak langsung #app —
+// posisinya dihitung dari lonceng yang sedang terlihat (sidebar di web,
+// strip atas di HP) supaya panel membuka di bawah lonceng itu, tidak
+// terpotong tepi kiri (desktop: membuka ke kanan dari sidebar) dan tidak
+// keluar viewport (HP: lebar panel dijepit ke dalam layar).
+function positionNotifPanel() {
+  const panel = $('#notif-panel');
+  if (!panel) return;
+  const desk = $('#notif-bell');
+  const hp = $('#notif-bell-hp');
+  const anchor = (desk && desk.offsetParent !== null) ? desk : hp;
+  if (!anchor) return;
+  const r = anchor.getBoundingClientRect();
+  const w = Math.min(window.innerWidth * 0.92, 360);
+  let left = r.left;
+  if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+  if (left < 8) left = 8;
+  panel.style.left = left + 'px';
+  panel.style.top = (r.bottom + 8) + 'px';
+  panel.style.right = 'auto';
 }
 
 // Laporan trader lokal (D22): backend moderasi belum ada (Fase 5), jadi
@@ -867,7 +895,7 @@ $('#auth-password').addEventListener('input', refreshMatchHint);
 $('#auth-password-confirm').addEventListener('input', refreshMatchHint);
 
 // ------------------------------------------------------------------ nav ---
-const VIEWS = ['home', 'search', 'trader', 'office', 'wallet', 'profile', 'helpguide', 'settings'];
+const VIEWS = ['home', 'search', 'trader', 'office-trader', 'office-follower', 'wallet', 'profile', 'helpguide', 'settings'];
 function showView(name) {
   S.view = name;
   VIEWS.forEach((v) => $('#view-' + v).classList.toggle('active', v === name));
@@ -883,12 +911,12 @@ function showView(name) {
   if (name === 'home') renderHome();
   if (name === 'search') renderSearch();
   if (name === 'trader') renderTraderProfile();
-  if (name === 'office') renderOffice();
+  if (name === 'office-trader') renderTraderWork();
+  if (name === 'office-follower') renderFollowerWork();
   if (name === 'wallet') renderWallet();
   if (name === 'profile') { S.profileSub = null; renderProfile(); }
   if (name === 'helpguide') renderHelpGuide();
   if (name === 'settings') renderSettings();
-  renderRightPanel(); // Ronde 22: panel kanan ikut segar di tiap halaman.
 }
 $$('.bottom-nav [data-nav]').forEach((b) => {
   b.addEventListener('click', () => showView(b.dataset.nav));
@@ -913,18 +941,23 @@ $('#btn-helpguide-back').addEventListener('click', () => {
   }
   showView('profile');
 });
-$('#notif-bell').addEventListener('click', (e) => {
-  e.stopPropagation();
-  setNotifPanel(!S.notifOpen);
-});
+// R38: DUA lonceng (sidebar web + strip atas HP) — keduanya membuka
+// panel yang sama; badge juga ada dua dan mengikat kliknya sendiri.
 // R37b (D-R37b-1b): badge di luar tombol (anak .notif-wrap) — ketukan di
-// badge TIDAK tembus ke tombol (tengah badge 22,6px dari pusat tombol,
-// di luar lingkaran r=20px), jadi badge mengikat kliknya sendiri.
-$('#notif-badge').addEventListener('click', (e) => {
-  e.stopPropagation();
-  setNotifPanel(!S.notifOpen);
+// badge TIDAK tembus ke tombol (tengah badge di luar lingkaran tombol
+// r=18px), jadi badge mengikat kliknya sendiri.
+$$('#notif-bell, #notif-bell-hp').forEach((b) => {
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setNotifPanel(!S.notifOpen);
+  });
 });
-$('#rp-avatar').addEventListener('click', () => showView('profile'));
+$$('#notif-badge, #notif-badge-hp').forEach((b) => {
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setNotifPanel(!S.notifOpen);
+  });
+});
 $('#side-logout').addEventListener('click', () => doLogout());
 // Ronde 22: ripple saat ditekan (preview) — satu span .ripple yang
 // mengembang dari titik tekan, lalu dihapus; tanpa setPointerCapture.
@@ -942,7 +975,9 @@ document.addEventListener('pointerdown', (e) => {
   setTimeout(() => s.remove(), 480);
 });
 document.addEventListener('click', (e) => {
-  if (S.notifOpen && !e.target.closest('.notif-wrap')) setNotifPanel(false);
+  // R38: panel tidak lagi di dalam .notif-wrap (anak langsung #app),
+  // jadi klik di dalam panel juga harus diizinkan agar tidak menutupnya.
+  if (S.notifOpen && !e.target.closest('.notif-wrap, .notif-panel')) setNotifPanel(false);
   const guideBtn = e.target.closest('[data-guide]');
   if (guideBtn) { openGuideSection(guideBtn.dataset.guide); }
 });
@@ -1091,12 +1126,11 @@ async function handleSession(session, event = 'INITIAL_SESSION') {
   try {
     S.myCopies = await api.listMyCopies(S.user.id);
     S.copiedIds = new Set(S.myCopies.map((c) => c.signal_id));
-  } catch (e) { /* salinan dimuat ulang saat membuka Ruang Kerja */ }
+  } catch (e) { /* salinan dimuat ulang saat membuka menu Follower */ }
   try {
     S.myFollows = await api.listMyFollows(S.user.id);
-  } catch (e) { /* ikutan dimuat ulang saat membuka Cari / Ruang Kerja */ }
+  } catch (e) { /* ikutan dimuat ulang saat membuka Cari / Trader */ }
   showApp();
-  renderRightPanel(); // Ronde 22: panel kanan ikut segar setelah masuk.
   // C-01 + R9-1: hanya pindah ke Beranda saat pertama kali masuk / sesi awal
   // untuk user ini. SIGNED_IN ulang (tab kembali aktif, refresh lintas-tab)
   // dan INITIAL_SESSION kedua hanya memuat ulang data — jangan sentuh
@@ -1390,7 +1424,7 @@ function bindSignalCards(root) {
           if (!res.ok) { toast(rpcErrorMessage(res), true); return; }
           toast(t('toastCancelled'));
           invalidateAllSignals();
-          await renderOffice();
+          await renderTraderWork();
           await renderHome();
         } catch (err) {
           toast(t('errNetwork'), true);
@@ -1447,9 +1481,9 @@ async function copySignalText(id) {
     }
   }
   toast(t('toastCopied', { pair: sig.pair }) + (already ? t('toastCopiedAlready') : t('toastCopiedNew')));
-  // R25: bila halaman Ruang Kerja → Pengikut sedang dibuka,
+  // R25: bila halaman Follower sedang dibuka,
   // segarkan daftar Salinan aktif dari state lokal (tanpa reload).
-  if (S.view === 'office' && S.officeRole === 'follower') renderOfficeFollowerTab();
+  if (S.view === 'office-follower') renderOfficeFollowerTab();
   return true;
 }
 
@@ -1971,10 +2005,10 @@ async function markSharedBestEffort(sig) {
   } catch (e) { return false; }
 }
 // R9-4: perbarui tampilan setelah sinyal ditandai dibagikan — daftar feed +
-// Ruang Kerja dirender ulang dari state (objek lokal sudah punya shared_at).
+// menu Trader dirender ulang dari state (objek lokal sudah punya shared_at).
 async function refreshAfterShare() {
   try { renderHomeList(); } catch (e) { /* abaikan */ }
-  try { await renderOffice(); } catch (e) { /* abaikan */ }
+  try { await renderTraderWork(); } catch (e) { /* abaikan */ }
 }
 async function downloadShareCard(sig) {
   // R19: hanya sinyal selesai (WIN/LOSS) yang bisa dibagikan. Tolak DI
@@ -2367,14 +2401,14 @@ function openSignalDetail(id) {
 }
 
 // ------------------------------------------------- renderer statistik ---
-// Dipakai profil trader, statistik Ruang Kerja, dan jurnal follower.
+// Dipakai profil trader, statistik Trader, dan jurnal follower.
 // Semua angka dari sinyal tertutup nyata (js/stats.js); yang belum bisa
 // dihitung tampil "—".
 function statsGridHtml(s) {
   const wr = s.wr === null ? '—' : ds(s.wr.toFixed(1)) + '%';
   const sk = s.streaks;
-  // R26: definisi "ada trade tertutup" sama dengan panel kanan
-  // (renderRightPanel: has = st.closed > 0). Tanpa trade tertutup, Total
+  // R26: definisi "ada trade tertutup" sama dengan statistik Trader
+  // (has = st.closed > 0). Tanpa trade tertutup, Total
   // Profit + Total R menampilkan "—" netral, bukan 0 hijau.
   // R34 (audit B-2): sufiks jumlah pips ("+20 pips" / "0 pips") hanya
   // tampil bila ada trade tertutup — di bawah sel "—", "0 pips" adalah
@@ -2601,7 +2635,8 @@ function bindJournalRows(root) {
         if (copy) S.copiedIds.delete(copy.signal_id);
         S.myCopies = S.myCopies.filter((c) => c.id !== copyId);
         toast(t('jrnlDeleted'));
-        if (S.view === 'office') await renderOffice();
+        if (S.view === 'office-trader') await renderTraderWork();
+        else if (S.view === 'office-follower') await renderFollowerWork();
         renderHomeList(); // kartu feed ikut diperbarui tanpa reload
       } catch (e) {
         toast(t('errNetwork'), true);
@@ -2746,7 +2781,6 @@ async function renderHome(force = false) {
   }
   renderHomeFilters();
   renderHomeList();
-  renderRightPanel(); // Ronde 22: statistik panel kanan ikut segar.
 }
 
 // ------------------------------------------------------------------ Cari ---
@@ -3232,7 +3266,7 @@ async function renderTraderProfile() {
     </div>
     <div id="trader-profile-body"><p class="sub">${esc(t('loading'))}</p></div>`;
   $('#tp-back').addEventListener('click', () => {
-    showView(['home', 'office', 'search'].includes(S.traderProfileFrom) ? S.traderProfileFrom : 'search');
+    showView(['home', 'office-trader', 'office-follower', 'search'].includes(S.traderProfileFrom) ? S.traderProfileFrom : 'search');
   });
   bindFollowSubscribe(box);
   const tpShare = $('#tp-share');
@@ -3321,7 +3355,7 @@ function renderTraderProfileBody(traderId) {
   bindJournalRows(box);
 }
 
-// ----------------------------------------------------------- Ruang Kerja ---
+// ------------------------------------------------- Trader: saldo & statistik ---
 function balanceCardHtml() {
   const p = progressOf(S.trader);
   const level = p ? Number(p.level) || 1 : 1;
@@ -3406,78 +3440,7 @@ function balanceCardHtml() {
   </div>`;
 }
 
-// ------------------------------------------------------- panel kanan (R22) ---
-// Ringkasan akun di panel kanan (desktop): saldo simulasi + 11 baris
-// statistik dari sinyal pengguna SENDIRI (computeStats) — TANPA angka
-// contoh; yang belum bisa dihitung tampil "—" seperti kebiasaan live.
-// Saldo diambil dari sumber yang sama dengan kartu saldo simulasi
-// (trader_progress via progressOf); bila belum ada identitas trader,
-// fallback-nya sama seperti kartu itu (saldo awal $10.000).
-let __rpHideBalance = false;
-try { __rpHideBalance = localStorage.getItem('ole-hide-balance') === '1'; } catch (e) { /* abaikan */ }
-async function renderRightPanel() {
-  const body = $('#rp-body');
-  const avBtn = $('#rp-avatar');
-  if (!body || !S.user) return;
-  // Avatar pengguna yang sebenarnya (foto profil; jatuh ke inisial).
-  if (avBtn) {
-    const p = S.profile || {};
-    const name = p.display_name || p.username || S.user.email || '—';
-    avBtn.innerHTML = avatarImg(name, S.user.id, S.photoUploadPreview.profile || p.avatar_url, 'avatar-sm');
-  }
-  await ensureAllSignals();
-  // Ronde 36: panel SELALU menampilkan akun Trader (mode Follower R33
-  // dihapus; angka follower hanya ada di Ruang Kerja → Pengikut).
-  const list = signalsOfTrader(S.user.id);
-  const balLabel = `${esc(t('rpBalance'))} · ${esc(t('rpAccountTrader'))}`;
-  const statsTitle = t('rpStats');
-  const st = computeStats(list);
-  const closed = list.filter((s) => s.status === 'WIN' || s.status === 'LOSS');
-  const holds = closed
-    .map((s) => s.holding_minutes)
-    .filter((v) => v !== null && v !== undefined && Number.isFinite(Number(v)))
-    .map((v) => Number(v));
-  const avgHold = holds.length ? holds.reduce((a, b) => a + b, 0) / holds.length : null;
-  const has = st.closed > 0;
-  let balance;
-  let subTxt;
-  const p = progressOf(S.trader);
-  balance = p ? Number(p.balance_usd) : START_BALANCE_USD;
-  const cumProfit = balance - START_BALANCE_USD;
-  const pctStart = ((balance - START_BALANCE_USD) / START_BALANCE_USD) * 100;
-  subTxt = S.trader
-    ? `${cumProfit >= 0 ? '↑' : '↓'} ${esc(fmtUsd(Math.abs(cumProfit)))} · ${ds(pctStart.toFixed(2))}% <span>${esc(t('balPctStart'))} ${esc(fmtUsd(START_BALANCE_USD))}</span>`
-    : esc(t('rpNoTrader'));
-  const balTxt = __rpHideBalance ? '$ ••••••••' : fmtUsd(balance);
-  const row = (label, sub, val, valCls = '') => `<div class="rp-stat-row"><div><div class="n">${esc(label)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ''}</div><div class="v"><div class="a ${valCls}">${esc(val)}</div></div></div>`;
-  body.innerHTML = `<div class="rp-bal-label">${balLabel}</div>`
-    + `<div class="rp-bal-num" id="rp-bal-num">${esc(balTxt)}</div>`
-    + `<div class="rp-bal-sub">${subTxt}</div>`
-    + `<div class="rp-hide-row"><span class="t">${esc(t('rpHideBalance'))}</span><button class="rp-switch" id="rp-hide-switch" type="button" role="switch" aria-checked="${__rpHideBalance ? 'true' : 'false'}" aria-label="${esc(t('rpHideBalance'))}"></button></div>`
-    + `<h4>${esc(statsTitle)}</h4>`
-    + row(t('stWinRate'), t('rpClosedSub', { n: st.closed }), has ? `${st.wr.toFixed(0)}%` : '—')
-    + row(t('stTotalRNet'), '', has ? fmtR(st.totalR) : '—', has && st.totalR > 0 ? 'pips-pos' : has && st.totalR < 0 ? 'pips-neg' : '')
-    + row(t('stTotalProfitUSD'), '', has ? fmtUsd(st.totalUSD) : '—', has && st.totalUSD > 0 ? 'pips-pos' : has && st.totalUSD < 0 ? 'pips-neg' : '')
-    + row(t('stMaxDDShort'), '', has ? `−${fmtUsd(st.drawdown.usd)}` : '—', st.drawdown.usd > 0 ? 'pips-neg' : '')
-    + row(t('rpTotalSignals'), t('stTotalSignalsOpen', { n: st.active }), String(st.totalSignals))
-    + row(t('stProfitFactor'), '', has ? fmtPf(st.pf) : '—')
-    + row(t('stRecovery'), '', has ? fmtRf(st.recovery) : '—')
-    + row(t('stAvgR'), '', has ? fmtR(st.avgR) : '—')
-    + row(t('stStreakWinLong'), '', has ? String(st.streaks.longestWin) : '—')
-    + row(t('stStreakLoseLong'), '', has ? String(st.streaks.longestLose) : '—')
-    + row(t('stThHold'), '', fmtHoldMin(avgHold));
-  const sw = $('#rp-hide-switch');
-  if (sw) {
-    sw.addEventListener('click', () => {
-      __rpHideBalance = !__rpHideBalance;
-      try { localStorage.setItem('ole-hide-balance', __rpHideBalance ? '1' : '0'); } catch (e) { /* abaikan */ }
-      sw.setAttribute('aria-checked', __rpHideBalance ? 'true' : 'false');
-      const num = $('#rp-bal-num');
-      if (num) num.textContent = __rpHideBalance ? '$ ••••••••' : fmtUsd(balance);
-    });
-  }
-}
-
+// ------------------------------------------------------------- form sinyal ---
 function signalFormHtml(editing) {
   const sig = editing || null;
   // R9-6: username trader wajib dibuat sebelum posting (prototipe
@@ -3608,14 +3571,12 @@ function bindSignalForm(editing) {
   const sellBtn = $('#sf-sell');
   const guideLink = $('#sf-guide-link');
   if (guideLink) guideLink.addEventListener('click', () => openGuideSection('signal'));
-  // R9-6: tombol banner username → Ruang Kerja → Trader → Profil (Akun Trader).
+  // R9-6: tombol banner username → Trader → Profil (Akun Trader).
   const usernameCta = $('#sf-username-cta');
   if (usernameCta) {
     usernameCta.addEventListener('click', () => {
-      S.officeRole = 'trader';
       S.officeTraderTab = 'profil';
-      showView('office');
-      renderOffice();
+      showView('office-trader');
     });
   }
   const setDir = (dir) => {
@@ -3632,11 +3593,11 @@ function bindSignalForm(editing) {
   refreshRiskBox();
   const cancelEdit = $('#sf-cancel-edit');
   if (cancelEdit) {
-    // "Batal ubah" tetap di Ruang Kerja — tidak pindah halaman.
+    // "Batal ubah" tetap di menu Trader — tidak pindah halaman.
     cancelEdit.addEventListener('click', () => {
       S.editingId = null;
       S.editingVersion = null;
-      renderOffice();
+      renderTraderWork();
     });
   }
   $('#sig-form').addEventListener('submit', async (e) => {
@@ -3668,7 +3629,7 @@ function bindSignalForm(editing) {
           // Data basi — muat ulang agar versi terbaru tampil.
           S.editingId = null;
           S.editingVersion = null;
-          await renderOffice();
+          await renderTraderWork();
         }
         return;
       }
@@ -3677,7 +3638,7 @@ function bindSignalForm(editing) {
       S.editingVersion = null;
       invalidateAllSignals();
       await refreshIdentity();
-      await renderOffice();
+      await renderTraderWork();
       await renderHome();
     } catch (err) {
       errBox.textContent = t('errNetwork');
@@ -3697,8 +3658,8 @@ function startEditSignal(sig) {
   }
   S.editingId = sig.id;
   S.editingVersion = sig.version;
-  showView('office');
-  // Form edit dirender di atas daftar sinyal, tetap di Ruang Kerja.
+  showView('office-trader');
+  // Form edit dirender di atas daftar sinyal, tetap di menu Trader.
   setTimeout(() => {
     const form = $('#sig-form');
     if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3858,47 +3819,32 @@ function bindUsernameForm(root, kind, onDone) {
   }
 }
 
-async function renderOffice() {
-  const body = $('#office-body');
-  // D04: role toggle SELALU tampil — yang diblokir bila belum ada identitas
-  // trader hanyalah posting (banner + form identitas), bukan peran Pengikut.
-  body.innerHTML = `<div class="role-toggle" role="group" aria-label="${esc(t('officeTitle'))}">
-      <button type="button" data-orole="trader" aria-pressed="${S.officeRole === 'trader'}">${esc(t('officeRoleTrader'))}</button>
-      <button type="button" data-orole="follower" aria-pressed="${S.officeRole === 'follower'}">${esc(t('officeRoleFollower'))}</button>
-    </div>
-    <div id="office-role-body"><p class="sub">${esc(t('loading'))}</p></div>`;
-  $$('#office-body [data-orole]').forEach((b) => {
-    b.addEventListener('click', () => {
-      S.officeRole = b.dataset.orole;
-      renderOffice();
-    });
-  });
-  await renderOfficeRole();
-  renderRightPanel(); // Ronde 22: statistik panel kanan ikut segar.
-}
-
-async function renderOfficeRole() {
-  const box = $('#office-role-body');
-  if (!box) return;
-  if (S.officeRole === 'follower') {
-    await renderOfficeFollower(box);
-    return;
-  }
+// ------------------------------------------- Trader & Follower (R38) ---
+// R38: Ruang Kerja dipecah jadi dua menu (Trader + Follower) —
+// role-toggle dihapus; tiap menu merender cabangnya sendiri.
+async function renderTraderWork() {
+  const body = $('#trader-work-body');
+  if (!body) return;
   if (!S.trader) {
     // D04: belum ada identitas trader — tampilkan banner + form penyiapan
-    // (nama tampilan + username, komponen D05); peran Pengikut tetap
-    // bisa dibuka lewat toggle di atas.
-    box.innerHTML = `<div class="warnbar" role="alert">${esc(t('officeNeedUsernameBanner'))}</div>`
+    // (nama tampilan + username, komponen D05).
+    body.innerHTML = `<div class="warnbar" role="alert">${esc(t('officeNeedUsernameBanner'))}</div>`
       + `<div class="subcard" style="margin-top:14px;"><h3>${esc(t('officeIdentityTitle'))}</h3>`
       // R11/D3: pembungkus LUAR sengaja <div>, bukan <form> — usernameFormHtml
       // me-render <form> sendiri; form bersarang dibuang parser HTML sehingga
       // tombol "Buat username" dulu mati (submit native ke /?).
       + `<div><div class="field"><label for="id-display">${esc(t('traderNameLbl'))}</label><input id="id-display" maxlength="60" autocomplete="off" value=""></div>`
       + `<div id="id-username-wrap">${usernameFormHtml('trader')}</div></div></div>`;
-    bindUsernameForm(box, 'trader', () => renderOffice());
+    bindUsernameForm(body, 'trader', () => renderTraderWork());
     return;
   }
-  await renderOfficeTrader(box);
+  await renderOfficeTrader(body);
+}
+
+async function renderFollowerWork() {
+  const body = $('#follower-work-body');
+  if (!body) return;
+  await renderOfficeFollower(body);
 }
 
 function traderIdentityCardHtml() {
@@ -3950,7 +3896,7 @@ function bindPhotoInput(inputId, target) {
     S.photoUploadDraft[target] = file;
     S.photoUploadPreview[target] = URL.createObjectURL(file);
     S.photoDraft[target] = false; // foto baru membatalkan draft hapus
-    if (S.view === 'office') renderOfficeTraderTab();
+    if (S.view === 'office-trader') renderOfficeTraderTab();
     if (S.view === 'profile') renderProfile();
     input.value = '';
   });
@@ -4041,7 +3987,7 @@ function renderOfficeTraderTab(editing = null) {
           toast(t('toastResetDone', { n: res.deleted ?? 0, subs: res.paused ?? 0 }));
           invalidateAllSignals();
           await refreshIdentity();
-          await renderOffice();
+          await renderTraderWork();
         } catch (err) {
           toast(t('errNetwork'), true);
         } finally {
@@ -4179,13 +4125,13 @@ async function renderOfficeList() {
     list.innerHTML = `<div class="empty"><strong>${t(emptyKey)}</strong></div>`;
     return;
   }
-  // R20: feed Ruang Kerja Trader 2 kolom di web (seperti Beranda) — bungkus
+  // R20: feed Trader 2 kolom di web (seperti Beranda) — bungkus
   // .feed-grid; Riwayat (jurnal) tidak disentuh.
   list.innerHTML = `<div class="feed-grid">` + filtered.map(signalCardHtml).join('') + `</div>`;
   bindSignalCards(list);
 }
 
-// ---------------------------------------------------------- Ruang Kerja: pengikut ---
+// ---------------------------------------------------------- Follower ---
 async function renderOfficeFollower(box) {
   try {
     const [follows, copies, subs] = await Promise.all([
@@ -4499,9 +4445,9 @@ function renderSettingsAccount(body) {
     + (S.trader ? `<div class="subcard"><div id="trader-username-wrap">${usernameFormHtml('trader')}</div></div>` : '');
   bindSettingsBack();
   bindUsernameForm(body, 'follower', () => renderSettingsAccount(body));
-  // R11: ubah username trader pindah ke sini dari Ruang Kerja → Trader →
-  // Profil. Hanya bila identitas trader ada; setup pertama kali tetap di
-  // Ruang Kerja (renderOfficeRole) dan tidak ditampilkan di sini.
+  // R11: ubah username trader pindah ke sini dari Trader → Profil.
+  // Hanya bila identitas trader ada; setup pertama kali tetap di
+  // Trader (renderTraderWork) dan tidak ditampilkan di sini.
   if (S.trader) bindUsernameForm(body, 'trader', () => renderSettingsAccount(body));
   const form = $('#set-name-form');
   if (form) {
