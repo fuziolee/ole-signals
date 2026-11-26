@@ -458,9 +458,11 @@ h1 { font-size: 30px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 4p
   #app { margin-left: max(64px, calc((100vw - 996px) / 2)); }
 }
 
-/* ---- feed Beranda grid (R38: 3 kolom tetap di web) ----
+/* ---- feed Beranda grid (R40: 2 kolom di web — membalikkan
+   keputusan 21:01 WIB "Beranda 3 kolom SAJA" atas perintah user
+   23:14 WIB, supaya kartu cukup lebar untuk level 4 sebaris) ----
    R39 (aturan kolom global): HP (<900px) SEMUA feed 1 kolom —
-   #home-list, .feed-grid, .traders. Web (≥900px): #home-list 3 kolom,
+   #home-list, .feed-grid, .traders. Web (≥900px): #home-list 2 kolom,
    .feed-grid 2 kolom. Riwayat (jurnal) tidak memakai grid ini —
    tetap 1 kolom, tidak disentuh. */
 #home-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
@@ -469,7 +471,7 @@ h1 { font-size: 30px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 4p
 #home-list .sig { padding: 16px; }
 #home-list > .empty { grid-column: 1 / -1; }
 @media (min-width: 900px) {
-  #home-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #home-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* R39: feed sinyal 2 kolom di web. */
   .feed-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -1169,15 +1171,16 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
   .bottom-nav { display: none; }
 }
 /* --- HP <900px: satu halaman. R38: panel kanan dihapus — strip atas
-   ramping (.hp-topbar) berisi lonceng saja, tanpa avatar, di atas
-   konten. Bar TIDAK sticky — ikut scroll halaman: sticky tidak bisa
+   ramping (.hp-topbar) berisi nama web + lonceng, tanpa avatar, di atas
+   konten (R40: nama ditambahkan 23:19 WIB — sebelumnya lonceng saja).
+   Bar TIDAK sticky — ikut scroll halaman: sticky tidak bisa
    jalan di dalam .app yang overflow:hidden, dan bar tidak boleh
    menutupi konten saat scroll. --- */
 @media (max-width: 899px) {
   body { padding: 0; }
   .app { margin: 0; border-radius: 0; box-shadow: none; min-height: 100vh; display: flex; flex-direction: column; }
   main { padding: 14px 17px 110px; }
-  .hp-topbar { order: -1; display: flex; justify-content: flex-end; padding: 10px 17px; border-bottom: 1px solid var(--line); }
+  .hp-topbar { order: -1; display: flex; justify-content: space-between; align-items: center; padding: 10px 17px; border-bottom: 1px solid var(--line); }
   .side-nav { display: none; }
 }
 
@@ -1187,13 +1190,18 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
 .card, .tcard, .board-card, .subcard, .balance-card, .auth-card, .chart-card, .verify-card { border: 1.5px solid var(--teal); }
 .sig { border: 1.5px solid var(--teal); }
 /* Kartu sinyal: panel level abu-abu seperti preview. */
-/* R22: di feed 2 kolom (web ≥900px) kartu hanya ~300px — grid 4 kolom
-   membuat kotak ke-4 ("Harga sekarang") meluber keluar kartu (terbukti
-   screenshot r22-01). Pakai 2×2 seperti di HP (≤560px) — rapi. */
+/* R40: 2×2 R22 DIHAPUS — level 4 sebaris di semua kartu web (diukur
+   muat, r40-measure: kartu 2 kolom tersempit 374.5px di viewport
+   900px; font angka 13px + padding/gap ringkas membuat harga 8 digit
+   "3,571.99" muat tanpa overflow di 900/1024/1100/1366px; font 14.5px
+   gagal di 900px dan 1100px, maks meluber 10px). Perlakuan ini sama
+   dengan HP ≤560px. Beranda jadi 2 kolom (R40) supaya kartu cukup
+   lebar untuk 4 sebaris. */
 .sig-levels { background: var(--panel-2); border-radius: 14px; padding: 12px 15px; }
 .sig-levels .lv { background: transparent; }
 @media (min-width: 900px) {
-  .sig-levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sig-levels { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 10px; gap: 6px; }
+  .sig-levels .lv b { font-size: 13px; }
 }
 /* Baris atas kartu boleh membungkus: grup kanan (level, lencana, status)
    turun ke baris sendiri bila sempit, bukan menjepit nama/waktu sampai
