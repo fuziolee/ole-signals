@@ -570,6 +570,8 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
   border-radius: 999px; background: var(--sell); color: #fff;
   font-size: 11px; font-weight: 800; display: grid; place-items: center; padding: 0 4px;
 }
+/* R37b: badge anak .notif-wrap (bukan tombol) — bebas dari overflow:hidden
+   ripple R22; klik badge ditangani sendiri di app.js (ikat #notif-badge). */
 .notif-panel {
   position: absolute; right: 0; top: 48px; z-index: 50; width: min(92vw, 360px);
   background: var(--panel); border: 1.5px solid var(--teal); border-radius: var(--radius);
