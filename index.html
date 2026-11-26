@@ -47,6 +47,10 @@
     <main>
       <!-- Beranda -->
       <section class="view" id="view-home" aria-label="Beranda">
+        <!-- R37: ticker harga live arah A (marquee berjalan). Hanya Beranda.
+             Isi diisi paintTicker() dari S.prices; tersembunyi bila belum ada
+             harga (tidak pernah diisi angka karangan). -->
+        <div id="ticker" class="ticker" hidden><div class="ticker-track" id="ticker-track"></div></div>
         <div id="home-filters"></div>
         <p class="risk-note" data-i18n="riskNote"></p>
         <div id="home-list"></div>
