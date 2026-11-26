@@ -60,7 +60,6 @@ const S = {
   officeTab: 'ALL',
   officeRole: 'trader',
   officeTraderTab: 'sinyal',
-  officeFollowerTab: 'sinyal',
   traderProfileTab: 'sinyal',
   traderProfileFilter: 'ALL',
   traderProfileId: null,
@@ -497,8 +496,8 @@ function bindFollowSubscribe(root) {
         const name = traderHandle(traderOf({ trader_id: traderId }));
         toast(t(nowFollowed ? 'toastFollowed' : 'toastUnfollowed', { name }));
         // R25: segarkan "Sinyal dari trader yang kamu ikuti" bila halaman
-        // Ruang Kerja → Pengikut → Sinyal sedang dibuka (tanpa reload).
-        if (S.view === 'office' && S.officeRole === 'follower' && S.officeFollowerTab === 'sinyal') renderOfficeFollowerTab();
+        // Ruang Kerja → Pengikut sedang dibuka (tanpa reload).
+        if (S.view === 'office' && S.officeRole === 'follower') renderOfficeFollowerTab();
       } catch (err) {
         toast(t('errNetwork'), true);
       } finally {
@@ -918,13 +917,6 @@ $('#notif-bell').addEventListener('click', (e) => {
   setNotifPanel(!S.notifOpen);
 });
 $('#rp-avatar').addEventListener('click', () => showView('profile'));
-// R33: ikon ganti mode panel kanan (Trader ⇄ Follower) — satu klik, mode
-// disimpan (ole-rp-mode) lalu panel dirender ulang; tanpa daftar salinan.
-$('#rp-mode-btn').addEventListener('click', () => {
-  __rpMode = __rpMode === 'follower' ? 'trader' : 'follower';
-  try { localStorage.setItem('ole-rp-mode', __rpMode); } catch (e) { /* abaikan */ }
-  renderRightPanel();
-});
 $('#side-logout').addEventListener('click', () => doLogout());
 // Ronde 22: ripple saat ditekan (preview) — satu span .ripple yang
 // mengembang dari titik tekan, lalu dihapus; tanpa setPointerCapture.
@@ -1358,9 +1350,9 @@ async function copySignalText(id) {
     }
   }
   toast(t('toastCopied', { pair: sig.pair }) + (already ? t('toastCopiedAlready') : t('toastCopiedNew')));
-  // R25: bila halaman Ruang Kerja → Pengikut → Sinyal sedang dibuka,
+  // R25: bila halaman Ruang Kerja → Pengikut sedang dibuka,
   // segarkan daftar Salinan aktif dari state lokal (tanpa reload).
-  if (S.view === 'office' && S.officeRole === 'follower' && S.officeFollowerTab === 'sinyal') renderOfficeFollowerTab();
+  if (S.view === 'office' && S.officeRole === 'follower') renderOfficeFollowerTab();
   return true;
 }
 
@@ -2409,7 +2401,9 @@ function pairTableHtml(s, subKey = 'stPairSub') {
   return `<div class="chart-card"><h3>${esc(t('stPairTitle'))}</h3><div class="sub">${esc(t(subKey))}<span class="estbadge">${esc(t('estBadge'))}</span> <button class="guidelink" type="button" data-guide="risk">${esc(t('sigDetail'))} ${ICONS.arrow}</button></div>`
     + `<div class="board-wrap" style="box-shadow:none"><table class="board"><thead><tr><th>${esc(t('stThPair'))}</th><th class="num">${esc(t('stThTrades'))}</th><th class="num">${esc(t('stThWR'))}</th><th class="num">${esc(t('stThProfit'))}</th><th class="num">${esc(t('stThPF'))}</th><th class="num">${esc(t('stThTotalR'))}</th><th class="num">${esc(t('stThAvgR'))}</th><th class="num">${esc(t('stThAvgSL'))}</th><th class="num">${esc(t('stThAvgTP'))}</th><th class="num">${esc(t('stThStreak'))}</th><th class="num">${esc(t('stThMaxDD'))}</th><th class="num">${esc(t('stThRecovery'))}</th><th class="num">${esc(t('stThHold'))}</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
-function statsSectionHtml(s, titleKey, subKey = null, afterGridHtml = '', monthSurface = 'jurnal') {
+// Ronde 36: parameter monthSurface wajib diisi pemanggil (dulu default
+// 'jurnal' — permukaan itu dihapus bersama tab Jurnal follower).
+function statsSectionHtml(s, titleKey, subKey = null, afterGridHtml = '', monthSurface) {
   return `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t(titleKey))}</h2>`
     + (subKey ? `<p class="sub">${esc(t(subKey))}</p>` : '')
     + (s.closed === 0 ? `<div class="empty"><strong>${esc(t('stNoTrades'))}</strong></div>` : '')
@@ -3324,25 +3318,6 @@ function balanceCardHtml() {
 // fallback-nya sama seperti kartu itu (saldo awal $10.000).
 let __rpHideBalance = false;
 try { __rpHideBalance = localStorage.getItem('ole-hide-balance') === '1'; } catch (e) { /* abaikan */ }
-// R33: mode panel kanan — 'trader' (default) atau 'follower'. Persist di
-// localStorage (pola sama seperti ole-hide-balance) supaya tidak kembali
-// ke Trader tiap pindah halaman / reload.
-let __rpMode = 'trader';
-try { __rpMode = localStorage.getItem('ole-rp-mode') === 'follower' ? 'follower' : 'trader'; } catch (e) { /* abaikan */ }
-// Ikon mode (gaya feather seperti lonceng: stroke, 24x24). Ikon MENUNJUKKAN
-// mode aktif: grafik garis = Akun Trader, dua lembar salinan = Akun Follower.
-const RP_ICON_TRADER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>';
-const RP_ICON_FOLLOWER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-function paintRpModeBtn() {
-  const b = $('#rp-mode-btn');
-  if (!b) return;
-  const follower = __rpMode === 'follower';
-  b.setAttribute('data-mode', __rpMode);
-  const label = follower ? t('rpSwitchToTrader') : t('rpSwitchToFollower');
-  b.setAttribute('aria-label', label);
-  b.setAttribute('title', label);
-  b.innerHTML = follower ? RP_ICON_FOLLOWER : RP_ICON_TRADER;
-}
 async function renderRightPanel() {
   const body = $('#rp-body');
   const avBtn = $('#rp-avatar');
@@ -3354,31 +3329,11 @@ async function renderRightPanel() {
     avBtn.innerHTML = avatarImg(name, S.user.id, S.photoUploadPreview.profile || p.avatar_url, 'avatar-sm');
   }
   await ensureAllSignals();
-  // R33: ikon ganti mode dicat ulang di tiap render (ikon + label mengikuti
-  // mode aktif; mode Follower juga ditandai warna aksen via data-mode).
-  paintRpModeBtn();
-  let list;
-  let balLabel;
-  let statsTitle;
-  if (__rpMode === 'follower') {
-    // Mode Follower — jalur yang SAMA persis dengan tab Jurnal
-    // (renderOfficeFollowerTab): salinan pengguna → computeStats.
-    // Saldo simulasi = $10.000 + total profit jurnal salinan.
-    list = S.myCopies
-      .map((c) => one(c.signals) || c.signal_snapshot)
-      .filter(Boolean)
-      .map((s) => ({ ...s, traders: s.traders || {} }));
-    balLabel = `${esc(t('rpBalance'))} · ${esc(t('rpAccountFollower'))}`;
-    statsTitle = t('rpStatsFollower');
-  } else {
-    list = signalsOfTrader(S.user.id);
-    balLabel = `${esc(t('rpBalance'))} · ${esc(t('rpAccountTrader'))}`;
-    statsTitle = t('rpStats');
-  }
-  // Statistik dari daftar sinyal mode aktif; avgHold dihitung dari
-  // holding_minutes sinyal tertutup (computeStats mengembalikan null
-  // untuk avgHold karena settlement belum menulisnya dengan andal —
-  // bila tidak ada holding_minutes yang tercatat, tampil "—").
+  // Ronde 36: panel SELALU menampilkan akun Trader (mode Follower R33
+  // dihapus; angka follower hanya ada di Ruang Kerja → Pengikut).
+  const list = signalsOfTrader(S.user.id);
+  const balLabel = `${esc(t('rpBalance'))} · ${esc(t('rpAccountTrader'))}`;
+  const statsTitle = t('rpStats');
   const st = computeStats(list);
   const closed = list.filter((s) => s.status === 'WIN' || s.status === 'LOSS');
   const holds = closed
@@ -3389,20 +3344,13 @@ async function renderRightPanel() {
   const has = st.closed > 0;
   let balance;
   let subTxt;
-  if (__rpMode === 'follower') {
-    balance = START_BALANCE_USD + st.totalUSD;
-    const cumProfit = balance - START_BALANCE_USD;
-    const pctStart = ((balance - START_BALANCE_USD) / START_BALANCE_USD) * 100;
-    subTxt = `${cumProfit >= 0 ? '↑' : '↓'} ${esc(fmtUsd(Math.abs(cumProfit)))} · ${ds(pctStart.toFixed(2))}% <span>${esc(t('balPctStart'))} ${esc(fmtUsd(START_BALANCE_USD))}</span>`;
-  } else {
-    const p = progressOf(S.trader);
-    balance = p ? Number(p.balance_usd) : START_BALANCE_USD;
-    const cumProfit = balance - START_BALANCE_USD;
-    const pctStart = ((balance - START_BALANCE_USD) / START_BALANCE_USD) * 100;
-    subTxt = S.trader
-      ? `${cumProfit >= 0 ? '↑' : '↓'} ${esc(fmtUsd(Math.abs(cumProfit)))} · ${ds(pctStart.toFixed(2))}% <span>${esc(t('balPctStart'))} ${esc(fmtUsd(START_BALANCE_USD))}</span>`
-      : esc(t('rpNoTrader'));
-  }
+  const p = progressOf(S.trader);
+  balance = p ? Number(p.balance_usd) : START_BALANCE_USD;
+  const cumProfit = balance - START_BALANCE_USD;
+  const pctStart = ((balance - START_BALANCE_USD) / START_BALANCE_USD) * 100;
+  subTxt = S.trader
+    ? `${cumProfit >= 0 ? '↑' : '↓'} ${esc(fmtUsd(Math.abs(cumProfit)))} · ${ds(pctStart.toFixed(2))}% <span>${esc(t('balPctStart'))} ${esc(fmtUsd(START_BALANCE_USD))}</span>`
+    : esc(t('rpNoTrader'));
   const balTxt = __rpHideBalance ? '$ ••••••••' : fmtUsd(balance);
   const row = (label, sub, val, valCls = '') => `<div class="rp-stat-row"><div><div class="n">${esc(label)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ''}</div><div class="v"><div class="a ${valCls}">${esc(val)}</div></div></div>`;
   body.innerHTML = `<div class="rp-bal-label">${balLabel}</div>`
@@ -4157,55 +4105,15 @@ async function renderOfficeFollower(box) {
     box.innerHTML = `<div class="empty"><strong>${esc(t('errNetwork'))}</strong></div>`;
     return;
   }
-  let html = `<div class="subtabs" role="tablist">
-    <button class="subtab" role="tab" data-ftab="sinyal" aria-selected="${S.officeFollowerTab === 'sinyal'}">${esc(t('profTabSignals'))}</button>
-    <button class="subtab" role="tab" data-ftab="jurnal" aria-selected="${S.officeFollowerTab === 'jurnal'}">${esc(t('officeFollowerTabJournal'))}</button>
-  </div><div id="office-follower-body"></div>`;
+  // Ronde 36: tab Jurnal dihapus (keputusan user 14:10 WIB) — ruang kerja
+  // follower hanya Sinyal + Salinan aktif + Riwayat, tanpa subtab.
+  let html = `<div id="office-follower-body"></div>`;
   box.innerHTML = html;
-  $$('[data-ftab]', box).forEach((b) => {
-    b.addEventListener('click', () => {
-      S.officeFollowerTab = b.dataset.ftab;
-      renderOfficeFollowerTab();
-    });
-  });
   renderOfficeFollowerTab();
 }
 function renderOfficeFollowerTab() {
   const box = $('#office-follower-body');
   if (!box) return;
-  $$('[data-ftab]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.ftab === S.officeFollowerTab)));
-  if (S.officeFollowerTab === 'jurnal') {
-    // Jurnal salinan: statistik dari sinyal yang disalin + riwayat.
-    const copiedSignals = S.myCopies
-      .map((c) => one(c.signals) || c.signal_snapshot)
-      .filter(Boolean)
-      .map((s) => ({ ...s, traders: s.traders || {} }));
-    const st = computeStats(copiedSignals);
-    const aktif = copiedSignals.filter((s) => s.status === 'AKTIF');
-    const pend = copiedSignals.filter((s) => s.status === 'PENDING');
-    // Catatan floating di bawah grid statistik (nilai nyata; "—" bila
-    // belum ada harga live). Bila belum ada salinan, floatNote dibiarkan
-    // kosong (D-02/B2-04).
-    let floatNote = '';
-    if (copiedSignals.length) {
-      const vals = aktif.map((s) => floatingUsd(s));
-      const sum = vals.some((v) => v !== null) ? vals.reduce((a, b) => a + (b || 0), 0) : null;
-      const amt = sum !== null ? fmtUsd0(sum) : '—';
-      const pendPart = pend.length ? t('jrnlPendPart', { n: pend.length }) : '';
-      floatNote = `<p class="journal-note">${t('jrnlNote', { amt, n: aktif.length, pend: pendPart })}</p>`;
-    }
-    // R20-6: Jurnal adalah jurnal KINERJA (statistik + riwayat trade
-    // tertutup dari sinyal yang disalin), BUKAN daftar salinan — daftar
-    // salinan sudah ada di "Salinan aktif" (tab Sinyal). Kotak kosong
-    // jrnlEmpty di sini duplikat dan membingungkan, jadi dihapus; bila
-    // 0 trade tertutup, statsSectionHtml sudah menampilkan "Belum ada
-    // trade tertutup." sendiri. Isi Jurnal (statistik, chart, tabel
-    // bulanan, tabel per-pair) tidak berubah.
-    box.innerHTML = statsSectionHtml(st, 'officeJournalStatsTitle', null, floatNote, 'jurnal');
-    bindMonthYear('jurnal', () => renderOfficeFollowerTab());
-    updateBoardScrollHints(box);
-    return;
-  }
   // Tab Sinyal: salinan aktif + sinyal dari trader yang diikuti, dengan
   // chip filter (Semua/Pending/Aktif + Riwayat di kanan).
   // (Ronde 15 #2: sub-tab "Diikuti" dihapus — daftar trader yang diikuti
