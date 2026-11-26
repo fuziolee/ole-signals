@@ -35,14 +35,25 @@
   <div class="app" id="app" hidden>
     <!-- Sidebar web (Ronde 15 #3): layar lebar ≥900px; di HP pakai bottom nav -->
     <nav class="side-nav" aria-label="Navigasi utama">
-      <div class="side-brand"><span class="logo">OLE <em>Signals</em></span></div>
+      <div class="side-brand"><span class="logo">OLE <em>Signals</em></span><div class="notif-wrap"><button class="bellbtn" id="notif-bell" type="button" aria-label="Notifikasi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></button><span class="bellbadge" id="notif-badge" hidden>0</span></div></div>
       <button type="button" data-nav="home" aria-selected="true"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></svg></span><span class="lbl" data-i18n="navHome"></span></button>
       <button type="button" data-nav="search" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span><span class="lbl" data-i18n="navSearch"></span></button>
-      <button type="button" data-nav="office" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><span class="lbl" data-i18n="navOffice"></span></button>
+      <button type="button" data-nav="office-trader" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19v-6"/><path d="M10 19V9"/><path d="M15 19v-9"/><path d="M20 19V5"/></svg></span><span class="lbl" data-i18n="navTrader"></span></button>
+      <button type="button" data-nav="office-follower" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="lbl" data-i18n="navFollower"></span></button>
       <button type="button" data-nav="wallet" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H6"/></svg></span><span class="lbl" data-i18n="navWallet"></span></button>
       <button type="button" data-nav="profile" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="lbl" data-i18n="navProfile"></span></button>
       <button type="button" id="side-logout"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3"/><path d="m16 16.5 5-4.5-5-4.5"/><path d="M21 12H9.5"/></svg></span><span class="lbl" data-i18n="logout"></span></button>
     </nav>
+
+    <!-- R38: strip atas HP (<900px) berisi lonceng saja, tanpa avatar;
+         sidebar tersembunyi di HP jadi lonceng butuh wadah sendiri. -->
+    <div class="hp-topbar"><div class="notif-wrap"><button class="bellbtn" id="notif-bell-hp" type="button" aria-label="Notifikasi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></button><span class="bellbadge" id="notif-badge-hp" hidden>0</span></div></div>
+
+    <!-- R38: SATU panel notifikasi, anak langsung #app — tidak boleh di
+         dalam sidebar (display:none di HP menyembunyikan keturunannya,
+         termasuk panel fixed) atau di dalam main (ikut scroll). Posisi
+         fixed diatur JS dari lonceng yang terlihat (positionNotifPanel). -->
+    <div class="notif-panel" id="notif-panel" hidden></div>
 
     <main>
       <!-- Beranda -->
@@ -93,10 +104,16 @@
         <div id="wallet-body"></div>
       </section>
 
-      <!-- Ruang Kerja -->
-      <section class="view" id="view-office" aria-label="Ruang Kerja">
-        <h1 data-i18n="officeTitle"></h1>
-        <div id="office-body"></div>
+      <!-- Trader (R38: dulu tab Trader di Ruang Kerja) -->
+      <section class="view" id="view-office-trader" aria-label="Trader">
+        <h1 data-i18n="navTrader"></h1>
+        <div id="trader-work-body"></div>
+      </section>
+
+      <!-- Follower (R38: dulu tab Pengikut di Ruang Kerja) -->
+      <section class="view" id="view-office-follower" aria-label="Follower">
+        <h1 data-i18n="navFollower"></h1>
+        <div id="follower-work-body"></div>
       </section>
 
       <!-- Profil -->
@@ -123,25 +140,12 @@
       </section>
     </main>
 
-    <!-- Panel kanan (Ronde 22): ringkasan akun — saldo + statistik nyata,
-         tanpa "Trader Teratas" (dihapus atas persetujuan user). -->
-    <aside class="right-panel" id="right-panel" aria-label="Ringkasan akun">
-      <div class="rp-top">
-        <div class="notif-wrap">
-          <button class="bellbtn rp-bell" id="notif-bell" type="button" aria-label="Notifikasi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></button>
-          <span class="bellbadge" id="notif-badge" hidden>0</span>
-          <div class="notif-panel" id="notif-panel" hidden></div>
-        </div>
-        <button class="avatar-btn rp-avatar" id="rp-avatar" type="button" aria-label="Profil"></button>
-      </div>
-      <div id="rp-body"></div>
-    </aside>
-
     <div class="bottom-nav">
       <nav aria-label="Navigasi utama">
         <button type="button" data-nav="home" aria-selected="true"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></svg></span><span data-i18n="navHome"></span></button>
         <button type="button" data-nav="search" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span><span data-i18n="navSearch"></span></button>
-        <button type="button" data-nav="office" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><span data-i18n="navOffice"></span></button>
+        <button type="button" data-nav="office-trader" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19v-6"/><path d="M10 19V9"/><path d="M15 19v-9"/><path d="M20 19V5"/></svg></span><span data-i18n="navTrader"></span></button>
+        <button type="button" data-nav="office-follower" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span data-i18n="navFollower"></span></button>
         <button type="button" data-nav="wallet" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H6"/></svg></span><span data-i18n="navWallet"></span></button>
         <button type="button" data-nav="profile" aria-selected="false"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span data-i18n="navProfile"></span></button>
       </nav>
