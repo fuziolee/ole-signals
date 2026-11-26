@@ -683,7 +683,7 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
 
 /* Statistik: grid + grafik + tabel */
 .pstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 4px 0 12px; }
-.stat-cell { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px; }
+.stat-cell { background: var(--panel); border: 1.5px solid var(--teal); border-radius: 16px; padding: 10px 12px; }
 .stat-cell .num { font-size: 16px; font-weight: 800; }
 .stat-cell .lbl { font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.35; text-transform: uppercase; letter-spacing: .06em; }
 .chart-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; margin-bottom: 12px; }
@@ -1189,6 +1189,11 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
 /* --- Pinggiran kartu utama: biru muda tipis #38BDF8 1.5px (R22) --- */
 .card, .tcard, .board-card, .subcard, .balance-card, .auth-card, .chart-card, .verify-card { border: 1.5px solid var(--teal); }
 .sig { border: 1.5px solid var(--teal); }
+/* R41: kolom tabel statistik per pair: garis pinggir biru muda 1.5px,
+   sama seperti kartu (R22). Hanya tabel per pair (hook .pair-board di
+   pairTableHtml); tabel Profit Per Month tidak berubah. */
+.pair-board table.board th, .pair-board table.board td { border: 1.5px solid var(--teal); }
+.pair-board table.board tbody tr:last-child td { border-bottom: 1.5px solid var(--teal); }
 /* Kartu sinyal: panel level abu-abu seperti preview. */
 /* R40: 2×2 R22 DIHAPUS — level 4 sebaris di semua kartu web (diukur
    muat, r40-measure: kartu 2 kolom tersempit 374.5px di viewport
