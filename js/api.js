@@ -51,7 +51,7 @@ export async function updatePassword(password) {
 export async function getMyProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, display_name, avatar_url, region, kyc_status, kyc_full_name, kyc_reference, kyc_reject_reason, display_name_changed_at, created_at')
+    .select('id, username, display_name, avatar_url, region, kyc_status, kyc_full_name, kyc_reference, kyc_reject_reason, display_name_changed_at, username_changed_at, created_at')
     .eq('id', userId)
     .maybeSingle();
   if (error) throw error;
@@ -61,7 +61,7 @@ export async function getMyProfile(userId) {
 export async function getMyTrader(userId) {
   const { data, error } = await supabase
     .from('traders')
-    .select('profile_id, username, trader_display_name, trader_avatar_url, is_demo, trader_progress(level, balance_usd, level_ref_balance, r_since_level, trades_since_level, max_drawdown_usd, max_drawdown_pct, last_reset_at, reset_cooldown_until, updated_at)')
+    .select('profile_id, username, username_changed_at, trader_display_name, trader_avatar_url, is_demo, trader_progress(level, balance_usd, level_ref_balance, r_since_level, trades_since_level, max_drawdown_usd, max_drawdown_pct, last_reset_at, reset_cooldown_until, updated_at)')
     .eq('profile_id', userId)
     .maybeSingle();
   if (error) throw error;

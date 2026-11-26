@@ -42,6 +42,9 @@ const ICONS = {
   // R24: ikon baris Profil (SVG dari file preview yang disetujui).
   sliders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7.5h9"/><path d="M17.5 7.5H20"/><circle cx="15" cy="7.5" r="2.2"/><path d="M4 16.5h3.5"/><path d="M12 16.5h8"/><circle cx="9.5" cy="16.5" r="2.2"/></svg>',
   book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5Z"/><path d="M4 18V5.5"/><path d="M20 18H6.5A2.5 2.5 0 0 0 4 20.5"/></svg>',
+  // R41: ikon baris Profil Tampilan + Bahasa (gaya feather, sama seperti ikon lain).
+  sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>',
+  globe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
   logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3"/><path d="m16 16.5 5-4.5-5-4.5"/><path d="M21 12H9.5"/></svg>',
 };
 
@@ -73,6 +76,7 @@ const S = {
   walletRange: 'ALL',
   walletCustom: { from: '', to: '' },
   secPage: null, // sub-halaman Kata sandi: null | 'pw' | 'email'
+  acctPage: null, // R41: sub-halaman Akun: null | 'name' | 'follower' | 'trader'
   profileSub: null, // R25: sub-halaman Profil: null | 'kyc' | 'detail'
   wdAdd: false, // form tambah Akun Penarikan sedang dibuka
   followFilter: 'ALL',
@@ -106,6 +110,10 @@ const S = {
   mySubs: [],
   boardPage: 1,
   settingsSub: null,
+  // R41: wadah pemilik sub-halaman Pengaturan yang sedang terbuka:
+  // 'settings' (daftar Pengaturan) atau 'profile' (menu Profil, tempat
+  // Tampilan/Notifikasi/Bahasa pindah). Menentukan tujuan tombol kembali.
+  settingsOrigin: 'settings',
   authMode: 'login',
   followerCounts: {},
   copiedIds: new Set(),
@@ -1259,7 +1267,6 @@ function signalCardHtml(sig) {
   const locked = isLockedForMe(sig);
   const d = decimalsForPair(sig.pair);
   const dirCls = sig.direction === 'BUY' ? 'buy' : 'sell';
-  const wr = statsForTrader(sig.trader_id).wr;
   // D10: flag duplikat — dihitung sebelum cabang terkunci supaya tampil
   // juga di kartu terkunci (tidak membocorkan pair/arah).
   let dupHtml = '';
@@ -1366,7 +1373,7 @@ function signalCardHtml(sig) {
   const editedBadge = (sig.version && Number(sig.version) > 1)
     ? ` <span class="pill edited">${esc(t('editedBadge'))}</span>` : '';
   return `<article class="sig ${dirCls}" data-sig="${esc(sig.id)}" tabindex="0" role="button">
-    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><div class="right"><span class="lvlbadge">Level ${level} · ${esc(levelName(level, getLang()))}</span>${verified} ${subBadgeHtml(sig.trader_id)}${statusPill(sig.status)}${editedBadge}</div></div>
+    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}</div></div><div class="right"><span class="lvlbadge">Level ${level} · ${esc(levelName(level, getLang()))}</span>${verified} ${subBadgeHtml(sig.trader_id)}${statusPill(sig.status)}${editedBadge}</div></div>
     ${dupHtml}
     <div class="sig-head">
       <span class="sig-pair sig-pair-lg">${pairHtml(sig.pair)}</span>
@@ -2272,7 +2279,6 @@ function openSignalDetail(id) {
   const locked = isLockedForMe(sig);
   const d = decimalsForPair(sig.pair);
   const dirCls = sig.direction === 'BUY' ? 'buy' : 'sell';
-  const wr = statsForTrader(sig.trader_id).wr;
   const editedBadge = (sig.version && Number(sig.version) > 1)
     ? ` <span class="pill edited">${esc(t('editedBadge'))}</span>` : '';
   let dupHtml = '';
@@ -2285,7 +2291,7 @@ function openSignalDetail(id) {
   // judul terkunci + tombol Langganan (prototipe: subscribe + Tutup).
   if (locked) {
     openOverlay(`
-    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><span class="spacer"></span><span class="pill">Level ${level} · ${esc(levelName(level, getLang()))}</span>${verified}<span class="pill">${ICONS.lock} ${esc(t('locked'))}</span></div>
+    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}</div></div><span class="spacer"></span><span class="pill">Level ${level} · ${esc(levelName(level, getLang()))}</span>${verified}<span class="pill">${ICONS.lock} ${esc(t('locked'))}</span></div>
     <div class="locked-body" style="margin-top:14px;"><span aria-hidden="true">${ICONS.lock}</span><div><div class="lt">${esc(t('lockedTitle'))}</div><div class="ld">${esc(lockedDescFor(sig.trader_id))}</div></div></div>
     ${dupHtml}
     <div class="detail-actions">${subscribeBtnHtml(sig.trader_id)}<button class="btn" id="ov-close2" type="button">${esc(t('close'))}</button></div>`);
@@ -2373,7 +2379,7 @@ function openSignalDetail(id) {
   actions.push(`<button class="btn" id="ov-trader" type="button">${esc(t('sigViewTrader'))}</button>`);
   actions.push(`<button class="btn" id="ov-close2" type="button">${esc(t('close'))}</button>`);
   openOverlay(`
-    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}${wr !== null ? ` · WR ${wr.toFixed(0)}%` : ''}</div></div><span class="spacer"></span><span class="pill">Level ${level} · ${esc(levelName(level, getLang()))}</span>${verified}${statusPill(sig.status)}${editedBadge}</div>
+    <div class="sig-top"><button class="avatar-btn" data-profile="${esc(sig.trader_id)}" aria-label="${esc(name)}">${avatarImg(name, sig.trader_id, tr.trader_avatar_url, 'avatar-sm')}</button><div class="who"><button class="name" data-profile="${esc(sig.trader_id)}">${esc(name)}${demoBadge(sig.trader_id)}</button><div class="mt">${esc(fmtRel(sig.created_at))}</div></div><span class="spacer"></span><span class="pill">Level ${level} · ${esc(levelName(level, getLang()))}</span>${verified}${statusPill(sig.status)}${editedBadge}</div>
     ${dupHtml}
     <div class="sig-main"><span class="sig-pair sig-pair-lg">${pairHtml(sig.pair)}</span><span class="dir ${dirCls}">${esc(sig.direction)}</span><span class="spacer"></span>${lockNote ? `<span class="det-lock-note">${lockNote}</span>` : ''}</div>
     ${rowsHtml}
@@ -2531,7 +2537,7 @@ function pairTableHtml(s, subKey = 'stPairSub') {
       + `<td class="num mono">${fmtHold(e.avgHold)}</td></tr>`;
   }).join('') : `<tr><td colspan="13" style="color:var(--muted)">${esc(t('ppNoTrades'))}</td></tr>`;
   return `<div class="chart-card"><h3>${esc(t('stPairTitle'))}</h3><div class="sub">${esc(t(subKey))}<span class="estbadge">${esc(t('estBadge'))}</span> <button class="guidelink" type="button" data-guide="risk">${esc(t('sigDetail'))} ${ICONS.arrow}</button></div>`
-    + `<div class="board-wrap" style="box-shadow:none"><table class="board"><thead><tr><th>${esc(t('stThPair'))}</th><th class="num">${esc(t('stThTrades'))}</th><th class="num">${esc(t('stThWR'))}</th><th class="num">${esc(t('stThProfit'))}</th><th class="num">${esc(t('stThPF'))}</th><th class="num">${esc(t('stThTotalR'))}</th><th class="num">${esc(t('stThAvgR'))}</th><th class="num">${esc(t('stThAvgSL'))}</th><th class="num">${esc(t('stThAvgTP'))}</th><th class="num">${esc(t('stThStreak'))}</th><th class="num">${esc(t('stThMaxDD'))}</th><th class="num">${esc(t('stThRecovery'))}</th><th class="num">${esc(t('stThHold'))}</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
+    + `<div class="board-wrap pair-board" style="box-shadow:none"><table class="board"><thead><tr><th>${esc(t('stThPair'))}</th><th class="num">${esc(t('stThTrades'))}</th><th class="num">${esc(t('stThWR'))}</th><th class="num">${esc(t('stThProfit'))}</th><th class="num">${esc(t('stThPF'))}</th><th class="num">${esc(t('stThTotalR'))}</th><th class="num">${esc(t('stThAvgR'))}</th><th class="num">${esc(t('stThAvgSL'))}</th><th class="num">${esc(t('stThAvgTP'))}</th><th class="num">${esc(t('stThStreak'))}</th><th class="num">${esc(t('stThMaxDD'))}</th><th class="num">${esc(t('stThRecovery'))}</th><th class="num">${esc(t('stThHold'))}</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
 // Ronde 36: parameter monthSurface wajib diisi pemanggil (dulu default
 // 'jurnal' — permukaan itu dihapus bersama tab Jurnal follower).
@@ -4333,6 +4339,18 @@ async function renderProfile() {
     if (kycBtn) kycBtn.addEventListener('click', () => openKycFlow());
     return;
   }
+  // R41: Tampilan / Notifikasi / Bahasa pindah dari Pengaturan ke Profil:
+  // pakai ulang renderer Pengaturan yang sama; kembali ke Profil (bukan
+  // Pengaturan). State Pengaturan dibersihkan supaya tombol kembali tidak
+  // salah lompat ke sub-halaman Pengaturan yang sudah ditinggalkan.
+  if (S.profileSub === 'appearance' || S.profileSub === 'notifications' || S.profileSub === 'language') {
+    S.settingsOrigin = 'profile';
+    S.settingsSub = null; S.acctPage = null; S.secPage = null;
+    if (S.profileSub === 'appearance') renderSettingsAppearance(body);
+    else if (S.profileSub === 'notifications') renderSettingsNotifications(body);
+    else renderSettingsLanguage(body);
+    return;
+  }
   body.innerHTML = `
     <div class="profile-head">
       ${avatarImg(displayName, S.user.id, S.photoDraft.profile ? null : (S.photoUploadPreview.profile || p.avatar_url), 'avatar-lg')}
@@ -4347,6 +4365,9 @@ async function renderProfile() {
     ${S.photoUploadDraft.profile || S.photoDraft.profile ? `<div class="avatar-edit" style="margin-top:10px;">${S.photoDraft.profile ? `<span class="note">${esc(t('photoRemoveDraft'))}</span>` : ''}<button class="btn primary" id="profile-photo-done" type="button">${esc(t('doneBtn'))}</button><button class="btn" id="profile-photo-cancel" type="button">${esc(t('cancel'))}</button></div>` : ''}
     <button type="button" class="prow" id="prow-kyc"><span class="ic">${ICONS.lock}</span><span class="lbl">${esc(t('kycTitle'))}<span class="sub">${esc(kycSub)}</span></span><span class="ch">${ICONS.chevR}</span></button>
     <button type="button" class="prow" id="prow-detail"><span class="ic">${ICONS.user}</span><span class="lbl">${esc(t('accountDetail'))}<span class="sub">${esc(t('profileDetailSub'))}</span></span><span class="ch">${ICONS.chevR}</span></button>
+    <button type="button" class="prow" id="prow-appearance"><span class="ic">${ICONS.sun}</span><span class="lbl">${esc(t('theme'))}</span><span class="ch">${ICONS.chevR}</span></button>
+    <button type="button" class="prow" id="prow-notifications"><span class="ic">${ICONS.bell}</span><span class="lbl">${esc(t('setNotif'))}</span><span class="ch">${ICONS.chevR}</span></button>
+    <button type="button" class="prow" id="prow-language"><span class="ic">${ICONS.globe}</span><span class="lbl">${esc(t('language'))}</span><span class="ch">${ICONS.chevR}</span></button>
     <button type="button" class="prow" id="menu-settings"><span class="ic">${ICONS.sliders}</span><span class="lbl">${esc(t('settings'))}<span class="sub">${esc(t('profileSettingsSub'))}</span></span><span class="ch">${ICONS.chevR}</span></button>
     <button type="button" class="prow" id="menu-helpguide"><span class="ic">${ICONS.book}</span><span class="lbl">${esc(t('menuHelpGuide'))}<span class="sub">${esc(t('menuHelpGuideDesc'))}</span></span><span class="ch">${ICONS.chevR}</span></button>
     <button type="button" class="prow danger logout-mobile" id="menu-logout"><span class="ic">${ICONS.logout}</span><span class="lbl">${esc(t('logout'))}</span></button>`;
@@ -4393,21 +4414,29 @@ async function renderProfile() {
   }
   const photoBtn = $('#profile-photo-btn');
   if (photoBtn) photoBtn.addEventListener('click', () => { const inp = $('#profile-photo-input'); if (inp) inp.click(); });
-  $('#menu-settings').addEventListener('click', () => { S.settingsSub = null; showView('settings'); });
+  $('#menu-settings').addEventListener('click', () => { S.settingsSub = null; S.settingsOrigin = 'settings'; showView('settings'); });
   $('#menu-helpguide').addEventListener('click', () => { S.guideSub = null; S.helpGuideTab = 'guide'; showView('helpguide'); });
   $('#menu-logout').addEventListener('click', doLogout);
   const prowKyc = $('#prow-kyc');
   if (prowKyc) prowKyc.addEventListener('click', () => { S.profileSub = 'kyc'; renderProfile(); });
   const prowDetail = $('#prow-detail');
   if (prowDetail) prowDetail.addEventListener('click', () => { S.profileSub = 'detail'; renderProfile(); });
+  const prowAppearance = $('#prow-appearance');
+  if (prowAppearance) prowAppearance.addEventListener('click', () => { S.profileSub = 'appearance'; renderProfile(); });
+  const prowNotifications = $('#prow-notifications');
+  if (prowNotifications) prowNotifications.addEventListener('click', () => { S.profileSub = 'notifications'; renderProfile(); });
+  const prowLanguage = $('#prow-language');
+  if (prowLanguage) prowLanguage.addEventListener('click', () => { S.profileSub = 'language'; renderProfile(); });
 }
 
 // ----------------------------------------------------------- Pengaturan ---
-// Sub-halaman Profil: Akun, Akun Penarikan, Kata sandi dan keamanan,
-// Tampilan, Notifikasi, Bahasa — masing-masing sub-halaman sendiri.
+// Sub-halaman Pengaturan: Akun, Akun Penarikan, Kata sandi dan keamanan.
+// R41: Tampilan / Notifikasi / Bahasa PINDAH ke menu Profil (S.profileSub);
+// renderer ketiganya tetap di sini dan dipakai ulang dari Profil.
 function renderSettings() {
   const body = $('#settings-body');
   if (!body) return;
+  if (S.settingsSub !== 'account') S.acctPage = null; // R41: keluar Akun menutup halaman ubahnya
   if (S.settingsSub === 'account') { renderSettingsAccount(body); return; }
   if (S.settingsSub === 'security') { renderSettingsSecurity(body); return; }
   if (S.settingsSub === 'appearance') { renderSettingsAppearance(body); return; }
@@ -4415,21 +4444,20 @@ function renderSettings() {
   if (S.settingsSub === 'language') { renderSettingsLanguage(body); return; }
   if (S.settingsSub === 'withdraw') { renderSettingsWithdraw(body); return; }
   const rows = [
-    ['account', t('setAccount'), t('setAccountSub')],
-    ['withdraw', t('setWithdraw'), t('setWithdrawSub')],
-    ['security', t('securityTitle'), t('setSecuritySub')],
-    ['appearance', t('theme'), t('setAppearanceSub')],
-    ['notifications', t('setNotif'), ''],
-    ['language', t('language'), t('setLangSub')],
+    ['account', t('setAccount')],
+    ['withdraw', t('setWithdraw')],
+    ['security', t('securityTitle')],
   ];
   body.innerHTML = `<button class="btn backbtn" id="set-back-profile" type="button">${esc(t('backProfile'))}</button>`
     + `<div class="page-head"><h2>${esc(t('settings'))}</h2></div>`
-    + rows.map(([key, title, desc]) =>
-    `<div class="subcard"><button type="button" class="menurow" data-setsub="${key}"><span class="grow"><span class="t">${esc(title)}</span>${desc ? `<span class="d">${esc(desc)}</span>` : ''}</span><span class="marrow">${ICONS.arrow}</span></button></div>`
+    // R41: daftar polos gaya Panduan (.prow: judul kiri + chevron kanan,
+    // dipisah garis tipis), tanpa kartu .subcard, tanpa subjudul.
+    + rows.map(([key, title]) =>
+    `<button type="button" class="prow" data-setsub="${key}"><span class="lbl">${esc(title)}</span><span class="ch">${ICONS.chevR}</span></button>`
   ).join('');
   $('#set-back-profile').addEventListener('click', () => showView('profile'));
   $$('[data-setsub]', body).forEach((b) => {
-    b.addEventListener('click', () => { S.settingsSub = b.dataset.setsub; S.secPage = null; S.wdAdd = false; renderSettings(); });
+    b.addEventListener('click', () => { S.settingsSub = b.dataset.setsub; S.settingsOrigin = 'settings'; S.secPage = null; S.acctPage = null; S.wdAdd = false; renderSettings(); });
   });
 }
 function settingsBackButton() {
@@ -4442,52 +4470,219 @@ function bindSettingsBack() {
   // (Kata Sandi / Email) dulu; di sub-halaman lain kembali ke daftar.
   b.addEventListener('click', () => {
     if (S.settingsSub === 'security' && S.secPage) { S.secPage = null; renderSettings(); return; }
+    if (S.settingsSub === 'account' && S.acctPage) { S.acctPage = null; renderSettings(); return; }
+    // R41: sub-halaman yang dibuka dari Profil (Tampilan / Notifikasi /
+    // Bahasa) kembali ke Profil, bukan ke daftar Pengaturan.
+    if (S.settingsOrigin === 'profile') { S.profileSub = null; S.settingsOrigin = 'settings'; renderProfile(); return; }
     S.settingsSub = null; renderSettings();
   });
 }
+// R41: render ulang sub-halaman Pengaturan yang sedang terbuka, di wadah
+// asalnya: Profil bila dibuka dari Profil, Pengaturan bila dari Pengaturan.
+function rerenderSettingsSub() {
+  if (S.settingsOrigin === 'profile') { renderProfile(); return; }
+  renderSettings();
+}
+// R41: +1 bulan kalender (sama seperti interval '1 month' server di RPC).
+function addOneMonth(iso) {
+  const d = new Date(iso);
+  return new Date(d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds());
+}
+function acctTitleKey(kind) {
+  return kind === 'name' ? 'acctChangeName' : kind === 'trader' ? 'acctChangeTrader' : 'acctChangeFollower';
+}
+function acctUsernameChangedAt(kind) {
+  if (kind === 'trader') return S.trader ? S.trader.username_changed_at || null : null;
+  return S.profile ? S.profile.username_changed_at || null : null;
+}
 function renderSettingsAccount(body) {
+  if (S.acctPage) { renderSettingsAcctEdit(body, S.acctPage); return; }
   const p = S.profile || {};
-  const kycVerified = p.kyc_status === 'verified';
-  // B3-11: tanggal "Bisa diubah lagi pada {date}" + tombol Simpan
-  // dinonaktifkan selama cooldown 1 bulan (prototipe). Cooldown dihitung
-  // dari display_name_changed_at (server-side, migrasi 13).
-  const changedAt = p.display_name_changed_at ? new Date(p.display_name_changed_at) : null;
-  // 1 bulan kalender (sama dengan interval '1 month' server di RPC).
-  const nextChange = changedAt ? new Date(changedAt.getFullYear(), changedAt.getMonth() + 1, changedAt.getDate(), changedAt.getHours(), changedAt.getMinutes(), changedAt.getSeconds()) : null;
-  const inCooldown = !!nextChange && nextChange > new Date();
-  const nameHint = inCooldown
-    ? t('nameCooldown', { date: fmtDateShort(nextChange.toISOString()) })
-    : '';
+  // R41: daftar TEPAT 3 baris (nama, username follower, username trader),
+  // nilai sebagai teks polos + SATU tombol pensil per baris, pola yang
+  // sama seperti daftar Kata sandi dan keamanan. Tanpa baris foto (ganti
+  // foto tetap hanya di menu Profil), tanpa subjudul, tanpa catatan KYC
+  // (aturan KYC tetap, penjelasannya sudah ada di Panduan).
+  const rows = [
+    ['name', t('profileName'), p.display_name || '—'],
+    ['follower', t('usernameFollowerLbl'), p.username ? '@' + p.username : '—'],
+  ];
+  if (S.trader) rows.push(['trader', t('usernameTraderLbl'), S.trader.username ? '@' + S.trader.username : '—']);
   body.innerHTML = settingsBackButton()
     + `<div class="page-head"><h2>${esc(t('setAccount'))}</h2></div>`
-    + `<div class="subcard"><form id="set-name-form" novalidate><div class="field"><label for="set-name">${esc(t('profileName'))}</label><input id="set-name" type="text" maxlength="80" value="${esc(p.display_name || '')}"${kycVerified ? ' disabled' : ''} />${nameHint ? `<div class="hint">${esc(nameHint)}</div>` : ''}</div><div class="form-err" id="set-name-err" role="alert"></div><div class="detail-actions"><button class="btn primary" type="submit"${(kycVerified || inCooldown) ? ' disabled' : ''}>${esc(t('save'))}</button></div></form></div>`
-    + `<div class="subcard"><div id="follower-username-wrap">${usernameFormHtml('follower')}</div></div>`
-    + (S.trader ? `<div class="subcard"><div id="trader-username-wrap">${usernameFormHtml('trader')}</div></div>` : '');
+    + `<div class="subcard">`
+    + rows.map(([kind, label, value]) =>
+      `<div class="menurow" style="cursor:default;"><span class="grow"><span class="t">${esc(label)}</span><span class="d">${esc(value)}</span></span><button type="button" class="iconbtn" id="acct-open-${kind}" aria-label="${esc(t(acctTitleKey(kind)))}">${ICONS.edit}</button></div>`
+    ).join('')
+    + `</div>`;
   bindSettingsBack();
-  bindUsernameForm(body, 'follower', () => renderSettingsAccount(body));
-  // R11: ubah username trader pindah ke sini dari Trader → Profil.
-  // Hanya bila identitas trader ada; setup pertama kali tetap di
-  // Trader (renderTraderWork) dan tidak ditampilkan di sini.
-  if (S.trader) bindUsernameForm(body, 'trader', () => renderSettingsAccount(body));
-  const form = $('#set-name-form');
+  rows.forEach(([kind]) => {
+    const b = $('#acct-open-' + kind);
+    if (b) b.addEventListener('click', () => { openAcctEdit(kind); S.acctPage = kind; renderSettings(); });
+  });
+}
+// R41: siapkan state edit (draft = nilai saat ini, tanpa konfirmasi pending).
+function openAcctEdit(kind) {
+  if (kind === 'name') return;
+  const ui = S.usernameUI[kind];
+  const cur = kind === 'trader' ? (S.trader?.username || '') : (S.profile?.username || '');
+  clearTimeout(ui.timer);
+  ui.draft = cur;
+  ui.res = null;
+  ui.pending = null;
+}
+function renderSettingsAcctEdit(body, kind) {
+  if (kind === 'name') { renderSettingsAcctNameEdit(body); return; }
+  renderSettingsAcctUsernameEdit(body, kind);
+}
+function renderSettingsAcctNameEdit(body) {
+  const p = S.profile || {};
+  const kycVerified = p.kyc_status === 'verified';
+  const cur = p.display_name || '';
+  const nextChange = p.display_name_changed_at ? addOneMonth(p.display_name_changed_at) : null;
+  const inCooldown = !!nextChange && nextChange > new Date();
+  // Terkunci (cooldown/KYC): input nonaktif; tombol Simpan TIDAK dirender
+  // saat KYC (kunci permanen) dan nonaktif saat cooldown, tanggal alasan
+  // tampil di baris yang sama, jadi tidak ada tombol yang tampak bisa
+  // diklik tapi mati.
+  const locked = kycVerified || inCooldown;
+  body.innerHTML = settingsBackButton()
+    + `<div class="page-head"><h2>${esc(t('acctChangeName'))}</h2></div>`
+    + `<div class="subcard"><form id="acct-name-form" novalidate><div class="field"><label for="acct-name-input">${esc(t('profileName'))}</label><input id="acct-name-input" type="text" maxlength="80" value="${esc(cur)}"${locked ? ' disabled' : ''} />${inCooldown ? `<div class="hint">${esc(t('nameCooldown', { date: fmtDateShort(nextChange.toISOString()) }))}</div>` : ''}</div><div class="form-err" id="acct-name-err" role="alert"></div><div class="detail-actions">${kycVerified ? '' : `<button class="btn primary" type="submit" id="acct-name-save" disabled>${esc(t('save'))}</button>`}<button class="btn" type="button" id="acct-name-cancel">${esc(t('cancel'))}</button></div></form></div>`;
+  bindSettingsBack();
+  const input = $('#acct-name-input');
+  const saveBtn = $('#acct-name-save');
+  const cancel = () => { S.acctPage = null; renderSettings(); };
+  $('#acct-name-cancel').addEventListener('click', cancel);
+  $('#acct-name-form').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); cancel(); } });
+  if (locked || !input || !saveBtn) return;
+  const refresh = () => { saveBtn.disabled = !input.value.trim() || input.value.trim() === cur; };
+  input.addEventListener('input', refresh);
+  $('#acct-name-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const v = input.value.trim();
+    if (!v || v === cur) return;
+    const errBox = $('#acct-name-err');
+    errBox.textContent = '';
+    saveBtn.disabled = true;
+    try {
+      const res = await api.setProfileName(v);
+      if (!res.ok) {
+        errBox.textContent = (res && res.message) || rpcErrorMessage(res) || t('errNetwork');
+        saveBtn.disabled = false;
+        return;
+      }
+      toast(t('nameSaved'));
+      await refreshIdentity();
+      S.acctPage = null;
+      renderSettings();
+    } catch (err) {
+      errBox.textContent = t('errNetwork');
+      saveBtn.disabled = false;
+    }
+  });
+}
+function renderSettingsAcctUsernameEdit(body, kind) {
+  const isTrader = kind === 'trader';
+  const cur = isTrader ? (S.trader?.username || '') : (S.profile?.username || '');
+  const label = isTrader ? t('usernameTraderLbl') : t('usernameFollowerLbl');
+  const changedAt = acctUsernameChangedAt(kind);
+  const nextChange = changedAt ? addOneMonth(changedAt) : null;
+  const inCooldown = !!nextChange && nextChange > new Date();
+  body.innerHTML = settingsBackButton()
+    + `<div class="page-head"><h2>${esc(t(acctTitleKey(kind)))}</h2></div>`
+    + `<div class="subcard"><form class="wal-panel" data-username-form="${kind}" novalidate><div class="field"><label for="acct-uname-input">${esc(label)}</label><input id="acct-uname-input" data-username-input="${kind}" maxlength="30" autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(cur)}">${inCooldown ? `<div class="hint">${esc(t('usernameCheckCooldown', { date: fmtDateShort(nextChange.toISOString()) }))}</div>` : ''}<div class="hint" data-username-status="${kind}"></div></div><div id="acct-uname-suggest" style="display:flex;gap:8px;flex-wrap:wrap;"></div><div class="form-err" data-username-err="${kind}" role="alert"></div><div class="detail-actions"><button type="submit" class="btn primary" data-username-submit="${kind}" disabled>${esc(t('save'))}</button><button type="button" class="btn" id="acct-uname-cancel">${esc(t('cancel'))}</button></div></form></div>`;
+  bindSettingsBack();
+  bindAcctUsernameEdit(body, kind, inCooldown);
+}
+// R41: binder halaman ubah username di Akun: cek ketersediaan langsung
+// (debounce seperti bindUsernameForm) + simpan SATU langkah (tanpa
+// konfirmasi ui.pending). Dipakai HANYA di halaman Akun; alur setup
+// pertama kali di renderTraderWork tetap memakai bindUsernameForm.
+function bindAcctUsernameEdit(root, kind, inCooldown) {
+  const ui = S.usernameUI[kind];
+  const input = root.querySelector('[data-username-input]');
+  const statusEl = root.querySelector('[data-username-status]');
+  const suggestEl = root.querySelector('#acct-uname-suggest');
+  const curOf = () => (kind === 'trader' ? (S.trader?.username || '') : (S.profile?.username || ''));
+  const paint = () => {
+    paintUsernameStatus(kind, root);
+    // Cooldown: tanggal sudah tampil sebagai baris statis di atas, jangan
+    // ulangi pesan yang sama di baris status.
+    if (ui.res && ui.res.code === 'cooldown' && inCooldown && statusEl) { statusEl.textContent = ''; statusEl.classList.remove('ok', 'bad'); }
+    if (suggestEl) {
+      if (ui.res && ui.res.code === 'taken') {
+        const v = (ui.draft || '').trim().replace(/^@+/, '');
+        const cands = [v + '1', v + '2', v + '_id'].filter((c) => c.length <= 30 && c !== curOf() && c !== v);
+        suggestEl.innerHTML = cands.map((c) => `<button type="button" class="btn" data-suggest="${esc(c)}">@${esc(c)}</button>`).join('');
+        suggestEl.querySelectorAll('[data-suggest]').forEach((b) => b.addEventListener('click', () => {
+          input.value = b.dataset.suggest;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.focus();
+        }));
+      } else {
+        suggestEl.innerHTML = '';
+      }
+    }
+  };
+  const cancel = () => { clearTimeout(ui.timer); ui.draft = ''; ui.res = null; ui.pending = null; S.acctPage = null; renderSettings(); };
+  const cancelBtn = root.querySelector('#acct-uname-cancel');
+  if (cancelBtn) cancelBtn.addEventListener('click', cancel);
+  const form = root.querySelector('[data-username-form]');
+  if (form) form.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); cancel(); } });
+  if (input) {
+    input.addEventListener('input', () => {
+      const v = input.value.trim().replace(/^@+/, '');
+      ui.draft = v;
+      ui.res = null;
+      paint();
+      clearTimeout(ui.timer);
+      if (!v) return;
+      if (v === curOf()) return;
+      if (statusEl) { statusEl.textContent = t('usernameChecking'); statusEl.classList.remove('ok', 'bad'); }
+      ui.timer = setTimeout(async () => {
+        try {
+          const r = await api.checkUsername(kind, v);
+          if (ui.draft !== v) return;
+          ui.res = r;
+        } catch (e) {
+          ui.res = null;
+        }
+        paint();
+      }, 250);
+    });
+  }
   if (form) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const errBox = $('#set-name-err');
-      const v = $('#set-name').value.trim();
-      errBox.textContent = '';
-      if (!v) return;
+      const cur = curOf();
+      if (!ui.draft || ui.draft === cur) return;
+      const errBox = root.querySelector('[data-username-err]');
       try {
-        const res = await api.setProfileName(v);
-        if (!res.ok) {
-          errBox.textContent = rpcErrorMessage(res);
+        const r = await api.checkUsername(kind, ui.draft);
+        if (!r.ok) {
+          ui.res = r;
+          paint();
+          if (errBox) errBox.textContent = usernameStatusMsg(r).txt;
           return;
         }
-        toast(t('nameSaved'));
+        const value = r.value || ui.draft;
+        let res;
+        if (kind === 'trader') res = await api.setupTraderIdentity(value, S.trader.trader_display_name || value);
+        else res = await api.setFollowerUsername(value);
+        if (!res.ok) {
+          if (errBox) errBox.textContent = (res && res.message) || rpcErrorMessage(res) || t('errNetwork');
+          return;
+        }
+        ui.draft = '';
+        ui.res = null;
+        ui.pending = null;
+        toast((cur ? t('usernameChanged') : t('usernameSet')) + '@' + value);
         await refreshIdentity();
-        renderSettingsAccount(body);
+        S.acctPage = null;
+        renderSettings();
       } catch (err) {
-        errBox.textContent = t('errNetwork');
+        if (errBox) errBox.textContent = t('errNetwork');
       }
     });
   }
@@ -4649,7 +4844,7 @@ function renderSettingsAppearance(body) {
   $$('[data-theme-opt]', body).forEach((b) => {
     b.addEventListener('click', () => {
       setThemePref(b.dataset.themeOpt);
-      renderSettings();
+      rerenderSettingsSub();
     });
   });
 }
@@ -4677,7 +4872,7 @@ function renderSettingsNotifications(body) {
   const sysCb = $('#sys-notif-cb');
   if (sysCb) sysCb.addEventListener('change', async () => {
     try { await Notification.requestPermission(); } catch (e) { /* abaikan */ }
-    renderSettings();
+    rerenderSettingsSub();
   });
   $$('[data-notif-pref]', body).forEach((cb) => {
     cb.addEventListener('change', () => {
@@ -4701,6 +4896,9 @@ function renderSettingsLanguage(body) {
     b.addEventListener('click', async () => {
       setLang(b.dataset.langOpt);
       applyI18n();
+      // R41: showView('profile') mereset S.profileSub, dari Profil render
+      // ulang langsung supaya tetap di sub-halaman Bahasa.
+      if (S.settingsOrigin === 'profile') { renderProfile(); return; }
       showView('settings');
     });
   });
