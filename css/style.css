@@ -458,15 +458,20 @@ h1 { font-size: 30px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 4p
   #app { margin-left: max(64px, calc((100vw - 996px) / 2)); }
 }
 
-/* ---- feed Beranda grid (R38: 3 kolom tetap di web, 2 kolom di HP) ----
-   .feed-grid (Sinyal Saya, Riwayat) tetap 1 kolom. */
-#home-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+/* ---- feed Beranda grid (R38: 3 kolom tetap di web) ----
+   R39 (aturan kolom global): HP (<900px) SEMUA feed 1 kolom —
+   #home-list, .feed-grid, .traders. Web (≥900px): #home-list 3 kolom,
+   .feed-grid 2 kolom. Riwayat (jurnal) tidak memakai grid ini —
+   tetap 1 kolom, tidak disentuh. */
+#home-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .feed-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 #home-list .sig, .feed-grid .sig { margin-bottom: 0; }
 #home-list .sig { padding: 16px; }
 #home-list > .empty { grid-column: 1 / -1; }
 @media (min-width: 900px) {
   #home-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* R39: feed sinyal 2 kolom di web. */
+  .feed-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ---- overlay detail ---- */
@@ -807,9 +812,23 @@ table.board td.num, table.board th.num { text-align: right; }
 .calc { background: var(--panel-2); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13px; margin: 12px 0; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .calc .sep { color: var(--muted); }
 
-/* Kartu trader di Cari (1 kolom, R23 — perintah user 2026-11-25 03:26 WIB
-   "Cari juga satu"; sebelumnya 2 kolom R20, dicabut) */
+/* Kartu trader di Cari — R39 (aturan kolom global): 2 kolom di web
+   (≥900px), 1 kolom di HP. (R23 dulu 1 kolom atas perintah user
+   2026-11-25 "Cari juga satu"; R39 membalikkan atas perintah baru
+   user.) Peringkat memakai .board-grid sendiri (di bawah) — ikut
+   aturan global yang sama, tanpa modifier. */
 .traders { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+@media (min-width: 900px) {
+  .traders { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* R39: kartu Peringkat (.board-card) ikut aturan kolom global — 2 kolom
+   di web, 1 kolom di HP. Margin bawah kartu dimatikan di dalam grid
+   (gap 16px sudah mengatur jarak antarbaris). */
+.board-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.board-grid .board-card { margin-bottom: 0; }
+@media (min-width: 900px) {
+  .board-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .tcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; }
 .tcard .head { display: flex; gap: 10px; align-items: center; }
 .tcard .avatar { width: 40px; height: 40px; font-size: 14px; }
@@ -843,18 +862,19 @@ table.board td.num, table.board th.num { text-align: right; }
 }
 
 @media (max-width: 560px) {
-  /* R38: kartu Beranda HP ~170px — panel level 2×2 tidak muat untuk harga
-     XAUUSD ("4,090.00" butuh ~70px, sel hanya ~30px); level ditumpuk
-     1 kolom supaya angka utuh dan terbaca, bukan terpotong. Hanya
-     #home-list (feed 2 kolom); daftar 1 kolom (Trader/Follower) tetap 2×2. */
-  #home-list .sig { padding: 12px; }
-  #home-list .sig-levels { grid-template-columns: minmax(0, 1fr); padding: 8px 10px; gap: 6px; }
-  #home-list .sig-levels .lv { padding: 5px 8px; min-width: 0; }
-  #home-list .sig-levels .lv b { font-size: 13px; }
+  /* R39: aturan kolom global — HP semua feed 1 kolom, kartu selebar
+     penuh (~356px di 390px). Aturan D-R38-2 (level ditumpuk 1 kolom)
+     DIBALIK: kartu sempit 2 kolom sudah tidak ada, jadi level kembali
+     sebaris 4 kolom; padding ringkas (dulu hanya #home-list) kini
+     berlaku untuk semua kartu supaya angka XAUUSD muat. Ini menutup
+     sisa R38 (kartu HP ~90px lebih tinggi karena level ditumpuk). */
+  .sig { padding: 12px; }
+  .sig-levels { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 10px; gap: 6px; }
+  .sig-levels .lv { padding: 5px 8px; min-width: 0; }
+  .sig-levels .lv b { font-size: 13px; }
   /* R38: nama + pill Demo boleh turun baris di kartu sempit (sebelumnya
      pill Demo terpotong oleh ellipsis tombol nama). */
-  #home-list .sig-top .who button.name { white-space: normal; }
-  .sig-levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sig-top .who button.name { white-space: normal; }
   .conds { grid-template-columns: 1fr; }
   .overlay { padding: 24px 10px; }
   .search-grid { grid-template-columns: 1fr; }
