@@ -56,7 +56,7 @@ const S = {
   profile: null,
   trader: null, // baris traders + trader_progress (null bila belum ada)
   prices: new Map(),
-  prevPrices: new Map(), // R37: harga fetch SEBELUMNYA (pembanding panah ticker; kosong = tanpa panah)
+  prevPrices: new Map(), // R37b: harga SEBELUM gerakan terakhir per pair (sticky; pembanding panah ticker; kosong = tanpa panah)
   view: 'home',
   officeTab: 'ALL',
   officeRole: 'trader',
@@ -917,6 +917,13 @@ $('#notif-bell').addEventListener('click', (e) => {
   e.stopPropagation();
   setNotifPanel(!S.notifOpen);
 });
+// R37b (D-R37b-1b): badge di luar tombol (anak .notif-wrap) — ketukan di
+// badge TIDAK tembus ke tombol (tengah badge 22,6px dari pusat tombol,
+// di luar lingkaran r=20px), jadi badge mengikat kliknya sendiri.
+$('#notif-badge').addEventListener('click', (e) => {
+  e.stopPropagation();
+  setNotifPanel(!S.notifOpen);
+});
 $('#rp-avatar').addEventListener('click', () => showView('profile'));
 $('#side-logout').addEventListener('click', () => doLogout());
 // Ronde 22: ripple saat ditekan (preview) — satu span .ripple yang
@@ -1146,7 +1153,16 @@ function paintTicker() {
 }
 function applyPrices(next) {
   if (!(next instanceof Map)) return false;
-  S.prevPrices = S.prices;
+  // R37b (D-R37-10): prevPrices STICKY per pair — pembanding hanya maju
+  // bila harga pair itu BENAR-BENAR berubah. Bila sama, prev dipertahankan
+  // supaya panah arah gerakan terakhir TIDAK hilang di poll berikutnya
+  // (sebelumnya S.prevPrices = S.prices menimpa di setiap poll, jadi panah
+  // hanya hidup ≤5 menit lalu lenyap). Boot tetap tanpa panah: harga baru
+  // yang belum pernah ada di S.prices tidak mengisi prev (cur bukan number).
+  for (const [p, v] of next) {
+    const cur = S.prices.get(p);
+    if (typeof cur === 'number' && cur > 0 && v !== cur) S.prevPrices.set(p, cur);
+  }
   S.prices = next;
   __lastPriceFetchAt = Date.now();
   paintTicker();
