@@ -593,6 +593,25 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
 .pair-strip.dragging { cursor: grabbing; }
 .pair-strip::-webkit-scrollbar { display: none; }
 .pair-strip .fchip { flex: none; }
+/* R37: ticker harga live Beranda, arah A (marquee berjalan, pratinjau
+   arah A). Strip gelap di atas feed; track digandakan supaya loop
+   translateX(-50%) mulus. Berhenti saat kursor di atasnya; tanpa gerak
+   bila prefers-reduced-motion (strip jadi bisa di-scroll jari). */
+.ticker { background: #0A0A0B; border-radius: 16px; overflow: hidden; margin-bottom: 14px; max-width: 100%; }
+.ticker-track { display: flex; width: max-content; animation: ticker-scroll 45s linear infinite; }
+.ticker:hover .ticker-track { animation-play-state: paused; }
+.tk-half { display: flex; align-items: center; gap: 28px; padding: 10px 14px; }
+.tk-item { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.tk-pair { color: #38BDF8; font-size: 12.5px; font-weight: 700; letter-spacing: .02em; }
+.tk-price { color: #FFFFFF; font-size: 12.5px; font-weight: 600; }
+.tk-arrow { font-size: 10px; line-height: 1; }
+.tk-arrow.up { color: #00E676; }
+.tk-arrow.down { color: #FF1744; }
+@keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .ticker { overflow-x: auto; }
+  .ticker-track { animation: none; }
+}
 .feed-filters .filter-break { flex-basis: 100%; height: 0; }
 .feed-filters .sep { width: 1px; height: 24px; background: var(--line); margin: 0 2px; }
 /* Grid kotak syarat level (prototipe): 2 kolom; 1 kolom di layar sempit. */
