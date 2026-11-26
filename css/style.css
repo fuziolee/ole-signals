@@ -858,6 +858,8 @@ table.board td.num, table.board th.num { text-align: right; }
   .pstats { grid-template-columns: repeat(2, 1fr); }
   .traders { grid-template-columns: 1fr; }
   .search-grid { grid-template-columns: 1fr 1fr; }
+  /* R43: field Username trader selebar 2 kolom (input panjang). */
+  .search-grid .field:first-child { grid-column: span 2; }
   .fgrid { grid-template-columns: 1fr; }
 }
 
@@ -877,7 +879,7 @@ table.board td.num, table.board th.num { text-align: right; }
   .sig-top .who button.name { white-space: normal; }
   .conds { grid-template-columns: 1fr; }
   .overlay { padding: 24px 10px; }
-  .search-grid { grid-template-columns: 1fr; }
+  .search-grid { grid-template-columns: 1fr 1fr; }
   .board-stats { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -1180,6 +1182,14 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
   body { padding: 0; }
   .app { margin: 0; border-radius: 0; box-shadow: none; min-height: 100vh; display: flex; flex-direction: column; }
   main { padding: 14px 17px 110px; }
+  /* R43: kepala profil trader di HP — .followbox ke baris sendiri supaya
+     username panjang tidak menimpa tombol Ikuti/Langganan (di 400–660px
+     .followbox muat sebaris tapi div nama menyusut sampai 4px dan h2
+     meluber ke tombol; margin-left auto + text-align right dipertahankan
+     jadi tombol tetap rata kanan seperti sebelumnya). Desktop ≥900px
+     tidak berubah. h2 overflow-wrap sebagai pengaman username 20 karakter. */
+  .profile-head .followbox { flex-basis: 100%; }
+  .profile-head h2 { overflow-wrap: anywhere; }
   .hp-topbar { order: -1; display: flex; justify-content: space-between; align-items: center; padding: 10px 17px; border-bottom: 1px solid var(--line); }
   .side-nav { display: none; }
 }
