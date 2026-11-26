@@ -16,6 +16,7 @@ const STR = {
     walletAddAcc: 'Tambah Akun Penarikan',
     walletNoAccSuffix: 'di Pengaturan sebelum menarik dana.',
     walletLead: 'Penarikan maksimal 1× per bulan, minimal Rp200.000.',
+    walletSoon: 'Dompet menyusul di fase pembayaran terakhir — penarikan dan langganan belum bisa dipakai.',
     walletKycLock: 'Penarikan terkunci: verifikasi KYC di Profil akun dulu.',
     walletHistTx: 'Riwayat penarikan',
     walletHistSubs: 'Riwayat langganan',
@@ -141,10 +142,7 @@ const STR = {
     rangeAll: 'Semua',
     officeEmptyHistory: 'Belum ada sinyal kamu yang selesai.',
     balanceCard: 'Saldo simulasi · akun demo kamu',
-    // Ronde 22: kartu promo sidebar + panel kanan (saldo & statistik nyata).
-    promoTitle: 'Sinyal pertamamu',
-    promoText: 'Posting sinyal dari Ruang Kerja — status, level, dan statistikmu tercatat otomatis.',
-    promoStart: 'Mulai',
+    // Ronde 22: panel kanan (saldo & statistik nyata).
     rpBalance: 'Saldo Simulasi',
     rpAccountTrader: 'Akun Trader',
     rpAccountFollower: 'Akun Follower',
@@ -722,6 +720,7 @@ const STR = {
     walletAddAcc: 'Add a withdrawal account',
     walletNoAccSuffix: 'in Settings before withdrawing.',
     walletLead: 'Withdrawals are limited to once per month, minimum Rp200,000.',
+    walletSoon: 'The wallet is coming in the final payments phase — withdrawals and subscriptions cannot be used yet.',
     walletKycLock: 'Withdrawals are locked: verify KYC in Profile account first.',
     walletHistTx: 'Withdrawal history',
     walletHistSubs: 'Subscription history',
@@ -847,10 +846,7 @@ const STR = {
     rangeAll: 'All',
     officeEmptyHistory: 'None of your signals have finished yet.',
     balanceCard: 'Simulated balance · your demo account',
-    // Ronde 22: sidebar promo card + right panel (real balance & stats).
-    promoTitle: 'Your first signal',
-    promoText: 'Post a signal from the Workspace — your status, level and stats are recorded automatically.',
-    promoStart: 'Start',
+    // Ronde 22: right panel (real balance & stats).
     rpBalance: 'Simulated balance',
     rpAccountTrader: 'Trader account',
     rpAccountFollower: 'Follower account',

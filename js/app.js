@@ -925,11 +925,10 @@ $('#rp-mode-btn').addEventListener('click', () => {
   renderRightPanel();
 });
 $('#side-logout').addEventListener('click', () => doLogout());
-$('#side-promo-go').addEventListener('click', () => showView('office'));
 // Ronde 22: ripple saat ditekan (preview) — satu span .ripple yang
 // mengembang dari titik tekan, lalu dihapus; tanpa setPointerCapture.
 document.addEventListener('pointerdown', (e) => {
-  const el = e.target.closest('.btn:not(:disabled), .fchip, .chip, .tab, .subtab, .seg button, .menurow, .side-nav button, .bottom-nav button, .iconbtn, .bellbtn, .avatar-btn, .side-promo-btn');
+  const el = e.target.closest('.btn:not(:disabled), .fchip, .chip, .tab, .subtab, .seg button, .menurow, .side-nav button, .bottom-nav button, .iconbtn, .bellbtn, .avatar-btn');
   if (!el) return;
   const r = el.getBoundingClientRect();
   const d = Math.max(r.width, r.height);
@@ -2283,11 +2282,14 @@ function statsGridHtml(s) {
   // R26: definisi "ada trade tertutup" sama dengan panel kanan
   // (renderRightPanel: has = st.closed > 0). Tanpa trade tertutup, Total
   // Profit + Total R menampilkan "—" netral, bukan 0 hijau.
+  // R34 (audit B-2): sufiks jumlah pips ("+20 pips" / "0 pips") hanya
+  // tampil bila ada trade tertutup — di bawah sel "—", "0 pips" adalah
+  // angka yang mengada-ada; labelnya saja yang tersisa.
   const has = (s.closed || 0) > 0;
   return `<div class="pstats">`
     + `<div class="stat-cell"><div class="num mono">${wr}</div><div class="lbl">${esc(t('stWinRate'))}</div></div>`
     + `<div class="stat-cell"><div class="num mono">${s.totalSignals}</div><div class="lbl">${esc(t('stTotalSignalsOpen', { n: s.active }))}</div></div>`
-    + `<div class="stat-cell"><div class="num mono ${has && s.totalUSD > 0 ? 'pips-pos' : has && s.totalUSD < 0 ? 'pips-neg' : ''}">${has ? esc(fmtUsd(s.totalUSD, true)) : '—'}</div><div class="lbl">${esc(t('stTotalProfit'))} ${esc(fmtPipsSigned(s.totalPips))}</div></div>`
+    + `<div class="stat-cell"><div class="num mono ${has && s.totalUSD > 0 ? 'pips-pos' : has && s.totalUSD < 0 ? 'pips-neg' : ''}">${has ? esc(fmtUsd(s.totalUSD, true)) : '—'}</div><div class="lbl">${esc(t('stTotalProfit'))}${has ? ' ' + esc(fmtPipsSigned(s.totalPips)) : ''}</div></div>`
     + `<div class="stat-cell"><div class="num mono">${fmtPf(s.pf)}</div><div class="lbl">${esc(t('stProfitFactor'))}</div></div>`
     + `<div class="stat-cell"><div class="num mono ${has && s.totalR > 0 ? 'pips-pos' : has && s.totalR < 0 ? 'pips-neg' : ''}">${has ? esc(fmtR(s.totalR)) : '—'}</div><div class="lbl">${esc(t('stTotalR'))}</div></div>`
     + `<div class="stat-cell"><div class="num mono">${s.avgR === null ? '—' : esc(fmtR(s.avgR))}</div><div class="lbl">${esc(t('stAvgR'))}</div></div>`
@@ -2669,6 +2671,10 @@ function traderCardHtml(tr, rank, badge) {
     : badge === 'subscribed' ? `<span class="pill gold">${esc(t('subscribed'))}</span>` : '';
   const handle = traderHandle(tr); // publik: hanya @username (ronde 5)
   const folN = S.followerCounts[tr.profile_id];
+  // R34 (audit B-1/S-3): pola "—" Ronde 26 — trader tanpa trade tertutup
+  // tidak menampilkan "$0.00" / "0R" mentah di kartu (WR + Max DD sudah
+  // "—" sejak dulu; Total Profit + Total R disamakan di sini).
+  const has = st.closed > 0;
   return `<article class="tcard" data-trader="${esc(tr.profile_id)}" tabindex="0" role="button">
     <div class="head">
       <span class="rank-num${rank <= 3 ? ' top' : ''}">${rank}</span>
@@ -2680,12 +2686,12 @@ function traderCardHtml(tr, rank, badge) {
     </div>
     <div class="mini">
       <div class="mini-row r1">
-        <div class="cell hero"><div class="v">${esc(fmtUsd(st.totalUSD))}</div><div class="k">${esc(t('stTotalProfitUSD'))}</div></div>
+        <div class="cell hero"><div class="v">${has ? esc(fmtUsd(st.totalUSD)) : '—'}</div><div class="k">${esc(t('stTotalProfitUSD'))}</div></div>
         <div class="cell"><div class="v">${st.totalSignals}</div><div class="k">${esc(t('stSignals'))}</div></div>
         <div class="cell"><div class="v">${st.wr === null ? '—' : st.wr.toFixed(0) + '%'}</div><div class="k">${esc(t('stWinRate'))}</div></div>
       </div>
       <div class="mini-row r2">
-        <div class="cell"><div class="v ${st.totalR > 0 ? 'pips-pos' : st.totalR < 0 ? 'pips-neg' : ''}">${esc(fmtR(st.totalR))}</div><div class="k">${esc(t('stTotalRNet'))}</div></div>
+        <div class="cell"><div class="v ${has && st.totalR > 0 ? 'pips-pos' : has && st.totalR < 0 ? 'pips-neg' : ''}">${has ? esc(fmtR(st.totalR)) : '—'}</div><div class="k">${esc(t('stTotalRNet'))}</div></div>
         <div class="cell"><div class="v ${ddUsd > 0 ? 'pips-neg' : ''}">${ddUsd > 0 ? '-' + esc(fmtUsd(ddUsd)) : '—'}</div><div class="k">${esc(t('stMaxDDShort'))}</div></div>
       </div>
     </div>
@@ -2981,6 +2987,10 @@ function boardCardHtml(row, rank) {
   const level = p ? Number(p.level) || 1 : 1;
   const verified = level >= PAY_GATE_LEVEL ? ` <span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : '';
   const name = traderHandle(tr); // publik: hanya @username (ronde 5)
+  // R34 (audit B-1/S-3): pola "—" Ronde 26 — trader tanpa trade tertutup
+  // tidak menampilkan "$0.00" hijau / "0R" mentah (Max DD, PF, RF sudah
+  // "—" lewat guard/fmt null; Total Profit + Total R disamakan di sini).
+  const has = st.closed > 0;
   return `<article class="board-card" data-trader="${esc(tr.profile_id)}" tabindex="0" role="button">
     <div class="board-top">
       <span class="board-rank${rank <= 3 ? ' top' : ''}">${rank}</span>
@@ -2992,8 +3002,8 @@ function boardCardHtml(row, rank) {
       ${followBtnHtml(tr.profile_id)}
     </div>
     <div class="board-stats">
-      <div class="bs"><b class="${st.totalUSD >= 0 ? 'pips-pos' : 'pips-neg'}">${esc(fmtUsd(st.totalUSD, true))}</b><small>${esc(t('thProfit'))}</small></div>
-      <div class="bs"><b>${esc(fmtR(st.totalR))}</b><small>${esc(t('stTotalRNet'))}</small></div>
+      <div class="bs"><b class="${has ? (st.totalUSD >= 0 ? 'pips-pos' : 'pips-neg') : ''}">${has ? esc(fmtUsd(st.totalUSD, true)) : '—'}</b><small>${esc(t('thProfit'))}</small></div>
+      <div class="bs"><b>${has ? esc(fmtR(st.totalR)) : '—'}</b><small>${esc(t('stTotalRNet'))}</small></div>
       <div class="bs"><b class="${st.drawdown.usd > 0 ? 'pips-neg' : ''}">${st.drawdown.usd > 0 ? '-' + esc(fmtUsd(st.drawdown.usd)) + ` (${ds(st.drawdown.pct.toFixed(1))}%)` : '—'}</b><small>${esc(t('thMaxDD'))}</small></div>
       <div class="bs"><b>${fmtPf(st.pf)}</b><small>${esc(t('thPF'))}</small></div>
       <div class="bs"><b>${fmtRf(st.recovery)}</b><small>${esc(t('thRecovery'))}</small></div>
@@ -4715,6 +4725,7 @@ function renderWallet() {
     + `<div class="wal-bal-label">${esc(t('walletBalLabel'))}</div><div class="wal-bal-value mono">${esc(fmtIdr(0))}</div>`
     + `<div class="wal-actions"><button type="button" class="btn" disabled>${esc(t('walletWithdraw'))}</button></div></div>`
     + `<div class="risk-note"><span><b>${esc(t('walletNoAcc'))}</b> <button type="button" class="linkbtn" id="wallet-add-acc">${esc(t('walletAddAcc'))}</button> ${esc(t('walletNoAccSuffix'))}</span></div>`
+    + `<p class="lead-sm">${esc(t('walletSoon'))}</p>`
     + `<p class="lead-sm">${esc(t('walletLead'))}</p>`
     + (kycVerified ? '' : `<p class="lead-sm kyc-note">${esc(t('walletKycLock'))}</p>`)
     + `<div class="subtabs" role="tablist" aria-label="${esc(t('walletTitle'))}">`
