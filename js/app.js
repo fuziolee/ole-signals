@@ -4325,7 +4325,6 @@ async function renderProfile() {
       : kycStatus === 'rejected'
         ? `<span class="stchip bad">${esc(t('kycRejected'))}</span>${p.kyc_reject_reason ? `<span>${esc(t('kycRejectReason', { reason: p.kyc_reject_reason }))}</span>` : ''}<button class="btn" type="button" id="kyc-start-btn">${esc(t('kycRetry'))}</button>`
         : `<span style="color:var(--muted);">${esc(t('kycNotVerified'))}</span><button class="btn" type="button" id="kyc-start-btn">${esc(t('kycVerifyBtn'))}</button>`}</div>`
-      + `<p>${esc(t('kycHint'))}</p>`
       + (kycVerified ? `<p>${esc(t('kycNameLocked'))}</p><p class="note">${esc(t('kycDocsNote'))}</p>` : '');
     const detailBody = `<div class="menurow"><span class="grow"><span class="t">${esc(t('uid'))}</span><span class="d">${esc(uid)}</span></span></div>`
       + `<div class="menurow"><span class="grow"><span class="t">${esc(t('profileName'))}</span><span class="d">${esc(p.display_name || '—')}</span></span></div>`
