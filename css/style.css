@@ -365,8 +365,8 @@ h1 { font-size: 30px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 4p
 .pill.green { background: var(--buy-bg); color: var(--buy); }
 .pill.red { background: var(--sell-bg); color: var(--sell-text); }
 .sig-trader { font-size: 13px; color: var(--muted); margin-top: 6px; }
-.sig-levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
-.sig-levels .lv { background: var(--panel-2); border-radius: var(--radius-sm); padding: 8px 10px; }
+.sig-levels { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.sig-levels .lv { background: var(--panel-2); border-radius: var(--radius-sm); padding: 8px 10px; min-width: 0; }
 .sig-levels .lv small { display: block; font-size: 11.5px; color: var(--muted); }
 .sig-levels .lv b { font-size: 14.5px; }
 .sig-meta { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
@@ -393,10 +393,10 @@ h1 { font-size: 30px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 4p
   border-radius: 20px; box-shadow: 0 12px 32px -12px rgba(0, 0, 0, .5);
   display: flex; justify-content: center;
 }
-.bottom-nav nav { display: grid; grid-template-columns: repeat(5, 1fr); width: 100%; }
+.bottom-nav nav { display: grid; grid-template-columns: repeat(6, 1fr); width: 100%; }
 .bottom-nav button {
   appearance: none; background: none; border: 0; color: #9CA3AF;
-  font-size: 11.5px; font-weight: 600; padding: 8px 4px 9px; cursor: pointer;
+  font-size: 11px; font-weight: 600; padding: 8px 2px 9px; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   border-radius: 14px;
 }
@@ -407,6 +407,8 @@ h1 { font-size: 30px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 4p
 
 /* ---- sidebar web (Ronde 15 #3) ---- */
 .side-nav { display: none; }
+/* R38: strip atas HP (lonceng saja) — tersembunyi di web. */
+.hp-topbar { display: none; }
 @media (min-width: 900px) {
   .side-nav {
     display: flex; flex-direction: column; gap: 4px;
@@ -414,8 +416,18 @@ h1 { font-size: 30px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 4p
     width: 224px; padding: 18px 12px;
     background: var(--side-bg); border-right: 1px solid rgba(255, 255, 255, .07);
   }
-  .side-nav .side-brand { padding: 2px 10px 16px; }
-  .side-nav .side-brand .logo { color: #FFFFFF; display: flex; align-items: center; gap: 11px; }
+  /* R38: baris atas sidebar — nama web kiri, lonceng kanan, satu baris. */
+  .side-nav .side-brand { display: flex; align-items: center; gap: 8px; padding: 2px 10px 16px; }
+  .side-nav .side-brand .logo { color: #FFFFFF; display: flex; align-items: center; gap: 11px; flex: 1; min-width: 0; }
+  .side-nav .side-brand .bellbtn { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .14); color: #FFFFFF;
+    /* R38: lepas dari warisan .side-nav button (padding 12px 14px + flex)
+       yang menekan glyph jadi 8px dan memaksa tinggi 40px. */
+    display: grid; place-items: center; padding: 0; min-height: 0; flex: none;
+    /* D-R38-3: .side-nav button juga mewariskan border-radius var(--radius-sm)
+       (14px) yang mengalahkan .bellbtn 50% — lonceng jadi kotak membulat,
+       bukan bulat. Kembalikan 50% di sini (juga berlaku di rel ikon tablet). */
+    border-radius: 50%; }
+  .side-nav .side-brand .bellbtn svg { flex: none; }
   .side-nav .side-brand .logo::before { content: ""; width: 38px; height: 38px; flex: none; border-radius: 12px; background: var(--teal) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2307304A' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M5 19v-6'/%3E%3Cpath d='M10 19V9'/%3E%3Cpath d='M15 19v-9'/%3E%3Cpath d='M20 19V5'/%3E%3C/svg%3E") center/21px no-repeat; }
   .side-nav button {
     appearance: none; background: none; border: 0; color: var(--side-ink);
@@ -438,15 +450,24 @@ h1 { font-size: 30px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 4p
 /* Lebar menengah: sidebar menyusut jadi rel ikon 64px. */
 @media (min-width: 900px) and (max-width: 1100px) {
   .side-nav { width: 64px; padding: 18px 8px; align-items: stretch; }
-  .side-nav .side-brand { display: none; }
+  /* R38: rel ikon — nama web disembunyikan, lonceng tetap tampil di tengah. */
+  .side-nav .side-brand { display: flex; justify-content: center; padding: 2px 0 16px; }
+  .side-nav .side-brand .logo { display: none; }
   .side-nav button { padding: 10px; justify-content: center; }
   .side-nav button .lbl { display: none; }
   #app { margin-left: max(64px, calc((100vw - 996px) / 2)); }
 }
 
-/* ---- feed 1 kolom (Ronde 15 #4, diubah ke 1 kolom di Ronde 22b) ---- */
-#home-list, .feed-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+/* ---- feed Beranda grid (R38: 3 kolom tetap di web, 2 kolom di HP) ----
+   .feed-grid (Sinyal Saya, Riwayat) tetap 1 kolom. */
+#home-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.feed-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 #home-list .sig, .feed-grid .sig { margin-bottom: 0; }
+#home-list .sig { padding: 16px; }
+#home-list > .empty { grid-column: 1 / -1; }
+@media (min-width: 900px) {
+  #home-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 
 /* ---- overlay detail ---- */
 .overlay {
@@ -559,12 +580,16 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
 /* Lonceng notifikasi di header */
 .app-header { position: relative; }
 .notif-wrap { margin-left: auto; position: relative; display: flex; align-items: center; }
+/* R38: lonceng kecil — tombol 36px, glyph 17px, badge 18px.
+   min-height: 0 melepaskan dari aturan dasar tombol (2.5rem/40px) —
+   lonceng ikon 36px tetap di atas lantai sentuh 24px (UI QA). */
 .bellbtn {
   appearance: none; background: var(--panel); border: 1px solid var(--line);
-  color: var(--ink); border-radius: 50%; width: 40px; height: 40px;
+  color: var(--ink); border-radius: 50%; width: 36px; height: 36px;
   display: grid; place-items: center; cursor: pointer; position: relative; font-size: 17px;
+  min-height: 0; padding: 0; flex: none;
 }
-.bellbtn svg { width: 20px; height: 20px; }
+.bellbtn svg { width: 17px; height: 17px; }
 .bellbadge {
   position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px;
   border-radius: 999px; background: var(--sell); color: #fff;
@@ -572,8 +597,10 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
 }
 /* R37b: badge anak .notif-wrap (bukan tombol) — bebas dari overflow:hidden
    ripple R22; klik badge ditangani sendiri di app.js (ikat #notif-badge). */
+/* R38: panel fixed + diposisikan JS dari lonceng yang terlihat
+   (sidebar di web, strip atas di HP) — tidak lagi menempel .notif-wrap. */
 .notif-panel {
-  position: absolute; right: 0; top: 48px; z-index: 50; width: min(92vw, 360px);
+  position: fixed; z-index: 50; width: min(92vw, 360px);
   background: var(--panel); border: 1.5px solid var(--teal); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 12px; max-height: 70vh; overflow-y: auto;
 }
@@ -691,13 +718,6 @@ table.board td.num, table.board th.num { text-align: right; }
 .menurow.danger { color: var(--sell-text); }
 .menurow.danger .d { color: var(--sell-text); opacity: .75; }
 
-/* Ganti peran di Ruang Kerja + subtab */
-.role-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 14px; }
-.role-toggle button {
-  border: 1px solid var(--line); background: var(--panel); color: var(--muted);
-  border-radius: 18px; padding: 10px; font-weight: 700; cursor: pointer; min-height: 48px;
-}
-.role-toggle button[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--teal-ink); }
 .subtabs { display: flex; gap: 8px; margin: 4px 0 14px; flex-wrap: wrap; }
 .subtab {
   appearance: none; border: 1px solid var(--line); background: var(--panel);
@@ -823,7 +843,18 @@ table.board td.num, table.board th.num { text-align: right; }
 }
 
 @media (max-width: 560px) {
-  .sig-levels { grid-template-columns: repeat(2, 1fr); }
+  /* R38: kartu Beranda HP ~170px — panel level 2×2 tidak muat untuk harga
+     XAUUSD ("4,090.00" butuh ~70px, sel hanya ~30px); level ditumpuk
+     1 kolom supaya angka utuh dan terbaca, bukan terpotong. Hanya
+     #home-list (feed 2 kolom); daftar 1 kolom (Trader/Follower) tetap 2×2. */
+  #home-list .sig { padding: 12px; }
+  #home-list .sig-levels { grid-template-columns: minmax(0, 1fr); padding: 8px 10px; gap: 6px; }
+  #home-list .sig-levels .lv { padding: 5px 8px; min-width: 0; }
+  #home-list .sig-levels .lv b { font-size: 13px; }
+  /* R38: nama + pill Demo boleh turun baris di kartu sempit (sebelumnya
+     pill Demo terpotong oleh ellipsis tombol nama). */
+  #home-list .sig-top .who button.name { white-space: normal; }
+  .sig-levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .conds { grid-template-columns: 1fr; }
   .overlay { padding: 24px 10px; }
   .search-grid { grid-template-columns: 1fr; }
@@ -1028,7 +1059,7 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
 
 /* --- Transisi bersama: tekan cepat 150-250ms, morph warna 250-400ms --- */
 .btn, .tab, .subtab, .fchip, .chip, .seg button, .dir-toggle button,
-.role-toggle button, .bellbtn, .iconbtn, .menurow, .side-nav button,
+.bellbtn, .iconbtn, .menurow, .side-nav button,
 .bottom-nav button, .date-filter-btn, .df-preset, .df-day, .avatar-btn,
 .sig, .tcard, .board-card, .board-pager .btn, .notif-item {
   transition: transform .18s ease, background-color .3s ease, border-color .3s ease,
@@ -1039,7 +1070,7 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
 /* --- (1) Respon tekan: scale ~0.97 + gelap sebentar, kembali 150-250ms --- */
 .btn:active, .tab:active, .subtab:active, .fchip:active, .chip:active,
 .seg button:active, .date-filter-btn:active, .df-preset:active,
-.dir-toggle button:active, .role-toggle button:active,
+.dir-toggle button:active,
 .board-pager .btn:active { transform: scale(.97); filter: brightness(.92); }
 .btn.primary:active { transform: scale(.97); }
 .bellbtn:active, .iconbtn:active { transform: scale(.94); }
@@ -1075,7 +1106,7 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
 /* --- Hormati preferensi gerak minimal perangkat --- */
 @media (prefers-reduced-motion: reduce) {
   .btn, .tab, .subtab, .fchip, .chip, .seg button, .dir-toggle button,
-  .role-toggle button, .bellbtn, .iconbtn, .menurow, .side-nav button,
+  .bellbtn, .iconbtn, .menurow, .side-nav button,
   .bottom-nav button, .date-filter-btn, .df-preset, .df-day, .avatar-btn,
   .sig, .tcard, .board-card, .board-pager .btn, .notif-item, .prow, .dd-btn, .dd-chev { transition: none; }
   .view.active, .overlay.open, .overlay.open .sheet,
@@ -1097,84 +1128,46 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
    tetap jalan di dalam cangkang baru ini.
    ============================================================ */
 
-/* --- Cangkang: grid 3 kolom desktop ≥1100px, kolom scroll mandiri --- */
+/* --- Cangkang: grid 2 kolom desktop ≥1100px (R38: panel kanan dihapus), kolom scroll mandiri --- */
 @media (min-width: 1100px) {
-  .app { display: grid; grid-template-columns: 250px minmax(0, 1fr) 322px; height: calc(100vh - 52px); min-height: 640px; }
+  .app { display: grid; grid-template-columns: 250px minmax(0, 1fr); height: calc(100vh - 52px); min-height: 640px; }
   .side-nav { position: static; width: auto; height: 100%; overflow-y: auto; scrollbar-width: thin; border-right: 0; }
   #app { margin: 26px auto; padding-bottom: 0; }
   main { overflow-y: auto; scrollbar-width: thin; padding: 30px 34px 40px; }
   .view { padding-top: 0; }
-  .right-panel { overflow-y: auto; scrollbar-width: thin; }
   .bottom-nav { display: none; }
 }
-/* --- Tablet 900–1100px: sidebar rel ikon (live), panel kanan turun --- */
+/* --- Tablet 900–1100px: sidebar rel ikon (live) --- */
 @media (min-width: 900px) and (max-width: 1099px) {
   .app { display: grid; grid-template-columns: 64px minmax(0, 1fr); }
   .side-nav { position: static; width: 64px; height: 100%; overflow-y: auto; scrollbar-width: thin; padding: 18px 8px; align-items: stretch; border-right: 0; }
-  .side-nav .side-brand { display: none; }
+  /* R38: rel ikon — nama web disembunyikan, lonceng tetap tampil di tengah. */
+  .side-nav .side-brand { display: flex; justify-content: center; padding: 2px 0 16px; }
+  .side-nav .side-brand .logo { display: none; }
   .side-nav button { padding: 10px; justify-content: center; }
   .side-nav button .lbl { display: none; }
   #app { margin: 26px auto; padding-bottom: 0; }
   main { padding: 24px 28px 40px; }
-  .right-panel { grid-column: 2; border-top: 1px solid var(--line); }
   .bottom-nav { display: none; }
 }
-/* --- HP <900px: satu halaman; Ronde 32: isi panel kanan (Saldo +
-   Statistik) disembunyikan, .rp-top naik jadi bar atas (lonceng +
-   avatar) di atas konten. Bar TIDAK sticky — ikut scroll halaman:
-   sticky tidak bisa jalan di dalam .app yang overflow:hidden, dan
-   bar tidak boleh menutupi konten saat scroll. Lonceng sekarang ada
-   di atas (dulu di ujung bawah halaman), avatar tetap menuju Profil.
-   Saldo/statistik tetap bisa dibuka lewat Ruang Kerja → Trader. --- */
+/* --- HP <900px: satu halaman. R38: panel kanan dihapus — strip atas
+   ramping (.hp-topbar) berisi lonceng saja, tanpa avatar, di atas
+   konten. Bar TIDAK sticky — ikut scroll halaman: sticky tidak bisa
+   jalan di dalam .app yang overflow:hidden, dan bar tidak boleh
+   menutupi konten saat scroll. --- */
 @media (max-width: 899px) {
   body { padding: 0; }
   .app { margin: 0; border-radius: 0; box-shadow: none; min-height: 100vh; display: flex; flex-direction: column; }
   main { padding: 14px 17px 110px; }
-  .right-panel { order: -1; padding: 10px 17px; border-bottom: 1px solid var(--line); }
-  .right-panel .rp-top { margin-bottom: 0; }
-  .right-panel #rp-body { display: none; }
+  .hp-topbar { order: -1; display: flex; justify-content: flex-end; padding: 10px 17px; border-bottom: 1px solid var(--line); }
   .side-nav { display: none; }
 }
 
 /* --- Sidebar: Keluar di bawah Profil --- */
 
-/* --- Panel kanan --- */
-.right-panel { background: var(--aside-bg); padding: 26px 22px 30px; min-width: 0; }
-.rp-top { display: flex; align-items: center; gap: 9px; margin-bottom: 24px; }
-.rp-top .notif-wrap { margin-left: 0; }
-.rp-bell { background: var(--panel); box-shadow: 0 1px 4px rgba(20, 20, 30, .05); }
-.rp-avatar { margin-left: auto; width: 40px; height: 40px; font-size: 14px; }
-.rp-avatar .avatar { width: 40px; height: 40px; font-size: 14px; }
-/* Panel notifikasi: fixed agar tidak terpotong kolom yang bisa di-scroll. */
-.right-panel .notif-panel { position: fixed; top: 118px; right: max(38px, calc((100vw - 1280px) / 2 + 22px)); }
-@media (max-width: 1099px) {
-  .right-panel .notif-panel { top: 84px; right: 12px; }
-}
-.rp-bal-label { font-size: 13px; font-weight: 700; color: var(--muted); }
-.rp-bal-num { font-size: 33px; font-weight: 800; letter-spacing: -.03em; margin: 3px 0 2px; font-variant-numeric: tabular-nums; }
-.rp-bal-sub { font-size: 12.5px; font-weight: 700; color: var(--buy); margin-bottom: 20px; }
-.rp-bal-sub span { color: var(--muted); font-weight: 600; }
-.rp-hide-row { display: flex; align-items: center; gap: 9px; margin-bottom: 22px; }
-.rp-hide-row .t { font-size: 13px; font-weight: 700; }
-.rp-switch { margin-left: auto; width: 46px; height: 27px; border-radius: 999px; flex: none; background: #DCDCE1; position: relative; min-height: 27px; border: 0; cursor: pointer; padding: 0; }
-.rp-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 21px; height: 21px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .18); transition: left .22s cubic-bezier(.34, 1.4, .64, 1); }
-.rp-switch[aria-checked="true"] { background: var(--teal); }
-.rp-switch[aria-checked="true"]::after { left: 22px; }
-.rp-switch:active { transform: scale(.93); }
-.right-panel h4 { margin: 0 0 12px; font-size: 13px; font-weight: 800; letter-spacing: .02em; }
-.rp-stat-row { display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 11px 13px; margin-bottom: 9px; }
-.rp-stat-row .n { font-size: 13.5px; font-weight: 800; }
-.rp-stat-row .s { font-size: 11.5px; color: var(--muted); font-weight: 600; }
-.rp-stat-row .v { margin-left: auto; text-align: right; flex: none; }
-.rp-stat-row .v .a { font-size: 14.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.rp-stat-row .v .b { font-size: 11px; font-weight: 700; }
-.rp-empty { font-size: 13.5px; color: var(--muted); line-height: 1.6; }
-
 /* --- Pinggiran kartu utama: biru muda tipis #38BDF8 1.5px (R22) --- */
 .card, .tcard, .board-card, .subcard, .balance-card, .auth-card, .chart-card, .verify-card { border: 1.5px solid var(--teal); }
 .sig { border: 1.5px solid var(--teal); }
-/* Kartu terpilih: 2.5px + latar biru muda lembut (pilihan peran Trader/Follower). */
-.role-toggle button[aria-pressed="true"] { border: 2.5px solid var(--teal); background: var(--teal-soft); color: var(--ink); }
 /* Kartu sinyal: panel level abu-abu seperti preview. */
 /* R22: di feed 2 kolom (web ≥900px) kartu hanya ~300px — grid 4 kolom
    membuat kotak ke-4 ("Harga sekarang") meluber keluar kartu (terbukti
@@ -1215,7 +1208,7 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
 
 /* --- Ripple saat ditekan (preview: pointerdown, span .ripple) --- */
 .btn, .tab, .subtab, .fchip, .chip, .seg button, .dir-toggle button,
-.role-toggle button, .bellbtn, .iconbtn, .menurow, .side-nav button,
+.bellbtn, .iconbtn, .menurow, .side-nav button,
 .side-nav #side-logout, .bottom-nav button, .date-filter-btn,
 .df-preset, .df-day, .avatar-btn { position: relative; overflow: hidden; }
 .ripple { position: absolute; border-radius: 50%; pointer-events: none; background: currentColor; opacity: .16; transform: scale(0); animation: r22-rip .45s ease-out forwards; }
