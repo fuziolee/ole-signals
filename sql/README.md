@@ -30,6 +30,9 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
 | `r8-notif-fix.sql` | Ronde 8: `create_signal` / `update_signal` / `cancel_signal` + grants (perbaikan notifikasi: pesan generik untuk sinyal berbayar + @username). **PERHATIAN URUTAN:** file ini mendefinisikan ulang `update_signal` TANPA cek `shared_at` — bila diterapkan SETELAH `14_shared_lock.sql`, kunci shared hilang diam-diam. Terapkan r8 HANYA sebelum 14, atau terapkan ulang 14 sesudahnya. |
 | `16_audit_guards.sql` | Ronde 27 (audit pra-Fase 3, K-1 + T-3): perluas `guard_profile_kyc_columns()` agar menjaga `is_admin` (hanya service_role); trigger baru `guard_profile_cooldown_columns()` (cooldown username/nama 1×/bulan + kunci nama saat KYC terverifikasi + anti-utak-atik stempel) dan `guard_trader_guards()` (cooldown username trader + gerbang Level 5 / rentang Rp100.000–Rp10.000.000 / cooldown harga 1×/bulan + larangan mengangkat diri jadi demo). Hanya menambah/memperluas trigger — TIDAK mendefinisikan ulang RPC apa pun dari 03/13/14/15. **TERAPKAN SETELAH 01–15 + r8, SEBELUM verifikasi negatif live.** |
 | `17_profiles_public_view.sql` | Ronde 27 (audit pra-Fase 3, T-1): view `profiles_public` (kolom publik saja: id, username, display_name, avatar_url, region, created_at) + policy baca `profiles` menjadi owner-only (`profiles_select_own`) + revoke SELECT anon pada tabel dasar. Sesudah ini `kyc_*` + `is_admin` tidak lagi terbaca publik. **TERAPKAN SETELAH 16.** Frontend tidak membaca `profiles` publik (semua call site adalah baris milik sendiri — lihat `visual-diff/r27-inventory.md`), jadi tidak ada frontend yang bergantung pada migrasi ini. |
+| `18_fase3_settlement.sql` | **Fase 3:** `settle_signals()` (SECURITY DEFINER, hanya service_role) — kedaluwarsa PENDING → EXPIRED, aktivasi PENDING → AKTIF, penutupan AKTIF → WIN/LOSS (profit_usd/profit_pips/r_value/holding_minutes, close_price = level TP/SL) + `recalc_trader_progress()` (level inkremental: tangga tetap ref(L) = $10.000 × 1,05^(L−1); naik butuh AND saldo + R + 5 trade; saldo/peak/max DD dihitung ulang penuh dari sinyal tertutup) + tabel `settlement_runs` (ringkasan tiap putaran) + `quote_to_usd`/`contract_size`/`pip_size` (dipindah dari 03 ke sini agar settlement tidak bergantung pada urutan 03) + grants service_role. Harga basi (> 30 menit) TIDAK PERNAH menutup sinyal. **TERAPKAN SETELAH 01–17. TIDAK ADA perubahan frontend di Fase 3.** |
+| `19_fase3_tests.sql` | **Fase 3 (tes saja, bukan migrasi):** F3-01..F3-13 + SETUP + CLEANUP, pola 04 (tabel temp `test_results`, satu tes gagal tidak menghentikan yang lain). Jalankan di SQL Editor SETELAH 18. **PERHATIAN:** `settle_signals()` memproses SEMUA sinyal terbuka — jalankan hanya bila harga live tidak menyentuh sinyal demo/sungguhan, atau saat pasar tutup (lihat header file). |
+| `20_fase3_cron.sql` | **Fase 3 (jadwal):** pg_cron `fetch-prices-15min` (*/15) → `net.http_post` ke Edge Function `fetch-prices` dengan anon key. **TERAPKAN SETELAH 18 + deploy kedua Edge Function.** Ganti placeholder `<ANON_KEY>` dengan anon key dari `js/config.js` sebelum menjalankan. |
 
 ## Cara pakai (Supabase SQL Editor)
 
@@ -66,6 +69,15 @@ saja, saldo simulasi $10.000, pembayaran DITANGGUHKAN (dibangun terakhir).
    (PATCH `is_admin` sebagai akun tes HARUS ditolak; baca `profiles`
    sebagai anon HARUS kosong/gagal; lihat `visual-diff/r27-defect-report.md`
    § "Langkah deploy"). Tidak ada perubahan frontend di Ronde 27.
+9. **Fase 3 (migrasi 18 + Edge Functions + cron 20):** terapkan
+   `18_fase3_settlement.sql`, lalu deploy kedua Edge Function
+   (`supabase/functions/fetch-prices/index.ts`,
+   `supabase/functions/settle-signals/index.ts` — lewat Dashboard →
+   Edge Functions → editor, JANGAN via CLI), lalu terapkan
+   `20_fase3_cron.sql` (ganti `<ANON_KEY>` dulu). **Baru** jalankan
+   `19_fase3_tests.sql` di SQL Editor (baca peringatan di header file
+   itu dulu — jangan jalankan saat harga live menyentuh sinyal demo).
+   Tidak ada perubahan frontend di Fase 3.
 7. Aktifkan **Email** provider di **Authentication → Providers**
    (email+password saja; Google OAuth TIDAK diaktifkan).
 
@@ -142,16 +154,23 @@ pair quote-USD seperti XAUUSD/EURUSD tidak butuh konversi).
 
 1. **Aturan sentuh entry (AC-EDIT-07):** entry dianggap tersentuh bila
    harga saat ini sudah melewatinya — BUY: harga ≤ entry; SELL: harga
-   ≥ entry. Konfirmasi ulang saat `settle-signals` ditulis (Fase 3);
-   bila aturan settlement berbeda, samakan fungsi ini.
+   ≥ entry. **DIKONFIRMASI untuk settlement di Fase 3 (sql/18):** aturan
+   yang sama dipakai `settle_signals()`. Konsekuensi yang diuji (F3-01/
+   F3-13): satu harga tidak bisa sekaligus menyentuh entry dan TP, jadi
+   WIN selalu butuh minimal dua putaran; satu-satunya penutupan dalam
+   satu putaran adalah LOSS saat harga melompat menembus entry DAN SL
+   sekaligus (gap-down BUY / gap-up SELL).
 2. **XAGUSD** tidak masuk daftar pair (ukuran kontraknya belum
    diputuskan). Tambahkan setelah diputuskan produk.
 3. **Deteksi duplikasi dua lapis (§5) belum diimplementasikan.**
    Kolom `duplicate_of` / `duplicate_flagged` sudah siap; deteksi
    jalan di langkah lanjutan Fase 2 (butuh tabel pip per pair).
 4. **Settlement (AKTIF/WIN/LOSS) dan hitung ulang level/statistik**
-   (`recalc_trader_progress`) adalah Fase 3–4 (Edge Functions),
-   bukan file ini. Kolom-kolomnya sudah disiapkan.
+   (`recalc_trader_progress`) **DIBANGUN di Fase 3** (`18_fase3_settlement.sql`
+   + Edge Functions `fetch-prices` / `settle-signals` + cron 20; laporan
+   build: `visual-diff/laporan-fase-3.md`). Statistik server + leaderboard
+   komposit tetap Fase 4; deteksi duplikasi + notifikasi kedaluwarsa/
+   inaktivitas tetap Fase 5.
 5. **KYC:** kolom `kyc_*` di `profiles` hanya boleh DIUBAH oleh
    service_role (webhook Zyphe) — dijaga trigger. Sejak migrasi 17
    (Ronde 27), kolom itu juga TIDAK BISA DIBACA publik: baca `profiles`
