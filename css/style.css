@@ -815,20 +815,18 @@ table.board td.num, table.board th.num { text-align: right; }
 /* Kartu trader di Cari — R39 (aturan kolom global): 2 kolom di web
    (≥900px), 1 kolom di HP. (R23 dulu 1 kolom atas perintah user
    2026-11-25 "Cari juga satu"; R39 membalikkan atas perintah baru
-   user.) Peringkat memakai .board-grid sendiri (di bawah) — ikut
-   aturan global yang sama, tanpa modifier. */
+   user.) Peringkat memakai .board-grid sendiri (di bawah) — 1 kolom
+   di semua lebar atas perintah R39b, bukan aturan global. */
 .traders { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 @media (min-width: 900px) {
   .traders { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-/* R39: kartu Peringkat (.board-card) ikut aturan kolom global — 2 kolom
-   di web, 1 kolom di HP. Margin bawah kartu dimatikan di dalam grid
+/* R39b: kartu Peringkat (.board-card) 1 kolom di semua lebar — atas
+   perintah user 2026-11-26 "Peringkat di web 1 kolom aja" (bukan 2 kolom
+   seperti aturan global R39). Margin bawah kartu dimatikan di dalam grid
    (gap 16px sudah mengatur jarak antarbaris). */
 .board-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .board-grid .board-card { margin-bottom: 0; }
-@media (min-width: 900px) {
-  .board-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 .tcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; }
 .tcard .head { display: flex; gap: 10px; align-items: center; }
 .tcard .avatar { width: 40px; height: 40px; font-size: 14px; }
