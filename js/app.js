@@ -6,7 +6,7 @@
 import { supabase } from './supabase.js';
 import { t, setLang, getLang } from './i18n.js';
 import { levelName, levelRef, nextLevelRef, downLevelRef, PAY_GATE_LEVEL, START_BALANCE_USD } from './levels.js';
-import { PAIRS, calcRr, calcRisk, quoteToUsd, contractSize, validateSignal, decimalsForPair } from './risk.js';
+import { PAIRS, calcRr, calcRisk, inferEntryType, quoteToUsd, contractSize, validateSignal, decimalsForPair } from './risk.js';
 import { computeStats, rankedTraders, sparklineSVG, pipSize, pipsPnl } from './stats.js';
 import * as api from './api.js';
 
@@ -731,7 +731,8 @@ function rpcErrorMessage(res) {
     pair: 'errPair', taken: 'errTaken', shared: 'errShared', notclosed: 'errNotclosed',
   };
   if (res.code && map[res.code]) return t(map[res.code]);
-  return res.message || t('errInvalid');
+  // Ronde 35: kode jeda reset — tampilkan pesan server (tanggal akhir jeda).
+  if (res.code === 'resetcooldown' || res.code === 'resettoosoon') return res.message || t('errResetCooldown');
 }
 
 function authErrorMessage(err) {
@@ -1115,7 +1116,7 @@ function floatingUsd(sig) {
 }
 function riskTargetUsd(sig) {
   const rr = calcRr(Number(sig.entry), Number(sig.stop_loss), Number(sig.take_profit));
-  const risk = calcRisk({ pair: sig.pair, entry: Number(sig.entry), sl: Number(sig.stop_loss), lot: Number(sig.lot_size), balanceUsd: 0, prices: S.prices });
+  const risk = calcRisk({ pair: sig.pair, entry: Number(sig.entry), sl: Number(sig.stop_loss), lot: Number(sig.lot_size), refBalanceUsd: 0, prices: S.prices });
   if (risk.error || rr === null) return { riskUsd: null, targetUsd: null, rr };
   return { riskUsd: risk.riskUsd, targetUsd: risk.riskUsd * rr, rr };
 }
@@ -1246,6 +1247,7 @@ function signalCardHtml(sig) {
     <div class="sig-head">
       <span class="sig-pair sig-pair-lg">${pairHtml(sig.pair)}</span>
       <span class="dir ${dirCls}">${esc(sig.direction)}</span>
+      <span class="pill">${esc(t(sig.entry_type === 'stop' ? 'entryStop' : 'entryLimit'))}</span>
       <span class="spacer"></span>
       ${resultHtml}
     </div>
@@ -2185,9 +2187,10 @@ function openSignalDetail(id) {
       + `<div class="ends"><span>SL ${esc(fmtNum(sig.stop_loss, d))}</span><span>${esc(t('sigFloating'))} ${fl !== null ? esc(fmtUsd(fl)) : '—'}</span><span>TP ${esc(fmtNum(sig.take_profit, d))}</span></div></div>`;
   }
   const rt = riskTargetUsd(sig);
+  // Ronde 35: % risiko dihitung dari saldo acuan level pemilik sinyal.
   const ownerProg = progressOf(tr);
-  const ownerBal = ownerProg ? Number(ownerProg.balance_usd) : START_BALANCE_USD;
-  const riskPct = rt.riskUsd !== null && ownerBal > 0 ? (rt.riskUsd / ownerBal) * 100 : null;
+  const ownerRef = ownerProg && Number(ownerProg.level_ref_balance) > 0 ? Number(ownerProg.level_ref_balance) : START_BALANCE_USD;
+  const riskPct = rt.riskUsd !== null && ownerRef > 0 ? (rt.riskUsd / ownerRef) * 100 : null;
   const riskPips = Math.abs(Number(sig.entry) - Number(sig.stop_loss)) / pipSize(sig.pair);
   const targetPips = Math.abs(Number(sig.take_profit) - Number(sig.entry)) / pipSize(sig.pair);
   const now = priceOf(sig.pair);
@@ -2209,8 +2212,10 @@ function openSignalDetail(id) {
       ? ((sig.close_price !== null && sig.close_price !== undefined) ? esc(fmtNum(sig.close_price, d)) : '—')
       : (now !== null ? esc(fmtNum(now, d)) : '—'));
   rowsHtml += drow(t('lot'), esc(fmtNum(sig.lot_size, 2)));
+  // Ronde 35: jenis entry sinyal (Stop/Limit; sinyal lama = Limit).
+  rowsHtml += drow(t('detEntryType'), esc(t(sig.entry_type === 'stop' ? 'entryStop' : 'entryLimit')));
   rowsHtml += drow(t('riskUsd'), rt.riskUsd !== null ? esc(fmtUsd(rt.riskUsd)) : '—')
-    + drow(t('detRiskBal'), riskPct !== null ? esc(t('detRiskBalVal', { pct: riskPct.toFixed(2), bal: fmtUsd(ownerBal) })) : '—')
+    + drow(t('detRiskBal'), riskPct !== null ? esc(t('detRiskBalVal', { pct: riskPct.toFixed(2), bal: fmtUsd(ownerRef) })) : '—')
     + drow(t('detFullTP'), rt.targetUsd !== null ? esc(fmtUsd(rt.targetUsd)) : '—')
     + drow(t('riskReward'), '1:' + (rt.rr !== null ? ds(rt.rr.toFixed(2)) : '—'))
     + drow(t('detDist'), `${Math.round(riskPips)} pips / ${Math.round(targetPips)} pips`);
@@ -3360,7 +3365,7 @@ async function renderRightPanel() {
     // (renderOfficeFollowerTab): salinan pengguna → computeStats.
     // Saldo simulasi = $10.000 + total profit jurnal salinan.
     list = S.myCopies
-      .map((c) => one(c.signals))
+      .map((c) => one(c.signals) || c.signal_snapshot)
       .filter(Boolean)
       .map((s) => ({ ...s, traders: s.traders || {} }));
     balLabel = `${esc(t('rpBalance'))} · ${esc(t('rpAccountFollower'))}`;
@@ -3498,7 +3503,16 @@ function refreshRiskBox() {
   const box = $('#sf-risk');
   if (!box) return;
   const v = readSignalForm();
-  const balance = progressOf(S.trader) ? Number(progressOf(S.trader).balance_usd) : START_BALANCE_USD;
+  // Ronde 35: risiko dihitung dari SALDO ACUAN LEVEL ref(level), bukan
+  // saldo simulasi aktual. level_ref_balance dirawat recalc/reset;
+  // fallback $10.000 = ref(1) bila progress belum ada.
+  const prog = progressOf(S.trader);
+  const refBalance = prog && Number(prog.level_ref_balance) > 0
+    ? Number(prog.level_ref_balance) : START_BALANCE_USD;
+  // Ronde 35: masa jeda reset — tombol posting ikut nonaktif di UI
+  // (server tetap menegakkan; ini cerminan, bukan pengganti).
+  const inResetCd = !!(prog && prog.reset_cooldown_until
+    && new Date(prog.reset_cooldown_until).getTime() > Date.now());
   // B2-08: nonaktifkan tombol posting saat pair sudah penuh (2 terbuka).
   // Sinyal yang sedang diedit tidak dihitung — mengedit salah satu dari
   // 2 sinyal itu tetap diizinkan (server tetap menegakkan batasnya).
@@ -3509,22 +3523,34 @@ function refreshRiskBox() {
   // R9-6: tombol juga nonaktif bila username trader belum dibuat
   // (banner postUsernameWarn) — jangan timpa disabled itu dengan `full`
   // saja; kedua kondisi digabung.
-  if (submitBtn) submitBtn.disabled = full || !S.trader?.username;
-  const err = validateSignal({ ...v, balanceUsd: balance, prices: S.prices });
+  if (submitBtn) submitBtn.disabled = full || !S.trader?.username || inResetCd;
+  const err = validateSignal({ ...v, refBalanceUsd: refBalance, prices: S.prices });
   const rr = calcRr(v.entry, v.sl, v.tp);
   const slPips = (Number.isFinite(v.entry) && Number.isFinite(v.sl)) ? Math.abs(v.entry - v.sl) / pipSize(v.pair) : null;
   const tpPips = (Number.isFinite(v.entry) && Number.isFinite(v.tp)) ? Math.abs(v.tp - v.entry) / pipSize(v.pair) : null;
   const risk = ([v.entry, v.sl, v.lot].every((x) => Number.isFinite(x) && x > 0))
-    ? calcRisk({ pair: v.pair, entry: v.entry, sl: v.sl, lot: v.lot, balanceUsd: balance, prices: S.prices })
+    ? calcRisk({ pair: v.pair, entry: v.entry, sl: v.sl, lot: v.lot, refBalanceUsd: refBalance, prices: S.prices })
     : null;
   let html = '';
   if (risk && !risk.error && slPips !== null && tpPips !== null && rr !== null && Number.isFinite(rr)) {
     const profit = risk.riskUsd * rr;
     html = `<div class="calc"><span>${t('calcLot', { v: fmtNum(v.lot, 2) })}</span><span class="sep">·</span>`
-      + `<span>${t('calcRisk', { amt: fmtUsd(risk.riskUsd), pct: risk.riskPct !== null ? risk.riskPct.toFixed(2) : '—', bal: fmtUsd(balance), pips: Math.round(slPips) })}</span><span class="sep">·</span>`
+      + `<span>${t('calcRisk', { amt: fmtUsd(risk.riskUsd), pct: risk.riskPct !== null ? risk.riskPct.toFixed(2) : '—', bal: fmtUsd(refBalance), pips: Math.round(slPips) })}</span><span class="sep">·</span>`
       + `<span>${t('calcProfit', { amt: fmtUsd(profit), pips: Math.round(tpPips) })}</span><span class="sep">·</span>`
       + `<span>R:R <b>1:${rr.toFixed(2)}</b></span></div>`
       + `<div class="note">${esc(rr >= 5 ? t('calcRR5') : t('calcRRN', { rr: rr.toFixed(2) }))}</div>`;
+  }
+  // Ronde 35: jenis entry live — disimpulkan dari entry vs harga sekarang
+  // (sama seperti server). Tanpa harga live, jenis tidak ditampilkan.
+  const livePrice = priceOf(v.pair);
+  const et = inferEntryType(v.direction, v.entry, livePrice);
+  if (et && Number.isFinite(v.entry)) {
+    // BUY stop + SELL limit: harga harus NAIK ke entry; selainnya TURUN.
+    const verb = (v.direction === 'BUY') === (et === 'stop') ? t('entryVerbRise') : t('entryVerbFall');
+    html += `<div class="note">${esc(t('entryTypeNote', { type: t(et === 'stop' ? 'entryStop' : 'entryLimit'), verb, entry: fmtNum(v.entry, decimalsForPair(v.pair)) }))}</div>`;
+  }
+  if (inResetCd) {
+    html += `<div style="color:var(--sell);">${esc(t('resetCooldownWarn', { date: fmtDate(prog.reset_cooldown_until) }))}</div>`;
   }
   if (err === 'invalid-order') html += `<div style="color:var(--sell);">${esc(t('errOrder'))}</div>`;
   if (err === 'rr') html += `<div style="color:var(--sell);">${esc(t('errRr'))}</div>`;
@@ -3573,8 +3599,10 @@ function bindSignalForm(editing) {
     const errBox = $('#sf-err');
     errBox.textContent = '';
     const v = readSignalForm();
-    const balance = progressOf(S.trader) ? Number(progressOf(S.trader).balance_usd) : START_BALANCE_USD;
-    const code = validateSignal({ ...v, balanceUsd: balance, prices: S.prices });
+    // Ronde 35: validasi client memakai saldo acuan level (server yang memutuskan).
+    const prog = progressOf(S.trader);
+    const refBalance = prog && Number(prog.level_ref_balance) > 0 ? Number(prog.level_ref_balance) : START_BALANCE_USD;
+    const code = validateSignal({ ...v, refBalanceUsd: refBalance, prices: S.prices });
     if (code === 'invalid-order') { errBox.textContent = t('errOrder'); return; }
     if (code === 'rr') { errBox.textContent = t('errRr'); return; }
     if (code === 'risk') { errBox.textContent = t('errRisk'); return; }
@@ -3928,6 +3956,17 @@ function renderOfficeTraderTab(editing = null) {
     const st = statsForTrader(S.user.id);
     const tr = S.trader;
     const resetRow = (k, v) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="color:var(--muted);">${esc(k)}</span><b>${esc(v)}</b></div>`;
+    // Ronde 35: kartu Reset statistik — data live dari trader_progress.
+    // _addMonth mengikuti prototipe (jepit ke hari terakhir bulan).
+    const addMonth = (d) => { const e = new Date(d); const day = e.getDate(); e.setDate(1); e.setMonth(e.getMonth() + 1); e.setDate(Math.min(day, new Date(e.getFullYear(), e.getMonth() + 1, 0).getDate())); return e; };
+    const rprog = progressOf(S.trader);
+    const rLast = rprog?.last_reset_at ? new Date(rprog.last_reset_at) : null;
+    const rCdUntil = rprog?.reset_cooldown_until ? new Date(rprog.reset_cooldown_until) : null;
+    const rInCd = !!(rCdUntil && rCdUntil.getTime() > Date.now());
+    const rNext = rLast ? addMonth(rLast) : null;
+    const rIsDemo = !!S.trader?.is_demo;
+    const rCanReset = !rInCd && (rIsDemo || !rLast || (rNext && Date.now() >= rNext.getTime()));
+    const rNextTxt = rCanReset ? t('resetNow') : (rNext ? fmtDate(rNext.toISOString()) : t('resetNow'));
     box.innerHTML = `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeIdentityTitle'))}</h2>`
       + `<p class="sub">${esc(t('officeIdentitySub'))}</p>`
       + traderIdentityCardHtml()
@@ -3936,13 +3975,35 @@ function renderOfficeTraderTab(editing = null) {
           <h3>${esc(t('resetTitle'))}</h3>
           <p>${esc(t('resetDesc'))}</p>
           ${resetRow(t('resetRule'), t('resetOnceMonth'))}
-          ${resetRow(t('resetLast'), '—')}
-          ${resetRow(t('resetNext'), t('resetNow'))}
-          <div style="margin-top:12px;"><button class="btn primary compact" type="button" disabled>${esc(t('resetBtn'))}</button></div>
-          <p class="note">${esc(t('resetSoonNote'))}</p>
+          ${resetRow(t('resetLast'), rLast ? fmtDate(rLast.toISOString()) : '—')}
+          ${resetRow(t('resetNext'), rNextTxt)}
+          ${rInCd ? `<p class="note" style="color:var(--sell);">${esc(t('resetInCooldown', { date: fmtDate(rCdUntil.toISOString()) }))}</p>` : ''}
+          <div style="margin-top:12px;"><button class="btn primary compact" type="button" id="reset-btn"${rCanReset ? '' : ' disabled'}>${esc(t('resetBtn'))}</button></div>
+          ${(!rCanReset && !rInCd) ? `<p class="note">${esc(t('resetNotYet'))}</p>` : ''}
         </div>`
       + statsSectionHtml(st, 'officeStatsTitle', null, '', 'office');
     bindPhotoInput('trader-photo-input', 'trader');
+    // Ronde 35: reset butuh dialog konfirmasi (tindakan destruktif).
+    const resetBtn = $('#reset-btn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', async () => {
+        const yes = await confirmDialog(t('resetConfirmTitle'), t('resetConfirmBody'), t('resetConfirmYes'));
+        if (!yes) return;
+        resetBtn.disabled = true;
+        try {
+          const res = await api.resetTraderStats();
+          if (!res.ok) { toast(rpcErrorMessage(res), true); return; }
+          toast(t('toastResetDone', { n: res.deleted ?? 0, subs: res.paused ?? 0 }));
+          invalidateAllSignals();
+          await refreshIdentity();
+          await renderOffice();
+        } catch (err) {
+          toast(t('errNetwork'), true);
+        } finally {
+          resetBtn.disabled = false;
+        }
+      });
+    }
     const trShare = $('#trader-share-btn');
     if (trShare) {
       // R9-5 (B-05): bagikan kartu PNG portofolio (dulu hanya teks).
@@ -4116,7 +4177,7 @@ function renderOfficeFollowerTab() {
   if (S.officeFollowerTab === 'jurnal') {
     // Jurnal salinan: statistik dari sinyal yang disalin + riwayat.
     const copiedSignals = S.myCopies
-      .map((c) => one(c.signals))
+      .map((c) => one(c.signals) || c.signal_snapshot)
       .filter(Boolean)
       .map((s) => ({ ...s, traders: s.traders || {} }));
     const st = computeStats(copiedSignals);
@@ -4157,14 +4218,14 @@ function renderOfficeFollowerTab() {
   // D14: salinan aktif memakai journalRowHtml(isCopy) — floating/waiting
   // + hapus salinan (non-AKTIF).
   const activeCopies = S.myCopies
-    .map((c) => ({ sig: one(c.signals), copyId: c.id, copyCreatedAt: c.created_at }))
+    .map((c) => ({ sig: one(c.signals) || c.signal_snapshot, copyId: c.id, copyCreatedAt: c.created_at }))
     .filter((x) => x.sig && (x.sig.status === 'PENDING' || x.sig.status === 'AKTIF'));
   const f = S.followFilter;
   const openSigs = followedSignals.filter((s) => s.status === 'PENDING' || s.status === 'AKTIF');
   // B2-02: Riwayat pengikut hanya salinan yang SUDAH selesai (WIN/LOSS),
   // bukan semua sinyal dari trader yang diikuti (prototipe).
   const doneCopies = S.myCopies
-    .map((c) => ({ sig: one(c.signals), copy: c }))
+    .map((c) => ({ sig: one(c.signals) || c.signal_snapshot, copy: c }))
     .filter((x) => x.sig && ['WIN', 'LOSS'].includes(x.sig.status));
   const doneSigs = doneCopies.map((x) => x.sig);
   const fchip = (val, label, n) => `<button class="chip" type="button" data-ffilter="${val}" aria-pressed="${f === val}">${esc(label)}${n !== undefined ? ` (${n})` : ''}</button>`;

@@ -61,7 +61,7 @@ export async function getMyProfile(userId) {
 export async function getMyTrader(userId) {
   const { data, error } = await supabase
     .from('traders')
-    .select('profile_id, username, trader_display_name, trader_avatar_url, trader_progress(level, balance_usd, level_ref_balance, r_since_level, trades_since_level, max_drawdown_usd, max_drawdown_pct, updated_at)')
+    .select('profile_id, username, trader_display_name, trader_avatar_url, is_demo, trader_progress(level, balance_usd, level_ref_balance, r_since_level, trades_since_level, max_drawdown_usd, max_drawdown_pct, last_reset_at, reset_cooldown_until, updated_at)')
     .eq('profile_id', userId)
     .maybeSingle();
   if (error) throw error;
@@ -157,6 +157,16 @@ export async function cancelSignal(id) {
   return data;
 }
 
+// Ronde 35: reset statistik trader (sql/23). Jawaban RPC:
+// {ok, deleted, paused, cooldown_until, refund_pending: true}.
+// Pengembalian prorata DITUNDA bersama fase pembayaran (refund_pending
+// hanya penanda jujur — tidak ada dana yang ditulis ke dompet mana pun).
+export async function resetTraderStats() {
+  const { data, error } = await supabase.rpc('reset_trader_stats');
+  if (error) throw error;
+  return data;
+}
+
 // R9-4: tandai sinyal sebagai sudah dibagikan (set shared_at). Dipanggil
 // best-effort dari downloadShareCard — kegagalan RPC tidak merusak bagikan.
 export async function markSignalShared(signalId) {
@@ -208,7 +218,7 @@ export async function listAllSignals(limit = 500) {
     .from('signals')
     // B4-01: join traders agar halaman verifikasi /v/ bisa menampilkan
     // @username + level trader (sebelumnya S.traders kosong di jalur /v/).
-    .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, status, version, shared_at, created_at, expires_at, activated_at, closed_at, close_price, profit_usd, profit_pips, r_value, holding_minutes, traders(username, trader_display_name, trader_avatar_url, trader_progress(level, balance_usd))')
+    .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, entry_type, status, version, shared_at, created_at, expires_at, activated_at, closed_at, close_price, profit_usd, profit_pips, r_value, holding_minutes, traders(username, trader_display_name, trader_avatar_url, trader_progress(level, balance_usd))')
     .neq('status', 'CANCELLED')
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -251,7 +261,7 @@ export async function unfollowTrader(userId, traderId) {
 export async function listMyCopies(userId) {
   const { data, error } = await supabase
     .from('copies')
-    .select('id, signal_id, lot_size, status, created_at, signals!copies_signal_id_fkey(id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, status, created_at, closed_at, close_price, profit_usd, profit_pips, r_value, traders(username, trader_display_name))')
+    .select('id, signal_id, lot_size, status, created_at, signal_snapshot, signals!copies_signal_id_fkey(id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, entry_type, status, created_at, closed_at, close_price, profit_usd, profit_pips, r_value, traders(username, trader_display_name))')
     .eq('follower_id', userId)
     .order('created_at', { ascending: false });
   if (error) throw error;

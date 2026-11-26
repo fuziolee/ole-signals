@@ -2,6 +2,11 @@
 // Rumus SAMA dengan server (03_functions.sql) supaya yang tampil di form
 // cocok dengan yang ditegakkan server. Server tetap yang memutuskan:
 // form hanya memberi gambaran sebelum submit.
+//
+// Ronde 35: penyebut risiko adalah SALDO ACUAN LEVEL ref(L)
+// ($10.000 x 1,05^(L-1)), BUKAN saldo simulasi aktual. ref tidak pernah
+// turun (hanya naik ikut level); saldo simulasi yang naik/turun tidak
+// memengaruhi batas risiko per trade.
 
 export const PAIRS = [
   'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'GBPJPY', 'AUDUSD',
@@ -38,19 +43,30 @@ export function calcRr(entry, sl, tp) {
   return reward / risk;
 }
 
+// Jenis entry (Ronde 35) — cermin public.infer_entry_type di database.
+// Disimpulkan dari entry vs harga live saat posting; sama persis = limit.
+// null bila harga belum ada (server fallback 'limit').
+export function inferEntryType(direction, entry, price) {
+  if (price === null || price === undefined || !Number.isFinite(price)) return null;
+  if (direction === 'BUY') return entry > price ? 'stop' : 'limit';
+  if (direction === 'SELL') return entry < price ? 'stop' : 'limit';
+  return null;
+}
+
 // { riskUsd, riskPct } atau { error: 'no-price' } bila konversi belum ada.
-export function calcRisk({ pair, entry, sl, lot, balanceUsd, prices }) {
+// riskPct dihitung terhadap saldo acuan level (refBalanceUsd).
+export function calcRisk({ pair, entry, sl, lot, refBalanceUsd, prices }) {
   const conv = quoteToUsd(pair, prices);
   if (conv === null || conv === undefined) return { error: 'no-price' };
   const riskUsd = Math.abs(entry - sl) * lot * contractSize(pair) * conv;
-  const riskPct = balanceUsd > 0 ? (riskUsd / balanceUsd) * 100 : null;
+  const riskPct = refBalanceUsd > 0 ? (riskUsd / refBalanceUsd) * 100 : null;
   return { riskUsd, riskPct };
 }
 
 // Validasi client meniru aturan server. Kembalikan kode error pertama
 // yang kena, atau null bila lolos. Server tetap memeriksa ulang semuanya.
 // §12 bug #5: pair tidak dikenal memakai kode 'pair' (bukan 'invalid').
-export function validateSignal({ pair, direction, entry, sl, tp, lot, balanceUsd, prices }) {
+export function validateSignal({ pair, direction, entry, sl, tp, lot, refBalanceUsd, prices }) {
   if (!PAIRS.includes(pair)) return 'pair';
   if (direction !== 'BUY' && direction !== 'SELL') return 'invalid';
   if (![entry, sl, tp].every((v) => typeof v === 'number' && Number.isFinite(v) && v > 0)) {
@@ -62,10 +78,17 @@ export function validateSignal({ pair, direction, entry, sl, tp, lot, balanceUsd
     : (tp < entry && entry < sl);
   if (!orderOk) return 'invalid-order';
   const rr = calcRr(entry, sl, tp);
-  if (rr === null || rr < 1) return 'rr';
-  const risk = calcRisk({ pair, entry, sl, lot, balanceUsd, prices });
+  // D-R35-1: bandingkan RR dengan pembulatan 6 desimal. Aritmetika biner JS
+  // membuat RR tepat 1:1 jadi 0,9999999999999556 sehingga ditolak keliru,
+  // padahal server (numeric, desimal eksak) menerima 1:1. Tanpa ini,
+  // form menolak trade yang servernya sendiri akan terima.
+  if (rr === null || Math.round(rr * 1e6) / 1e6 < 1) return 'rr';
+  const risk = calcRisk({ pair, entry, sl, lot, refBalanceUsd, prices });
   if (risk.error) return null; // tidak bisa dihitung di client; server yang menilai
-  if (balanceUsd > 0 && risk.riskUsd / balanceUsd > 0.01) return 'risk';
+  // D-R35-1: bulatkan risiko ke sen sebelum membandingkan — |1.1-1.095| di
+  // JS = 0,0050000000000000044 sehingga risiko tepat $100 jadi
+  // $100,00000000000232 dan ditolak keliru. Server menghitung dalam numeric.
+  if (refBalanceUsd > 0 && (Math.round(risk.riskUsd * 100) / 100) / refBalanceUsd > 0.01) return 'risk';
   return null;
 }
 
