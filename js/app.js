@@ -56,6 +56,7 @@ const S = {
   profile: null,
   trader: null, // baris traders + trader_progress (null bila belum ada)
   prices: new Map(),
+  prevPrices: new Map(), // R37: harga fetch SEBELUMNYA (pembanding panah ticker; kosong = tanpa panah)
   view: 'home',
   officeTab: 'ALL',
   officeRole: 'trader',
@@ -938,6 +939,14 @@ document.addEventListener('click', (e) => {
   const guideBtn = e.target.closest('[data-guide]');
   if (guideBtn) { openGuideSection(guideBtn.dataset.guide); }
 });
+// R37: tab kembali terlihat setelah lama disembunyikan — segarkan harga
+// bila fetch terakhir sudah lebih dari satu interval (GoTrue juga
+// memancarkan SIGNED_IN ulang di sini, tapi refresh ini deterministik dan
+// tidak bergantung pada perilaku itu). Timer interval sendiri tidak
+// menumpuk saat tab disembunyikan (browser membatasi interval latar).
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && S.user && Date.now() - __lastPriceFetchAt > PRICE_POLL_MS) refreshPrices();
+});
 
 // ----------------------------------------------------------------- auth ---
 function hideSplash() {
@@ -1044,6 +1053,7 @@ async function handleSession(session, event = 'INITIAL_SESSION') {
   S.user = session?.user || null;
   if (!S.user) {
     __oleHomeNavDoneFor = null;
+    stopPricePolling(); // R37: jangan ambil harga lagi setelah keluar.
     showAuth();
     return;
   }
@@ -1061,7 +1071,12 @@ async function handleSession(session, event = 'INITIAL_SESSION') {
     S.traders.forEach((tr, i) => { if (counts[i] !== null && counts[i] !== undefined) S.followerCounts[tr.profile_id] = counts[i]; });
     paintAllFollowerCounts();
   } catch (e) { /* abaikan — nilai lama dipertahankan */ }
-  try { S.prices = await api.getPrices(); } catch (e) { S.prices = new Map(); }
+  // R37: harga dimuat di sini (boot / SIGNED_IN ulang) lalu di-poll tiap
+  // 5 menit (startPricePolling) — sebelumnya hanya sekali saat boot. Gagal
+  // ambil = nilai lama dipertahankan (bukan Map kosong); applyPrices
+  // menyimpan fetch sebelumnya sebagai pembanding panah ticker.
+  try { applyPrices(await api.getPrices()); } catch (e) { /* nilai lama dipertahankan */ }
+  startPricePolling();
   try { S.demoIds = new Set(await api.listDemoTraderIds()); } catch (e) { S.demoIds = new Set(); }
   await loadNotifications();
   // B2-01 + B2-05: muat salinan + ikutan dari DB agar "Sudah disalin" dan
@@ -1096,6 +1111,72 @@ function statusPill(status) {
 function priceOf(pair) {
   const v = S.prices.get(pair);
   return typeof v === 'number' && v > 0 ? v : null;
+}
+// ------------------------------------------------------- harga live (R37) ---
+// D-R37-1: harga HANYA dimuat sekali saat boot (handleSession) — "Harga
+// sekarang" + floating di kartu sinyal beku selama halaman terbuka. Perbaikan:
+// polling tiap 5 menit (data berubah paling cepat tiap 15 menit via cron
+// Fase 3; 5 menit menangkap tiap update tanpa membanjiri) + repaint murah
+// dari cache. Satu timer saja (guard __priceTimer), dihentikan saat keluar.
+const PRICE_POLL_MS = 5 * 60 * 1000;
+let __priceTimer = null;
+let __priceRefreshing = false;
+let __lastPriceFetchAt = 0;
+function paintTicker() {
+  const box = $('#ticker');
+  const track = $('#ticker-track');
+  if (!box || !track) return;
+  // Hanya pair yang punya harga live — tidak pernah diisi angka karangan.
+  const pairs = PAIRS.filter((p) => priceOf(p) !== null);
+  if (pairs.length === 0) { box.hidden = true; track.innerHTML = ''; return; }
+  box.hidden = false;
+  const half = pairs.map((p) => {
+    const now = priceOf(p);
+    const prev = S.prevPrices.get(p);
+    const dir = (typeof prev === 'number' && prev > 0)
+      ? (now > prev ? 'up' : (now < prev ? 'down' : 'same')) : 'none';
+    const arrow = dir === 'up' ? '<span class="tk-arrow up" aria-hidden="true">▲</span>'
+      : dir === 'down' ? '<span class="tk-arrow down" aria-hidden="true">▼</span>' : '';
+    return `<span class="tk-item" data-pair="${esc(p)}"><b class="tk-pair">${esc(p)}</b><span class="tk-price mono">${fmtNum(now, decimalsForPair(p))}</span>${arrow}</span>`;
+  }).join('');
+  // Track digandakan (paruh kedua aria-hidden): animasi translateX(-50%)
+  // berputar mulus tanpa lompat. Mengganti isi track TIDAK me-restart
+  // animasi CSS pada track itu sendiri, jadi marquee tidak meloncat tiap poll.
+  track.innerHTML = `<span class="tk-half">${half}</span><span class="tk-half" aria-hidden="true">${half}</span>`;
+}
+function applyPrices(next) {
+  if (!(next instanceof Map)) return false;
+  S.prevPrices = S.prices;
+  S.prices = next;
+  __lastPriceFetchAt = Date.now();
+  paintTicker();
+  return true;
+}
+async function refreshPrices() {
+  if (!S.user || __priceRefreshing) return;
+  __priceRefreshing = true;
+  try {
+    const next = await api.getPrices();
+    if (applyPrices(next)) repaintVisibleSignalLists();
+  } catch (e) { /* gagal: nilai lama dipertahankan, bukan 0 (pola R26) */ }
+  finally { __priceRefreshing = false; }
+}
+function repaintVisibleSignalLists() {
+  // Repaint murah dari cache — JANGAN renderHome() (refetch sinyal tiap
+  // 5 menit + reset daftar) dan JANGAN renderOffice (refetch sinyal +
+  // form edit tab Trader bisa terhapus); kartu office diperbarui saat
+  // navigasi (showView) seperti sebelumnya.
+  if (S.view === 'home') { renderHomeList(); return; }
+  if (S.view === 'trader' && S.traderProfileId) { renderTraderProfileBody(S.traderProfileId); }
+}
+function startPricePolling() {
+  // Idempotent: handleSession bisa jalan berulang (GoTrue memancarkan
+  // SIGNED_IN ulang saat tab kembali aktif) — timer kedua tidak dibuat.
+  if (__priceTimer !== null) return;
+  __priceTimer = setInterval(() => { refreshPrices(); }, PRICE_POLL_MS);
+}
+function stopPricePolling() {
+  if (__priceTimer !== null) { clearInterval(__priceTimer); __priceTimer = null; }
 }
 function floatingUsd(sig) {
   const now = priceOf(sig.pair);

@@ -437,8 +437,8 @@ export async function copySignal(userId, signalId, lotSize) {
 }
 
 // ----------------------------------------------------------------- harga ---
-// Tabel prices dibaca publik (cache harga live; saat ini masih kosong
-// karena fetcher Fase 3 belum jalan). Dipakai kalkulasi risiko client.
+// Tabel prices dibaca publik (cache harga live, diisi cron Fase 3 tiap
+// 15 menit). Dipakai kalkulasi risiko client + ticker Beranda (R37).
 export async function getPrices() {
   const { data, error } = await supabase.from('prices').select('pair, price');
   if (error) throw error;
