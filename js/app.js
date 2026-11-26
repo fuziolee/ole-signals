@@ -76,6 +76,7 @@ const S = {
   profileSub: null, // R25: sub-halaman Profil: null | 'kyc' | 'detail'
   wdAdd: false, // form tambah Akun Penarikan sedang dibuka
   followFilter: 'ALL',
+  followerTab: 'signals', // R39: sub-menu Follower — 'signals' | 'copies'
   followerRange: 'ALL', // filter tanggal Riwayat follower (Sinyal)
   followerCustom: { from: '', to: '' },
   dateFilterOpen: '',
@@ -3155,7 +3156,9 @@ function renderBoardList() {
   S.boardPage = Math.min(S.boardPage, pages);
   const start = (S.boardPage - 1) * perPage;
   const shown = ranked.slice(start, start + perPage);
-  html += `<div style="margin-top:14px;">` + shown.map((r, i) => boardCardHtml(r, start + i + 1)).join('') + `</div>`;
+  // R39: kartu Peringkat ikut aturan kolom global (.board-grid: 2 kolom
+  // web, 1 kolom HP) — bukan tumpuk vertikal lagi.
+  html += `<div class="board-grid" style="margin-top:14px;">` + shown.map((r, i) => boardCardHtml(r, start + i + 1)).join('') + `</div>`;
   // D32: catatan risiko di bawah board.
   html += `<div class="risk-note">${t('boardRiskNote')}</div>`;
   if (pages > 1 || ranked.length > 0) {
@@ -4148,29 +4151,53 @@ async function renderOfficeFollower(box) {
     box.innerHTML = `<div class="empty"><strong>${esc(t('errNetwork'))}</strong></div>`;
     return;
   }
-  // Ronde 36: tab Jurnal dihapus (keputusan user 14:10 WIB) — ruang kerja
-  // follower hanya Sinyal + Salinan aktif + Riwayat, tanpa subtab.
-  let html = `<div id="office-follower-body"></div>`;
+  // Ronde 39: ruang kerja follower jadi 2 sub-menu (gaya tab Ruang Kerja
+  // Trader): Sinyal (default) + Salinan aktif (berisi Riwayat salinan).
+  // Tab Jurnal sudah dihapus Ronde 36 — tidak kembali.
+  const html = `<div class="subtabs" role="tablist">
+    <button class="subtab" role="tab" data-ftab="signals" aria-selected="${S.followerTab === 'signals'}">${esc(t('profTabSignals'))}</button>
+    <button class="subtab" role="tab" data-ftab="copies" aria-selected="${S.followerTab === 'copies'}">${esc(t('officeActiveCopies'))}</button>
+  </div><div id="office-follower-body"></div>`;
   box.innerHTML = html;
+  $$('[data-ftab]', box).forEach((b) => {
+    b.addEventListener('click', () => {
+      S.followerTab = b.dataset.ftab;
+      renderOfficeFollowerTab();
+    });
+  });
   renderOfficeFollowerTab();
 }
 function renderOfficeFollowerTab() {
   const box = $('#office-follower-body');
   if (!box) return;
-  // Tab Sinyal: salinan aktif + sinyal dari trader yang diikuti, dengan
-  // chip filter (Semua/Pending/Aktif + Riwayat di kanan).
-  // (Ronde 15 #2: sub-tab "Diikuti" dihapus — daftar trader yang diikuti
-  // kini di Cari lewat filter "Diikuti saja"; daftar langganan tidak
-  // lagi punya tampilan sendiri, data/fungsi langganan tetap utuh.)
+  // Perbarui aria-selected subtab.
+  $$('[data-ftab]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.ftab === S.followerTab)));
   const followedIds = new Set(S.myFollows.map((x) => x.trader_id));
   const followedSignals = S.allSignals
     .filter((s) => followedIds.has(s.trader_id))
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  // D14: salinan aktif memakai journalRowHtml(isCopy) — floating/waiting
-  // + hapus salinan (non-AKTIF).
-  const activeCopies = S.myCopies
-    .map((c) => ({ sig: one(c.signals) || c.signal_snapshot, copyId: c.id, copyCreatedAt: c.created_at }))
-    .filter((x) => x.sig && (x.sig.status === 'PENDING' || x.sig.status === 'AKTIF'));
+  if (S.followerTab === 'copies') {
+    // R39: tab Salinan aktif — HANYA daftar salinan aktif. Riwayat tetap
+    // di tab Sinyal (koreksi user: jangan pindah).
+    // D14: salinan aktif memakai journalRowHtml(isCopy) — floating/waiting
+    // + hapus salinan (non-AKTIF).
+    const activeCopies = S.myCopies
+      .map((c) => ({ sig: one(c.signals) || c.signal_snapshot, copyId: c.id, copyCreatedAt: c.created_at }))
+      .filter((x) => x.sig && (x.sig.status === 'PENDING' || x.sig.status === 'AKTIF'));
+    const html = `<h2 style="font-size:16px; margin: 6px 0 10px;">${esc(t('officeActiveCopies'))} (${activeCopies.length})</h2>`
+      + (activeCopies.length
+        ? `<div class="hist journal-scroll" tabindex="0">` + activeCopies.map((x) => journalRowHtml(x.sig, { showTrader: true, isCopy: true, copyId: x.copyId, copyCreatedAt: x.copyCreatedAt })).join('') + `</div>`
+        : `<div class="empty"><strong>${S.myCopies.length === 0 ? t('jrnlEmpty') : t('jrnlNoActive')}</strong></div>`);
+    box.innerHTML = html;
+    bindJournalRows(box);
+    return;
+  }
+  // R39: tab Sinyal (default) — sinyal terbuka dari trader yang diikuti
+  // (chip Semua/Pending/Aktif) + Riwayat salinan selesai (chip Riwayat +
+  // filter tanggal). Persis bagian Sinyal lama, hanya menjadi tab sendiri.
+  // (Ronde 15 #2: sub-tab "Diikuti" dihapus — daftar trader yang diikuti
+  // kini di Cari lewat filter "Diikuti saja"; daftar langganan tidak
+  // lagi punya tampilan sendiri, data/fungsi langganan tetap utuh.)
   const f = S.followFilter;
   const openSigs = followedSignals.filter((s) => s.status === 'PENDING' || s.status === 'AKTIF');
   // B2-02: Riwayat pengikut hanya salinan yang SUDAH selesai (WIN/LOSS),
@@ -4181,14 +4208,7 @@ function renderOfficeFollowerTab() {
   const doneSigs = doneCopies.map((x) => x.sig);
   const fchip = (val, label, n) => `<button class="chip" type="button" data-ffilter="${val}" aria-pressed="${f === val}">${esc(label)}${n !== undefined ? ` (${n})` : ''}</button>`;
   const filtersHtml = `<div class="pfilters">${fchip('ALL', t('pfAll', { n: openSigs.length }))}${fchip('PENDING', t('pfPending'))}${fchip('AKTIF', t('pfActive'))}<button class="chip hist-tab" type="button" data-ffilter="HISTORY" aria-pressed="${f === 'HISTORY'}">${esc(t('tabHistory'))} (${doneSigs.length})</button></div>`;
-  let html = `<h2 style="font-size:16px; margin: 6px 0 10px;">${esc(t('officeActiveCopies'))} (${activeCopies.length})</h2>`;
-  html += activeCopies.length
-    ? `<div class="hist journal-scroll" tabindex="0">` + activeCopies.map((x) => journalRowHtml(x.sig, { showTrader: true, isCopy: true, copyId: x.copyId, copyCreatedAt: x.copyCreatedAt })).join('') + `</div>`
-    : `<div class="empty"><strong>${S.myCopies.length === 0 ? t('jrnlEmpty') : t('jrnlNoActive')}</strong></div>`;
-  // (8b) Chip filter Semua/Pending/Aktif/Riwayat SELALU tampil, termasuk di
-  // tampilan Riwayat — kalau tidak, pengguna tidak bisa kembali dari Riwayat
-  // (jalan buntu). Prototipe: chip filter di slot terpisah yang selalu tampil.
-  html += `<h2 style="font-size:16px; margin: 18px 0 10px;">${esc(t('officeFollowSignals'))}</h2>`;
+  let html = `<h2 style="font-size:16px; margin: 6px 0 10px;">${esc(t('officeFollowSignals'))}</h2>`;
   html += filtersHtml;
   if (f === 'HISTORY') {
     // B2-03: baris terpisah — chip "Semua" + Filter tanggal (seperti
