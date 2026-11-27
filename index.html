@@ -10,10 +10,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <!-- R52/R61/R63: ?v=NN di-bump tiap ronde supaya CDN/browser tidak menyajikan
+  <!-- R52/R61/R63/R64: ?v=NN di-bump tiap ronde supaya CDN/browser tidak menyajikan
        bundle lama ≤5 menit setelah deploy (header live s-maxage=300).
        Bila lupa bump, kegagalan jinak: kembali ke jendela 5 menit. -->
-  <link rel="stylesheet" href="/css/style.css?v=63" />
+  <link rel="stylesheet" href="/css/style.css?v=64" />
 </head>
 <body>
   <div id="boot-splash" role="status" aria-live="polite">
@@ -149,15 +149,6 @@
   <div class="app auth-wrap" id="auth-view" hidden>
     <div class="logo" style="text-align:center; margin-bottom: 4px;">OLE <em>Signals</em></div>
     <p class="sub" style="text-align:center;" data-i18n="authWelcome"></p>
-    <!-- Ronde 63 (amandemen): stepper langkah proses lupa kata sandi.
-         Indikator statis (bukan navigasi): langkah tidak bisa diklik. -->
-    <ol class="auth-steps" id="auth-steps">
-      <li data-step="login"><span class="step-dot"><span class="step-num">1</span><svg class="step-check" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-label" data-i18n="stepLogin"></span></li>
-      <li data-step="forgot"><span class="step-dot"><span class="step-num">2</span><svg class="step-check" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-label" data-i18n="stepForgot"></span></li>
-      <li data-step="sent"><span class="step-dot"><span class="step-num">3</span><svg class="step-check" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-label" data-i18n="stepSent"></span></li>
-      <li data-step="reset"><span class="step-dot"><span class="step-num">4</span><svg class="step-check" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-label" data-i18n="stepReset"></span></li>
-      <li data-step="done"><span class="step-dot"><span class="step-num">5</span><svg class="step-check" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-label" data-i18n="stepDone"></span></li>
-    </ol>
     <div class="auth-card">
       <div class="notice err" id="auth-error" hidden></div>
       <div class="notice" id="auth-notice" hidden></div>
@@ -201,11 +192,11 @@
         <div class="page-head"><h2 data-i18n="sentTitle"></h2></div>
         <div class="email-chip" id="sent-email"></div>
         <p class="sub" data-i18n="forgotSent"></p>
-        <div class="row" style="justify-content:center; margin-top: 12px;">
+        <div class="row" style="justify-content:flex-start; margin-top: 12px;">
           <span class="sub" data-i18n="sentNoEmail"></span>
           <button class="linkbtn" type="button" id="sent-resend" data-i18n="resend"></button>
         </div>
-        <div class="row" style="justify-content:center; margin-top: 12px;">
+        <div class="row" style="justify-content:flex-start; margin-top: 12px;">
           <button class="linkbtn" type="button" id="sent-back" data-i18n="backToLogin"></button>
         </div>
       </div>
@@ -261,6 +252,6 @@
   <div id="toasts" aria-live="polite"></div>
 
   <script src="/js/qrcode.js"></script>
-  <script type="module" src="/js/app.js?v=63"></script>
+  <script type="module" src="/js/app.js?v=64"></script>
 </body>
 </html>
