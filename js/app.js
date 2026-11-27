@@ -5349,10 +5349,8 @@ function renderGuide() {
   if (S.guideSub) {
     const sec = GUIDE_SECS.find((s) => s.id === S.guideSub);
     if (sec) {
-      secs.innerHTML = `<button class="btn backbtn" id="guide-sub-back" type="button">${esc(t('backGuide'))}</button>`
-        + `<div class="page-head"><h2>${esc(t(sec.titleKey))}</h2></div>`
+      secs.innerHTML = `<div class="page-head"><h2>${esc(t(sec.titleKey))}</h2></div>`
         + `<div class="card guide-sec"><div class="more-body">${guideSectionBody(sec.id)}</div></div>`;
-      $('#guide-sub-back').addEventListener('click', () => { S.guideSub = null; renderGuide(); });
       updateLvlTableScrollHint();
       return;
     }
