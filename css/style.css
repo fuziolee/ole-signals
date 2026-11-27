@@ -867,17 +867,12 @@ table.board td.num, table.board th.num { text-align: right; }
      berlaku untuk semua kartu supaya angka XAUUSD muat. Ini menutup
      sisa R38 (kartu HP ~90px lebih tinggi karena level ditumpuk). */
   .sig { padding: 12px; }
-  /* R52 (D-R40-1): naikkan spesifisitas panel level supaya padding
-     ringkas ini menang atas aturan dasar style.css:1211 (12px 15px,
-     selektor sama tapi lebih akhir di file). */
-  .sig .sig-levels { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 10px; gap: 4px; }
-  /* R52 (D-R40-1, lanjutan): padding ringkas SAJA belum cukup di 390px —
-     diukur: kartu 341px, sel 67.3px, angka 8 digit butuh 70.4px
-     (8px padding + 62.4px teks) → masih meluber 3.2px. Kecilkan padding
-     sel (8px→4px) + gap (6px→4px) di blok ≤560px ini saja: sel 68.8px,
-     butuh 66.4px → muat, sisa 2.4px. Web ≥900px tidak tersentuh
-     (gap 6px + padding sel 8px 10px dari aturan dasar). */
-  .sig-levels .lv { padding: 5px 4px; min-width: 0; }
+  /* R53: aturan rapat R52 PINDAH ke blok ≤410px di bawah. Di 411–560px
+     render kembali persis pra-R52: panel 12px 15px (aturan dasar yang
+     menang — deklarasi padding 8px 10px di sini sengaja mati, JANGAN
+     naikkan spesifisitasnya lagi), sel 5px 8px, gap 6px. */
+  .sig-levels { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 10px; gap: 6px; }
+  .sig-levels .lv { padding: 5px 8px; min-width: 0; }
   .sig-levels .lv b { font-size: 13px; }
   /* R38: nama + pill Demo boleh turun baris di kartu sempit (sebelumnya
      pill Demo terpotong oleh ellipsis tombol nama). */
@@ -886,6 +881,23 @@ table.board td.num, table.board th.num { text-align: right; }
   .overlay { padding: 24px 10px; }
   .search-grid { grid-template-columns: 1fr 1fr; }
   .board-stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 410px) {
+  /* R53 (D-R40-1, lanjutan dari R52): aturan rapat R52 PINDAH ke sini.
+     Diukur (r53-probe): angka 8 digit "4,100.00" dengan padding longgar
+     (pra-R52) baru muat di ~413px (spill +0.2 di 412px, −1.8 di 420px).
+     Breakpoint 410px dipilih supaya HP 412px/430px (termasuk HP user)
+     kembali ke render longgar pra-R52, sementara 390px tetap muat
+     (spill −2.3). Di 411–412px spill aturan longgar ≤ +0.45px (dalam
+     toleransi R52 ≤0.5px, tak kasat mata). Blok ini harus sesudah blok
+     ≤560px supaya aturan sel menang lewat urutan file; panel menang
+     lewat spesifisitas .sig (0,2,0) atas aturan dasar (0,1,0). */
+  .sig .sig-levels { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 10px; gap: 4px; }
+  /* R52: padding sel (8px→4px) + gap (6px→4px) saja yang membuat 390px
+     muat — diukur: kartu 341px, sel 68.8px, angka 8 digit butuh 66.4px
+     → sisa 2.4px. Font tetap 13px. */
+  .sig-levels .lv { padding: 5px 4px; min-width: 0; }
 }
 
 /* Chip filter profil / Ruang Kerja (Semua / Pending / Aktif + Riwayat di kanan) */
