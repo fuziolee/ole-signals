@@ -7,7 +7,7 @@ import { supabase } from './supabase.js';
 import { t, setLang, getLang } from './i18n.js';
 import { levelName, levelRef, nextLevelRef, downLevelRef, PAY_GATE_LEVEL, START_BALANCE_USD } from './levels.js';
 import { PAIRS, calcRr, calcRisk, inferEntryType, quoteToUsd, contractSize, validateSignal, decimalsForPair } from './risk.js';
-import { computeStats, rankedTraders, sparklineSVG, pipSize, pipsPnl } from './stats.js';
+import { computeStats, rankedTraders, pipSize, pipsPnl } from './stats.js';
 import * as api from './api.js';
 
 // Pendaftaran DITUTUP (keputusan user 24 Nov 2026): jangan terima
@@ -70,6 +70,8 @@ const S = {
   traderProfileRange: 'ALL',
   traderProfileCustom: { from: '', to: '' },
   monthYear: null, // R29: tahun terpilih tabel Profit Per Month (null = default: tahun terbaru berdata)
+  chartYear: null, // R51: tahun terpilih grafik Akumulasi profit (null = default: tahun terbaru berdata)
+  chartPoint: null, // R51: indeks titik terpilih di grafik tahun berjalan (null = titik terakhir)
   officeRange: 'ALL',
   officeCustom: { from: '', to: '' },
   walletTab: 'tx',
@@ -2440,11 +2442,147 @@ function statsGridHtml(s) {
     + `<div class="stat-cell"><div class="num mono" style="font-size:14px">${s.perPair.filter((e) => e.trades > 0).map((e) => e.pair).join(', ') || '—'}</div><div class="lbl">${esc(t('stPostedPairs'))}</div></div>`
     + `</div>`;
 }
-function chartCardHtml(s) {
-  const inner = s.results.length >= 2
-    ? sparklineSVG(s.results)
-    : `<div class="empty" style="padding:24px 12px;"><strong>${esc(t('stChartEmpty'))}</strong></div>`;
-  return `<div class="chart-card"><h3>${esc(t('stChartTitle'))}</h3><div class="sub">${esc(t('stChartSub'))}</div>${inner}</div>`;
+// R51: grafik Akumulasi profit Arah A — garis kumulatif + label sumbu Y ($),
+// label tanggal sumbu X (tanggal sama dikelompokkan), titik per trade yang
+// bisa diklik, label nilai akhir, filter tahunan. Teks dibuat sebagai HTML
+// (bukan di dalam SVG) supaya tidak terdistorsi saat kartu melebar/menyempit;
+// SVG hanya garis + area. points = [{profit, date}] kronologis SATU tahun.
+function chartDateLabel(iso) {
+  try {
+    return new Intl.DateTimeFormat(getLang() === 'en' ? 'en-US' : 'id-ID', {
+      day: 'numeric', month: 'short',
+    }).format(new Date(iso));
+  } catch (e) { return ''; }
+}
+function chartYearOf(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.getFullYear();
+}
+function resolveChartYear(points) {
+  const years = [...new Set((points || []).map((p) => chartYearOf(p.date)).filter((y) => y !== null))].sort((a, b) => a - b);
+  const nowYear = new Date().getFullYear();
+  if (years.length === 0) { S.chartYear = nowYear; return { years: [], year: nowYear }; }
+  if (S.chartYear === null || !years.includes(S.chartYear)) S.chartYear = years[years.length - 1];
+  return { years, year: S.chartYear };
+}
+function accumChartSVG(points, selIdx) {
+  const n = points.length;
+  const cum = [0];
+  for (const p of points) cum.push(cum[cum.length - 1] + p.profit);
+  const min = Math.min(...cum, 0);
+  const max = Math.max(...cum, 0);
+  const span = (max - min) || 1;
+  const PLOT_W = 480, PLOT_H = 114;
+  const px = (i) => (i / n) * PLOT_W;
+  const py = (v) => (1 - (v - min) / span) * PLOT_H;
+  const up = cum[n] >= 0;
+  const color = up ? 'var(--buy)' : 'var(--sell)';
+  const line = cum.map((v, i) => `${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
+  const area = `0,${PLOT_H} ${line} ${PLOT_W},${PLOT_H}`;
+  // Label sumbu Y: max / 0 / min — dedup bila dua label berhimpit (<9px).
+  const yRows = [];
+  for (const v of [max, 0, min]) {
+    const y = py(v);
+    if (yRows.some((r) => Math.abs(r.y - y) < 9)) continue;
+    yRows.push({ v, y });
+  }
+  const grid = yRows.map((r) => `<line x1="0" x2="${PLOT_W}" y1="${r.y.toFixed(1)}" y2="${r.y.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`).join('');
+  const yLabels = yRows.map((r) => `<div style="position:absolute;left:0;top:${(r.y / PLOT_H * 100).toFixed(2)}%;transform:translateY(-50%);width:62px;text-align:right;font-size:11px;color:var(--muted)" class="mono">${esc(fmtUsd(r.v))}</div>`).join('');
+  // Label sumbu X: trade berurutan dengan tanggal sama jadi SATU label di
+  // tengah kelompok; bila kelompok > 6, tipiskan merata jadi ≤6 label.
+  const groups = [];
+  for (let j = 0; j < n; j++) {
+    const lbl = chartDateLabel(points[j].date);
+    const g = groups[groups.length - 1];
+    if (g && g.label === lbl) g.end = j; else groups.push({ label: lbl, start: j, end: j });
+  }
+  let shown = groups;
+  if (shown.length > 6) { const step = Math.ceil(shown.length / 6); shown = shown.filter((_, i) => i % step === 0); }
+  const xLabels = shown.map((g) => {
+    const mid = (px(g.start + 1) + px(g.end + 1)) / 2;
+    const pct = Math.max(3, Math.min(97, (mid / PLOT_W) * 100));
+    return `<div style="position:absolute;left:${pct.toFixed(2)}%;bottom:0;transform:translateX(-50%);font-size:11px;color:var(--muted);white-space:nowrap">${esc(g.label)}</div>`;
+  }).join('');
+  // Titik per trade: tombol asli (bisa diklik + keyboard) di atas plot.
+  const dots = points.map((p, j) => {
+    const cx = (px(j + 1) / PLOT_W) * 100;
+    const cy = (py(cum[j + 1]) / PLOT_H) * 100;
+    const sel = j === selIdx;
+    return `<button type="button" class="chart-dot${sel ? ' sel' : ''}" data-chart-idx="${j}" style="left:${cx.toFixed(2)}%;top:${cy.toFixed(2)}%;background:${color}" aria-label="${esc(fmtDateShort(p.date))} · ${esc(fmtUsd(p.profit))}"></button>`;
+  }).join('');
+  // Label nilai akhir di dekat titik terakhir (di bawah bila terlalu dekat
+  // ke atas, di atas bila tidak).
+  const endY = py(cum[n]);
+  const endTop = Math.max(3, Math.min(97, ((endY < 24 ? endY + 16 : endY - 16) / PLOT_H) * 100));
+  const endLabel = `<div style="position:absolute;right:0;top:${endTop.toFixed(2)}%;transform:translateY(-50%);font-size:12px;font-weight:700;color:${color}" class="mono">${esc(fmtUsd(cum[n]))}</div>`;
+  return `<div class="chart-plot" style="position:relative;height:150px;margin-top:10px">`
+    + `<div style="position:absolute;left:68px;right:12px;top:14px;bottom:22px">`
+    + `<svg width="100%" height="100%" viewBox="0 0 ${PLOT_W} ${PLOT_H}" preserveAspectRatio="none" aria-hidden="true">${grid}<polygon points="${area}" fill="${color}" opacity="0.12"/><polyline points="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`
+    + dots + endLabel
+    + `</div>`
+    + `<div style="position:absolute;left:0;width:62px;top:14px;bottom:22px">${yLabels}</div>`
+    + `<div style="position:absolute;left:68px;right:12px;bottom:0;height:18px">${xLabels}</div>`
+    + `</div>`;
+}
+function chartDetailHtml(points, selIdx) {
+  const p = points[selIdx];
+  let cum = 0;
+  for (let j = 0; j <= selIdx; j++) cum += points[j].profit;
+  const cls = (v) => (v > 0 ? 'pips-pos' : v < 0 ? 'pips-neg' : '');
+  const cell = (label, val, c) => `<div class="stat-cell"><div class="num mono ${c}">${val}</div><div class="lbl">${esc(label)}</div></div>`;
+  return `<div class="pstats" style="margin-top:12px">`
+    + cell(t('stChartDate'), esc(fmtDateShort(p.date)), '')
+    + cell(t('stChartTradeProfit'), esc(fmtUsd(p.profit)), cls(p.profit))
+    + cell(t('stChartCum'), esc(fmtUsd(cum)), cls(cum))
+    + `</div>`;
+}
+function chartCardHtml(s, surface) {
+  const points = s.chartPoints || [];
+  const { years, year } = resolveChartYear(points);
+  const yearPts = points.filter((p) => chartYearOf(p.date) === year);
+  const total = yearPts.reduce((a, p) => a + p.profit, 0);
+  const unit = yearPts.length === 1 ? 'trade' : t('stThTrades').toLowerCase();
+  const totalCls = total > 0 ? 'pips-pos' : total < 0 ? 'pips-neg' : '';
+  const yearOpts = years.length ? years.map((y) => [y, String(y)]) : [[year, String(year)]];
+  const yearField = `<div class="field" style="max-width:180px;margin:12px 0 0"><label>${esc(t('ppmYearLabel'))}</label>${dropdownHtml('chart-year-' + surface, yearOpts, year)}</div>`;
+  const totalLine = `<div style="margin-top:12px;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap"><span style="font-size:15px;font-weight:700">${esc(t('stChartTotal', { year }))}:</span><b class="mono ${totalCls}" style="font-size:22px">${esc(fmtUsd(total))}</b><span style="color:var(--muted);font-size:13px">· ${yearPts.length} ${unit}</span></div>`;
+  let inner;
+  if (yearPts.length < 2) {
+    inner = `<div class="empty" style="padding:24px 12px;"><strong>${esc(t('stChartEmpty'))}</strong></div>`;
+  } else {
+    const sel = Math.max(0, Math.min(S.chartPoint ?? yearPts.length - 1, yearPts.length - 1));
+    inner = accumChartSVG(yearPts, sel) + chartDetailHtml(yearPts, sel);
+  }
+  return `<div class="chart-card" id="chart-card-${surface}"><h3>${esc(t('stChartTitle'))}</h3><div class="sub">${esc(t('stChartSub'))}</div>${yearField}${totalLine}${inner}</div>`;
+}
+// R51: ikat dropdown tahun grafik + klik/keyboard titik; ganti tahun →
+// render ulang permukaan (akumulasi mulai dari 0 di tahun baru, titik
+// terpilih direset ke titik terakhir).
+function bindChartYear(surface, rerender) {
+  bindDropdown('chart-year-' + surface);
+  const hidden = document.getElementById('chart-year-' + surface);
+  if (hidden) hidden.addEventListener('change', () => {
+    S.chartYear = Number(hidden.value) || null;
+    S.chartPoint = null;
+    rerender();
+  });
+  const card = document.getElementById('chart-card-' + surface);
+  if (card) {
+    card.addEventListener('click', (e) => {
+      const dot = e.target.closest('[data-chart-idx]');
+      if (!dot) return;
+      S.chartPoint = Number(dot.dataset.chartIdx);
+      rerender();
+    });
+    card.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const dot = e.target.closest('[data-chart-idx]');
+      if (!dot) return;
+      e.preventDefault();
+      S.chartPoint = Number(dot.dataset.chartIdx);
+      rerender();
+    });
+  }
 }
 // R29: tahun terpilih untuk tabel Profit Per Month (state global S.monthYear).
 // Daftar tahun = tahun-tahun yang ada di s.months (urut naik). Default =
@@ -2547,7 +2685,7 @@ function statsSectionHtml(s, titleKey, subKey = null, afterGridHtml = '', monthS
     + (s.closed === 0 ? `<div class="empty"><strong>${esc(t('stNoTrades'))}</strong></div>` : '')
     + statsGridHtml(s)
     + afterGridHtml
-    + chartCardHtml(s)
+    + chartCardHtml(s, monthSurface)
     + monthTableHtml(s.months, monthSurface)
     + pairTableHtml(s);
 }
@@ -3314,10 +3452,11 @@ function renderTraderProfileBody(traderId) {
     const st = statsForTrader(traderId);
     box.innerHTML = (st.closed === 0 ? `<div class="empty"><strong>${esc(t('stNoTrades'))}</strong></div>` : '')
       + statsGridHtml(st)
-      + chartCardHtml(st)
+      + chartCardHtml(st, 'profile')
       + monthTableHtml(st.months, 'profile')
       + pairTableHtml(st, 'stPairSubAbove');
     bindMonthYear('profile', () => renderTraderProfileBody(traderId));
+    bindChartYear('profile', () => renderTraderProfileBody(traderId));
     updateBoardScrollHints(box);
     return;
   }
@@ -4077,6 +4216,7 @@ function renderOfficeTraderTab(editing = null) {
     const balGuide = $('#bal-guide-link');
     if (balGuide) balGuide.addEventListener('click', () => openGuideSection('level'));
     bindMonthYear('office', () => renderOfficeTraderTab());
+    bindChartYear('office', () => renderOfficeTraderTab());
     updateBoardScrollHints(box);
     return;
   }

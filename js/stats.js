@@ -174,15 +174,25 @@ export function computeStats(allSignals) {
     const st = statsFromClosed(byMonth[key]);
     return { year, month: month - 1, trades: st.closed, profit: st.totalUSD, pips: st.totalPips, wr: st.wr };
   });
-  // Deret hasil (profit USD tiap trade tertutup, kronologis) untuk grafik.
-  const results = closed.map((s) => profitOf(s)).filter((v) => v !== null && Number.isFinite(v));
+  // Titik grafik akumulasi (profit + tanggal tutup tiap trade tertutup,
+  // kronologis) — R51: grafik butuh tanggal, bukan angka saja. Trade tanpa
+  // tanggal valid dikeluarkan dari grafik (tidak pernah terjadi live:
+  // created_at selalu ada).
+  const chartPoints = [];
+  for (const s of closed) {
+    const profit = profitOf(s);
+    if (profit === null || !Number.isFinite(profit)) continue;
+    const d = new Date(s.closed_at || s.created_at);
+    if (Number.isNaN(d.getTime())) continue;
+    chartPoints.push({ profit, date: s.closed_at || s.created_at });
+  }
   return {
     ...base,
     active,
     totalSignals: closed.length + active,
     perPair,
     months,
-    results,
+    chartPoints,
   };
 }
 
@@ -225,26 +235,4 @@ export function rankedTraders(traders, statsByTrader) {
     return b.totalR - a.totalR;
   });
   return rows;
-}
-
-// Sparkline SVG kumulatif profit (kosong bila <2 hasil — pemanggil yang
-// menampilkan keadaan kosong yang jujur).
-export function sparklineSVG(results, width = 520, height = 90) {
-  if (!results || results.length < 2) return '';
-  let cum = 0;
-  const pts = [0];
-  for (const v of results) { cum += v; pts.push(cum); }
-  const min = Math.min(...pts, 0);
-  const max = Math.max(...pts, 0);
-  const span = (max - min) || 1;
-  const px = (i) => (i / (pts.length - 1)) * width;
-  const py = (v) => height - 8 - ((v - min) / span) * (height - 16);
-  const line = pts.map((v, i) => `${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
-  const area = `0,${height} ${line} ${width},${height}`;
-  const up = pts[pts.length - 1] >= 0;
-  const color = up ? 'var(--buy)' : 'var(--sell)';
-  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="none" aria-hidden="true">`
-    + `<polygon points="${area}" fill="${color}" opacity="0.12"/>`
-    + `<polyline points="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`
-    + `</svg>`;
 }
