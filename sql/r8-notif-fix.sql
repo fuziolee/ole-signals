@@ -1,3 +1,14 @@
+-- ==========================================================================
+-- SUPERSEDED — JANGAN TERAPKAN (Ronde 61, D3).
+-- Isi file ini (perbaikan notifikasi B4-03/B4-04: pesan tanpa bocor entry
+-- sinyal berbayar + @username) SUDAH hidup di file acuan saat ini —
+-- dibuktikan R61 dengan membandingkan blok INSERT notifications
+-- (MD5 ternormalisasi identik): create_signal + update_signal di
+-- sql/28_r60_min_distance.sql, cancel_signal di sql/03_functions.sql.
+-- Menerapkan file ini SEKARANG akan REGRESI: versi create/update di sini
+-- TIDAK punya cek shared_at (14), jeda reset (23), dan jarak entry min
+-- $2 (28). File dipertahankan sebagai arsip saja.
+-- ==========================================================================
 -- Ronde 8 (B4-03 + B4-04): perbaikan notifikasi — HANYA 3 fungsi ini.
 -- Terapkan via Supabase Dashboard > SQL Editor. JANGAN re-apply sql/03_functions.sql
 -- utuh (akan menimpa setup_trader_identity migrasi 13); file ini hanya mengganti
