@@ -1290,18 +1290,14 @@ function signalCardHtml(sig) {
   }
   let levelsHtml;
   {
-    // Kotak ke-4: HARGA SEKARANG (sinyal terbuka; "—" bila belum ada harga
-    // live) atau HARGA KELUAR (sinyal tertutup, dari close_price).
-    const done = sig.status === 'WIN' || sig.status === 'LOSS';
-    const now = priceOf(sig.pair);
-    const fourth = done
-      ? { k: t('sigExit'), v: (sig.close_price !== null && sig.close_price !== undefined) ? fmtNum(sig.close_price, d) : '—' }
-      : { k: t('sigNow'), v: now !== null ? fmtNum(now, d) : '—' };
+    // R54: sel ke-4 DIHAPUS dari kartu (dulu: Harga sekarang untuk sinyal
+    // terbuka, Harga keluar untuk WIN/LOSS). Keduanya duplikat: harga
+    // sekarang sudah tampil di baris status kartu (pendDist / floating)
+    // + Detail + ticker; harga keluar tetap di Detail. Tersisa 3 sel.
     levelsHtml = `<div class="sig-levels">
       <div class="lv"><small>${esc(t('entry'))}</small><b class="mono">${fmtNum(sig.entry, d)}</b></div>
       <div class="lv"><small>${esc(t('stopLoss'))}</small><b class="mono">${fmtNum(sig.stop_loss, d)}</b></div>
       <div class="lv"><small>${esc(t('takeProfit'))}</small><b class="mono">${fmtNum(sig.take_profit, d)}</b></div>
-      <div class="lv"><small>${esc(fourth.k)}</small><b class="mono">${esc(fourth.v)}</b></div>
     </div>`;
   }
   // Fakta kaki kartu — satu span seperti prototipe (D36): "Lot 0.10 ·
