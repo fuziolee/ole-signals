@@ -212,7 +212,6 @@ button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visib
 .switch input:focus-visible { outline: none; }
 /* Ukuran ikon SVG per konteks (ikon memakai stroke currentColor). */
 .bottom-nav button .ic svg { width: 20px; height: 20px; display: block; }
-.roadmap li .tick svg { width: 16px; height: 16px; display: block; }
 .farr svg { width: 18px; height: 18px; display: block; }
 .guidelink svg { width: 16px; height: 16px; flex: none; }
 .btn svg { width: 16px; height: 16px; flex: none; }
@@ -256,15 +255,6 @@ h1 { font-size: 30px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 4p
 .farr { align-self: center; color: var(--muted); font-weight: 700; flex: none; }
 .guidelink { appearance: none; background: none; border: 0; color: var(--teal); font-weight: 700; font-size: 14px; cursor: pointer; padding: 12px 0 0; display: inline-flex; gap: 6px; align-items: center; }
 
-/* ---- roadmap ---- */
-.roadmap { margin-top: 44px; }
-.roadmap h2 { font-size: 20px; font-weight: 800; margin: 0 0 4px; }
-.roadmap p { color: var(--muted); margin: 0 0 14px; font-size: 14.5px; }
-.roadmap ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.roadmap li { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; font-size: 14px; display: flex; gap: 10px; align-items: flex-start; }
-.roadmap li .tick { width: 16px; height: 16px; flex: none; margin-top: 3px; color: var(--teal); font-weight: 800; line-height: 1; }
-.roadmap li b { display: block; font-size: 14.5px; }
-.roadmap li div span { color: var(--muted); font-size: 13px; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .spacer { flex: 1; }
 
@@ -853,7 +843,6 @@ table.board td.num, table.board th.num { text-align: right; }
 /* ---- ronde 6: media query HP HARUS setelah aturan dasar grid (sebelumnya
    aturan dasar ditulis setelah blok ini sehingga menang di semua lebar) ---- */
 @media (max-width: 760px) {
-  .roadmap ul { grid-template-columns: 1fr; }
   .gloss-grid { grid-template-columns: 1fr; }
   .pstats { grid-template-columns: repeat(2, 1fr); }
   .traders { grid-template-columns: 1fr; }
