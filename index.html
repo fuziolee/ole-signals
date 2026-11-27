@@ -10,10 +10,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <!-- R52/R61: ?v=NN di-bump tiap ronde supaya CDN/browser tidak menyajikan
+  <!-- R52/R61/R63: ?v=NN di-bump tiap ronde supaya CDN/browser tidak menyajikan
        bundle lama ≤5 menit setelah deploy (header live s-maxage=300).
        Bila lupa bump, kegagalan jinak: kembali ke jendela 5 menit. -->
-  <link rel="stylesheet" href="/css/style.css?v=62" />
+  <link rel="stylesheet" href="/css/style.css?v=63" />
 </head>
 <body>
   <div id="boot-splash" role="status" aria-live="polite">
@@ -149,6 +149,15 @@
   <div class="app auth-wrap" id="auth-view" hidden>
     <div class="logo" style="text-align:center; margin-bottom: 4px;">OLE <em>Signals</em></div>
     <p class="sub" style="text-align:center;" data-i18n="authWelcome"></p>
+    <!-- Ronde 63 (amandemen): stepper langkah proses lupa kata sandi.
+         Indikator statis (bukan navigasi): langkah tidak bisa diklik. -->
+    <ol class="auth-steps" id="auth-steps">
+      <li data-step="login"><span class="step-dot"><span class="step-num">1</span><svg class="step-check" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-label" data-i18n="stepLogin"></span></li>
+      <li data-step="forgot"><span class="step-dot"><span class="step-num">2</span><svg class="step-check" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-label" data-i18n="stepForgot"></span></li>
+      <li data-step="sent"><span class="step-dot"><span class="step-num">3</span><svg class="step-check" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-label" data-i18n="stepSent"></span></li>
+      <li data-step="reset"><span class="step-dot"><span class="step-num">4</span><svg class="step-check" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-label" data-i18n="stepReset"></span></li>
+      <li data-step="done"><span class="step-dot"><span class="step-num">5</span><svg class="step-check" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-label" data-i18n="stepDone"></span></li>
+    </ol>
     <div class="auth-card">
       <div class="notice err" id="auth-error" hidden></div>
       <div class="notice" id="auth-notice" hidden></div>
@@ -162,6 +171,10 @@
           <input id="auth-password" type="password" required autocomplete="current-password" />
           <div class="hint" id="password-hint" data-i18n="passwordHint"></div>
         </div>
+        <!-- Ronde 63: lupa kata sandi, di bawah kolom kata sandi, halaman login. -->
+        <div class="row" id="auth-forgot-row" style="justify-content:flex-end; margin-top: 6px;">
+          <button class="linkbtn" type="button" id="auth-forgot" data-i18n="forgotPassword"></button>
+        </div>
         <div class="field" id="auth-confirm-field" hidden>
           <label for="auth-password-confirm" data-i18n="passwordConfirm"></label>
           <input id="auth-password-confirm" type="password" autocomplete="new-password" />
@@ -169,7 +182,68 @@
         </div>
         <button class="btn primary" type="submit" id="auth-submit"></button>
       </form>
-      <div class="row" style="justify-content:center; margin-top: 12px;">
+      <!-- Ronde 63: layar lupa kata sandi (form kirim link reset). -->
+      <!-- novalidate: validasi format email ditangani JS (authErrEmail),
+           bukan gelembung bawaan browser yang memblokir submit. -->
+      <form id="forgot-form" hidden novalidate>
+        <p class="sub" data-i18n="forgotLead"></p>
+        <div class="field">
+          <label for="forgot-email" data-i18n="email"></label>
+          <input id="forgot-email" type="email" required autocomplete="email" placeholder="nama@email.com" />
+        </div>
+        <button class="btn primary" type="submit" id="forgot-submit" data-i18n="forgotSubmit"></button>
+        <div class="row" style="justify-content:center; margin-top: 12px;">
+          <button class="linkbtn" type="button" id="forgot-back" data-i18n="backToLogin"></button>
+        </div>
+      </form>
+      <!-- Ronde 63 (amandemen): layar "Cek email kamu" setelah link dikirim. -->
+      <div id="sent-screen" hidden>
+        <div class="page-head"><h2 data-i18n="sentTitle"></h2></div>
+        <div class="email-chip" id="sent-email"></div>
+        <p class="sub" data-i18n="forgotSent"></p>
+        <div class="row" style="justify-content:center; margin-top: 12px;">
+          <span class="sub" data-i18n="sentNoEmail"></span>
+          <button class="linkbtn" type="button" id="sent-resend" data-i18n="resend"></button>
+        </div>
+        <div class="row" style="justify-content:center; margin-top: 12px;">
+          <button class="linkbtn" type="button" id="sent-back" data-i18n="backToLogin"></button>
+        </div>
+      </div>
+      <!-- Ronde 63: layar atur ulang kata sandi (dibuka dari link email). -->
+      <!-- novalidate: validasi kata sandi ditangani JS (authErrWeak /
+           passwordMismatch), bukan gelembung bawaan browser. -->
+      <form id="reset-form" hidden novalidate>
+        <div class="page-head"><h2 data-i18n="resetPwTitle"></h2></div>
+        <div class="field">
+          <label for="reset-password" data-i18n="password"></label>
+          <input id="reset-password" type="password" required autocomplete="new-password" minlength="8" />
+          <div class="hint" data-i18n="passwordHint"></div>
+          <!-- Ronde 63 (amandemen): meter kekuatan kata sandi. Aturan sama
+               dengan passwordValid: min 8 + angka + huruf kapital. Panjang
+               >= 12 hanya bonus skor, tidak menggagalkan submit. -->
+          <div class="pw-meter" id="reset-meter"><div class="pw-meter-fill" id="reset-meter-fill"></div></div>
+          <ul class="pw-rules" id="reset-rules">
+            <li data-rule="len"><span class="rule-dot"></span><span data-i18n="ruleLen"></span></li>
+            <li data-rule="num"><span class="rule-dot"></span><span data-i18n="ruleNum"></span></li>
+            <li data-rule="upper"><span class="rule-dot"></span><span data-i18n="ruleUpper"></span></li>
+          </ul>
+        </div>
+        <div class="field">
+          <label for="reset-confirm" data-i18n="passwordConfirm"></label>
+          <input id="reset-confirm" type="password" required autocomplete="new-password" />
+          <div class="hint" id="reset-match-hint"></div>
+        </div>
+        <button class="btn primary" type="submit" id="reset-submit" data-i18n="resetSubmit"></button>
+        <div class="row" style="justify-content:center; margin-top: 12px;">
+          <button class="linkbtn" type="button" id="reset-back" data-i18n="backToLogin"></button>
+        </div>
+      </form>
+      <!-- Ronde 63: kata sandi berhasil diubah. -->
+      <div id="reset-done" hidden>
+        <div class="notice" data-i18n="resetDone"></div>
+        <button class="btn primary" type="button" id="reset-done-back" data-i18n="backToLogin"></button>
+      </div>
+      <div class="row" id="auth-toggle-row" style="justify-content:center; margin-top: 12px;">
         <button class="btn ghost" type="button" id="auth-toggle"></button>
       </div>
     </div>
@@ -187,6 +261,6 @@
   <div id="toasts" aria-live="polite"></div>
 
   <script src="/js/qrcode.js"></script>
-  <script type="module" src="/js/app.js?v=62"></script>
+  <script type="module" src="/js/app.js?v=63"></script>
 </body>
 </html>
