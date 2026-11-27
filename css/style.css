@@ -679,6 +679,13 @@ table.lvltable td.lvlcell { font-weight: 700; color: var(--muted); white-space: 
 .chart-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; margin-bottom: 12px; }
 .chart-card h3 { font-size: 16px; margin: 0 0 4px; }
 .chart-card .sub { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+/* R51: titik grafik Akumulasi profit — tombol asli di atas plot. min-height: 0
+   melepaskan dari aturan dasar tombol (2.5rem/40px di style.css:209). */
+.chart-dot { position: absolute; width: 12px; height: 12px; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 50%; transform: translate(-50%, -50%); cursor: pointer; }
+/* R-03: area ketuk 44px (visual tetap 12px) — titik rapat tetap bisa diketuk. */
+.chart-dot::after { content: ''; position: absolute; inset: -16px; }
+.chart-dot.sel { width: 16px; height: 16px; box-shadow: 0 0 0 2px var(--teal); }
+.chart-dot:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 .board-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table.board { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.board th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 7px 9px; border-bottom: 1px solid var(--line); font-weight: 600; white-space: nowrap; }
