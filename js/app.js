@@ -3413,6 +3413,10 @@ function balanceCardHtml() {
   const rUpMet = r >= 5;
   const balDownMet = balance <= downRef;
   const rDownMet = r <= -5;
+  // R49: badge turun BEKU "BELUM TERPENUHI" selama Level 1 (sejajar bar beku
+  // R48) — mulai L2 badge memakai nilai terhitung.
+  const balDownMetShown = level > 1 ? balDownMet : false;
+  const rDownMetShown = level > 1 ? rDownMet : false;
   const balUpDetail = t('condBalDetail', { bal: fmtUsd(balance), ref: fmtUsd(ref), thr: fmtUsd(nextRef) })
     + (balUpMet ? t('condReached') : t('condShort', { amt: fmtUsd(nextRef - balance) }));
   const rUpDetail = t('condRDetail', { r: fmtRShort(r), thr: '+5R' })
@@ -3449,8 +3453,8 @@ function balanceCardHtml() {
     <div>
       <div style="font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);">${esc(t('balDownTitle'))}</div>
       <div class="conds">
-        ${condBox(balDownMet, t('condBalDown'), balDownDetail, pctDownBalShown)}
-        ${condBox(rDownMet, t('condRDown'), rDownDetail, pctDownRShown)}
+        ${condBox(balDownMetShown, t('condBalDown'), balDownDetail, pctDownBalShown)}
+        ${condBox(rDownMetShown, t('condRDown'), rDownDetail, pctDownRShown)}
       </div>
     </div>
     <button class="guidelink" id="bal-guide-link" type="button" style="padding-top:0;">${esc(t('balGuide'))}<span aria-hidden="true"> ${ICONS.arrow}</span></button>
