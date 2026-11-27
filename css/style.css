@@ -737,6 +737,16 @@ table.board td.num, table.board th.num { text-align: right; }
 .stchip.bad { background: var(--sell-bg); color: var(--sell-text); }
 .kyc-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
 
+/* R57 arah C: penanda langkah dialog KYC, nama langkah aktif besar + 4 titik.
+   Titik aktif memanjang (bukan hanya warna) supaya beda dari titik selesai;
+   titik berikut berongga. Token sama seperti pill/chip yang sudah ada. */
+.kyc-current { margin-top: 14px; }
+.kyc-cur-name { font-size: 17px; font-weight: 700; color: var(--ink); }
+.kyc-dots { display: flex; gap: 8px; margin-top: 10px; }
+.kyc-dot { flex: none; width: 10px; height: 10px; border-radius: 999px; border: 1.5px solid var(--line-2); background: transparent; }
+.kyc-dot.done { background: var(--teal); border-color: var(--teal); }
+.kyc-dot.cur { width: 24px; background: var(--teal); border-color: var(--teal); }
+
 /* Lencana Demo + Terverifikasi di kartu */
 .pill.demo { background: var(--panel-2); color: var(--muted); }
 
