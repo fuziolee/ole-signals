@@ -3385,7 +3385,10 @@ function balanceCardHtml() {
     if (vals.every((v) => v !== null)) floating = vals.reduce((a, b) => a + b, 0);
   }
   const equity = floating === null ? null : balance + floating;
-  const pctBal = Math.min(100, Math.max(0, (balance / nextRef) * 100));
+  // R45: progres Syarat 1 diukur DARI acuan level ref(L) KE ambang naik
+  // ref(L+1) — bukan saldo/ambang. Saldo di bawah acuan = 0% (kosong),
+  // seperti Syarat 2 yang kosong saat R negatif.
+  const pctBal = Math.min(100, Math.max(0, ((balance - ref) / (nextRef - ref)) * 100));
   const pctR = Math.min(100, Math.max(0, (r / 5) * 100));
   const pctTr = Math.min(100, (trades / 5) * 100);
   const pctDownBal = ref > downRef ? Math.min(100, Math.max(0, ((ref - balance) / (ref - downRef)) * 100)) : 0;
