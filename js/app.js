@@ -3431,7 +3431,7 @@ function balanceCardHtml() {
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <span class="pill gold">Level ${level} · ${esc(levelName(level, getLang()))}</span>
       ${level >= PAY_GATE_LEVEL ? `<span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : ''}
-      <span style="font-size:13px;color:var(--muted);">${t('lvlProgress', { up: upCount, down: downCount })}</span>
+      <span style="font-size:13px;color:var(--muted);">${level > 1 ? t('lvlProgress', { up: upCount, down: downCount }) : t('lvlProgressUp', { up: upCount })}</span>
     </div>
     <div>
       <div style="font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);">${esc(t('balUpTitle'))}</div>
@@ -3441,13 +3441,13 @@ function balanceCardHtml() {
         ${condBox(trades >= 5, t('condTradesUp'), t('condTradesDetail', { n: trades }), pctTr)}
       </div>
     </div>
-    <div>
+    ${/* R46: baris turun disembunyikan di Level 1. Turun level tidak bisa jalan di lantai (engine: while v_level > 1), jadi barisnya membingungkan. Di L2+ tampil seperti semula. */ level > 1 ? `<div>
       <div style="font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);">${esc(t('balDownTitle'))}</div>
       <div class="conds">
         ${condBox(balDownMet, t('condBalDown'), balDownDetail, pctDownBal)}
         ${condBox(rDownMet, t('condRDown'), rDownDetail, pctDownR)}
       </div>
-    </div>
+    </div>` : ''}
     <button class="guidelink" id="bal-guide-link" type="button" style="padding-top:0;">${esc(t('balGuide'))}<span aria-hidden="true"> ${ICONS.arrow}</span></button>
   </div>`;
 }

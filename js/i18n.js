@@ -670,6 +670,8 @@ const STR = {
     balCondMet: 'Terpenuhi',
     balCondUnmet: 'Belum terpenuhi',
     lvlProgress: 'Naik <strong>{up}/3</strong> · Turun <strong>{down}/2</strong> syarat.',
+    // R46: ringkasan tanpa Turun saat Level 1 (baris turun disembunyikan).
+    lvlProgressUp: 'Naik <strong>{up}/3</strong> syarat.',
     condBalUp: 'Syarat 1 · Saldo naik 5%',
     condBalDown: 'Syarat turun 1 · Saldo turun 5%',
     condRUp: 'Syarat 2 · R kumulatif (net) +5R',
@@ -1360,6 +1362,8 @@ const STR = {
     balCondMet: 'Met',
     balCondUnmet: 'Not yet met',
     lvlProgress: 'Up <strong>{up}/3</strong> · Down <strong>{down}/2</strong> conditions.',
+    // R46: summary without Down at Level 1 (down rows hidden).
+    lvlProgressUp: 'Up <strong>{up}/3</strong> conditions.',
     condBalUp: 'Condition 1 · Balance up 5%',
     condBalDown: 'Down condition 1 · Balance down 5%',
     condRUp: 'Condition 2 · Cumulative R (net) +5R',
