@@ -1520,7 +1520,7 @@ async function handleSession(session, event = 'INITIAL_SESSION') {
     paintAllFollowerCounts();
   } catch (e) { /* abaikan — nilai lama dipertahankan */ }
   // R37: harga dimuat di sini (boot / SIGNED_IN ulang) lalu di-poll tiap
-  // 5 menit (startPricePolling) — sebelumnya hanya sekali saat boot. Gagal
+  // 1 menit (startPricePolling), sebelumnya hanya sekali saat boot. Gagal
   // ambil = nilai lama dipertahankan (bukan Map kosong); applyPrices
   // menyimpan fetch sebelumnya sebagai pembanding panah ticker.
   try { applyPrices(await api.getPrices()); } catch (e) { /* nilai lama dipertahankan */ }
@@ -1569,10 +1569,11 @@ function priceOf(pair) {
 // ------------------------------------------------------- harga live (R37) ---
 // D-R37-1: harga HANYA dimuat sekali saat boot (handleSession) — "Harga
 // sekarang" + floating di kartu sinyal beku selama halaman terbuka. Perbaikan:
-// polling tiap 5 menit (data berubah paling cepat tiap 15 menit via cron
-// Fase 3; 5 menit menangkap tiap update tanpa membanjiri) + repaint murah
+// polling tiap 1 menit (emas berubah tiap 1 menit via cron fetch-gold
+// Ronde 65; forex tetap tiap 15 menit via cron Fase 3; 1 menit menangkap
+// tiap update emas tanpa membanjiri) + repaint murah
 // dari cache. Satu timer saja (guard __priceTimer), dihentikan saat keluar.
-const PRICE_POLL_MS = 5 * 60 * 1000;
+const PRICE_POLL_MS = 1 * 60 * 1000;
 let __priceTimer = null;
 let __priceRefreshing = false;
 let __lastPriceFetchAt = 0;
@@ -1626,7 +1627,7 @@ async function refreshPrices() {
 }
 function repaintVisibleSignalLists() {
   // Repaint murah dari cache — JANGAN renderHome() (refetch sinyal tiap
-  // 5 menit + reset daftar) dan JANGAN renderOffice (refetch sinyal +
+  // 1 menit + reset daftar) dan JANGAN renderOffice (refetch sinyal +
   // form edit tab Trader bisa terhapus); kartu office diperbarui saat
   // navigasi (showView) seperti sebelumnya.
   if (S.view === 'home') { renderHomeList(); return; }
