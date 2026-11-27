@@ -493,6 +493,35 @@ h1 { font-size: 30px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 4p
 /* ---- auth ---- */
 .auth-wrap { max-width: 420px; margin: 32px auto 0; }
 .auth-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; }
+/* Ronde 63 (amandemen): stepper langkah, chip email, meter kata sandi. */
+.auth-steps { list-style: none; display: flex; gap: 2px; margin: 0 0 14px; padding: 0; }
+.auth-steps li { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; position: relative; }
+.auth-steps li:not(:last-child)::after { content: ''; position: absolute; top: 11px; left: calc(50% + 13px); width: calc(100% - 26px); height: 1.5px; background: var(--line); }
+.auth-steps li.done:not(:last-child)::after { background: var(--buy); }
+.step-dot { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--line-2); background: var(--panel); color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; position: relative; z-index: 1; }
+.step-check { display: none; }
+.auth-steps li.current .step-dot { border-color: var(--teal); background: var(--teal-soft); color: var(--teal); }
+.auth-steps li.done .step-dot { border-color: var(--buy); background: var(--buy); color: #fff; }
+.auth-steps li.done .step-num { display: none; }
+.auth-steps li.done .step-check { display: block; }
+.step-label { font-size: 10.5px; line-height: 1.25; color: var(--muted); text-align: center; }
+.auth-steps li.current .step-label { color: var(--ink); font-weight: 700; }
+.auth-steps li.done .step-label { color: var(--muted); }
+@media (max-width: 420px) {
+  /* Layar sempit: hanya label langkah aktif yang tampil, titik tetap lima. */
+  .auth-steps li:not(.current) .step-label { display: none; }
+}
+.email-chip { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; font-size: 13px; font-weight: 700; text-align: center; word-break: break-all; margin-bottom: 12px; }
+.pw-meter { height: 6px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); overflow: hidden; margin-top: 8px; }
+.pw-meter-fill { height: 100%; width: 0; border-radius: 999px; background: var(--sell); transition: width .2s ease, background .2s ease; }
+.pw-meter-fill.mid { background: var(--amber); }
+.pw-meter-fill.strong { background: var(--buy); }
+.pw-rules { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pw-rules li { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); }
+.pw-rules li.ok { color: var(--ink); }
+.rule-dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--muted-2); flex: none; }
+.pw-rules li.ok .rule-dot { background: var(--buy); border-color: var(--buy); }
+.linkbtn:disabled { color: var(--muted-2); cursor: default; text-decoration: none; }
 .notice { background: var(--panel-2); border-radius: 12px; padding: 10px 12px; font-size: 13.5px; margin-bottom: 12px; }
 .notice.err { background: var(--sell-bg); color: var(--sell-text); }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 14px; }
