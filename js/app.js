@@ -4421,7 +4421,7 @@ function openKycFlow() {
   const f = S.kycFlow;
   const step = f.step;
   const steps = [t('kycStepDoc'), t('kycStepKtp'), t('kycStepSelfie'), t('kycStepVerify')];
-  let body = `<div class="kyc-steps">${steps.map((s2, i) => `<span class="kyc-step${i + 1 === step ? ' cur' : ''}">${i + 1}. ${esc(s2)}</span>`).join('')}</div>`;
+  let body = `<div class="kyc-steps">${steps.map((s2, i) => `<span class="kyc-step${i + 1 === step ? ' cur' : ''}">${i + 1}. ${esc(s2)}</span>`).join(' ')}</div>`;
   if (step === 1) {
     body += `<div class="field"><label for="kyc-name">${esc(t('kycNameLbl'))}</label><input id="kyc-name" maxlength="80" value="${esc(f.name || S.profile?.display_name || '')}" placeholder="${esc(t('kycNamePh'))}"></div>`;
     body += `<div class="detail-actions"><button class="btn primary" id="kyc-next" type="button">${esc(t('kycNext'))}</button></div>`;
