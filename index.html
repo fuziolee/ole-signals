@@ -10,10 +10,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <!-- R52/R61/R63/R64: ?v=NN di-bump tiap ronde supaya CDN/browser tidak menyajikan
+  <!-- R52/R61/R63/R64/R65: ?v=NN di-bump tiap ronde supaya CDN/browser tidak menyajikan
        bundle lama ≤5 menit setelah deploy (header live s-maxage=300).
        Bila lupa bump, kegagalan jinak: kembali ke jendela 5 menit. -->
-  <link rel="stylesheet" href="/css/style.css?v=64" />
+  <link rel="stylesheet" href="/css/style.css?v=65" />
 </head>
 <body>
   <div id="boot-splash" role="status" aria-live="polite">
@@ -252,6 +252,6 @@
   <div id="toasts" aria-live="polite"></div>
 
   <script src="/js/qrcode.js"></script>
-  <script type="module" src="/js/app.js?v=64"></script>
+  <script type="module" src="/js/app.js?v=65"></script>
 </body>
 </html>
