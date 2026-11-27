@@ -59,6 +59,22 @@ export async function requestPasswordReset(email) {
   return data;
 }
 
+// Ronde 64: tukar token hash recovery menjadi sesi. Dipanggil boot setelah
+// membaca URL sendiri (klien tidak lagi memproses URL otomatis).
+export async function setSession({ access_token, refresh_token }) {
+  const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
+  if (error) throw error;
+  return data;
+}
+
+// Ronde 64: tukar ?code= (PKCE) menjadi sesi. Hanya dipakai bila URL
+// membawa code. Di aplikasi ini hanya link reset email yang memakai PKCE.
+export async function exchangeCodeForSession(code) {
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) throw error;
+  return data;
+}
+
 // ---------------------------------------------------------------- profil ---
 export async function getMyProfile(userId) {
   const { data, error } = await supabase

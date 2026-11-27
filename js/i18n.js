@@ -50,12 +50,7 @@ const STR = {
     resetSubmit: 'Simpan kata sandi baru',
     resetDone: 'Kata sandi berhasil diubah. Masuk dengan kata sandi baru.',
     resetLinkInvalid: 'Link tidak valid atau sudah kedaluwarsa. Minta link baru dari halaman masuk.',
-    // Ronde 63 (amandemen): stepper + layar sent + meter + backoff.
-    stepLogin: 'Masuk',
-    stepForgot: 'Lupa kata sandi',
-    stepSent: 'Email terkirim',
-    stepReset: 'Kata sandi baru',
-    stepDone: 'Selesai',
+    // Ronde 63 (amandemen): layar sent + meter + backoff.
     sentTitle: 'Cek email kamu',
     sentNoEmail: 'Belum menerima email?',
     resend: 'Kirim ulang',
@@ -772,12 +767,7 @@ const STR = {
     resetSubmit: 'Save new password',
     resetDone: 'Password changed. Sign in with your new password.',
     resetLinkInvalid: 'This link is invalid or has expired. Request a new one from the login page.',
-    // Ronde 63 (amendment): stepper + sent screen + meter + backoff.
-    stepLogin: 'Sign in',
-    stepForgot: 'Forgot password',
-    stepSent: 'Email sent',
-    stepReset: 'New password',
-    stepDone: 'Done',
+    // Ronde 63 (amendment): sent screen + meter + backoff.
     sentTitle: 'Check your email',
     sentNoEmail: "Didn't get the email?",
     resend: 'Resend',

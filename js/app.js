@@ -1209,19 +1209,6 @@ function refreshLoginLock() {
   }
 }
 
-// Urutan langkah stepper: masuk(0) -> lupa(1) -> email terkirim(2) ->
-// kata sandi baru(3) -> selesai(4). Indikator statis, bukan navigasi:
-// langkah tidak bisa diklik (lompat langkah tanpa state = tombol mati).
-const AUTH_STEPS = ['login', 'forgot', 'sent', 'reset', 'resetDone'];
-function paintStepper() {
-  const ol = $('#auth-steps'); if (!ol) return;
-  const idx = AUTH_STEPS.indexOf(S.authScreen);
-  ol.querySelectorAll('li').forEach((li, i) => {
-    li.classList.toggle('done', i < idx);
-    li.classList.toggle('current', i === idx);
-  });
-}
-
 // Meter kekuatan kata sandi (amandemen pratinjau): aturan SAMA dengan
 // passwordValid (min 8 + angka + huruf kapital); panjang >= 12 hanya
 // bonus skor, tidak pernah menggagalkan submit.
@@ -1281,15 +1268,35 @@ function showAuthScreen(name) {
     refreshResetHint();
     refreshPwMeter();
   }
-  paintStepper();
 }
 
 // Link reset email memakai hash #access_token=...&type=recovery (implicit
-// flow). Periksa hash langsung, karena event PASSWORD_RECOVERY bisa
-// terpancar sebelum listener terdaftar, jadi hash adalah pemicu utama.
+// flow) atau query ?code=... (PKCE). Periksa hash langsung, karena event
+// PASSWORD_RECOVERY bisa terpancar sebelum listener terdaftar.
 function isRecoveryHash(hash) {
   const h = String(hash === undefined ? window.location.hash : hash || '');
   return /(?:^|[&#?])type=recovery(?:&|$)/.test(h);
+}
+
+// Ronde 64: baca parameter recovery dari URL SENDIRI, sebelum penanganan
+// sesi apa pun. Dengan detectSessionInUrl:false, GoTrue tidak lagi
+// mengonsumsi hash (dulu: hash dibersihkan saat init klien, sebelum app.js
+// sempat membaca isRecoveryHash, link reset malah masuk ke aplikasi).
+// Bentuk yang dikenali: hash implicit (#access_token=...&refresh_token=...
+// &type=recovery) dan query PKCE (?code=...). Hash recovery tanpa token
+// tetap dianggap recovery yang tidak valid (bukan masuk biasa).
+function readRecoveryParams() {
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  if (hashParams.get('type') === 'recovery') {
+    const access_token = hashParams.get('access_token');
+    const refresh_token = hashParams.get('refresh_token');
+    if (access_token && refresh_token) return { kind: 'hash', access_token, refresh_token };
+    return { kind: 'invalid' };
+  }
+  const query = new URLSearchParams(window.location.search);
+  const code = query.get('code');
+  if (code) return { kind: 'pkce', code };
+  return null;
 }
 
 function resetErrorMessage(err) {
@@ -1318,11 +1325,19 @@ $('#reset-confirm').addEventListener('input', refreshResetHint);
 // Ronde 63 (amandemen): meter kekuatan mengikuti aturan passwordValid.
 $('#reset-password').addEventListener('input', refreshPwMeter);
 
-// Masuk ke layar atur ulang dari link email. Sesi recovery sudah disimpan
-// klien (detectSessionInUrl); hash dibersihkan supaya reload tidak memicu
-// recovery lagi dan token tidak tertinggal di address bar/riwayat.
-function enterRecovery(session) {
-  try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch (e) { /* abaikan */ }
+// Masuk ke layar atur ulang dari link email. Sesi recovery dibuat boot
+// secara eksplisit (setSession / exchangeCodeForSession), bukan oleh klien.
+// Parameter recovery dibersihkan dari URL supaya reload tidak memproses
+// ulang link yang sama dan token tidak tertinggal di address bar/riwayat;
+// ?code= dibuang beserta seluruh query (link reset tidak membawa query lain
+// yang bermakna bagi aplikasi).
+function enterRecovery(session, opts = {}) {
+  try {
+    const url = new URL(window.location.href);
+    url.hash = '';
+    if (opts.dropQuery) url.search = '';
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
+  } catch (e) { /* abaikan */ }
   S.session = session || null;
   S.user = session?.user || null;
   showAuth();
@@ -1521,6 +1536,13 @@ async function handleSession(session, event = 'INITIAL_SESSION') {
   try {
     S.myFollows = await api.listMyFollows(S.user.id);
   } catch (e) { /* ikutan dimuat ulang saat membuka Cari / Trader */ }
+  // Ronde 64: periksa ulang SETELAH semua await. Pengguna bisa masuk ke
+  // layar reset di tengah boot (event PASSWORD_RECOVERY saat refreshIdentity
+  // / listTraders menunggu jaringan). Tanpa pemeriksaan ini, showApp() di
+  // akhir akan menimpa layar reset (inilah yang terjadi pada link asli:
+  // event sempat memanggil enterRecovery, lalu ekor handleSession tetap
+  // memanggil showApp()).
+  if (S.authScreen === 'reset' || S.authScreen === 'resetDone') return;
   showApp();
   // C-01 + R9-1: hanya pindah ke Beranda saat pertama kali masuk / sesi awal
   // untuk user ini. SIGNED_IN ulang (tab kembali aktif, refresh lintas-tab)
@@ -5818,34 +5840,56 @@ if (isVerifyPath()) {
   renderVerifyView();
 } else {
   api.onAuthChange((event, session) => {
-    // Ronde 63: jalur kedua deteksi recovery (jalur utama: hash di bawah).
+    // Ronde 63: jalur kedua deteksi recovery (jalur utama: baca URL di boot
+    // di bawah). Dengan detectSessionInUrl:false (Ronde 64) klien tidak
+    // lagi memancarkan event ini dari URL, tapi handler tetap dipertahankan
+    // sebagai cadangan.
     if (event === 'PASSWORD_RECOVERY') { enterRecovery(session); return; }
     handleSession(session, event);
   });
-  try {
-    // D07: getSession() yang menggantung tidak boleh membiarkan halaman
-    // blank tanpa batas — batas 10 detik, lalu tampilkan layar masuk
-    // dengan pesan + tombol muat ulang di splash.
-    const session = await withTimeout(api.getSession(), 10000);
-    // Ronde 63: hash recovery didahulukan, jangan jalankan jalur masuk
-    // normal untuk sesi recovery (pengguna sedang mereset, bukan masuk).
-    if (isRecoveryHash()) enterRecovery(session);
-    else await handleSession(session, 'INITIAL_SESSION');
-  } catch (e) {
-    console.error('init session', e);
-    // Ronde 63: getSession gagal saat hash recovery ada, tampilkan layar
-    // reset dalam keadaan tidak valid, bukan layar masuk biasa.
-    if (isRecoveryHash()) {
-      enterRecovery(null);
-    } else {
+  // Ronde 64: recovery DIBACA DULU dari URL sendiri, SEBELUM getSession /
+  // handleSession apa pun. Dulu GoTrue mengonsumsi hash saat init klien
+  // (hash dibersihkan sebelum app.js jalan) sehingga isRecoveryHash()
+  // selalu false dan sesi recovery menempuh jalur normal → showApp().
+  // Sekarang klien tidak memproses URL (detectSessionInUrl:false) dan boot
+  // yang menukar token menjadi sesi secara eksplisit; gagal tukar = layar
+  // reset dalam keadaan tidak valid, bukan layar masuk biasa.
+  const recovery = readRecoveryParams();
+  if (recovery) {
+    try {
+      let session = null;
+      if (recovery.kind === 'hash') {
+        const { session: s } = await withTimeout(api.setSession({ access_token: recovery.access_token, refresh_token: recovery.refresh_token }), 10000);
+        session = s;
+      } else if (recovery.kind === 'pkce') {
+        const { session: s } = await withTimeout(api.exchangeCodeForSession(recovery.code), 10000);
+        session = s;
+      }
+      // kind 'invalid' -> session tetap null (link tidak valid).
+      enterRecovery(session, recovery.kind === 'pkce' ? { dropQuery: true } : undefined);
+    } catch (e) {
+      console.error('init recovery', e);
+      enterRecovery(null, recovery.kind === 'pkce' ? { dropQuery: true } : undefined);
+    } finally {
+      window.__oleBooted = true;
+    }
+  } else {
+    try {
+      // D07: getSession() yang menggantung tidak boleh membiarkan halaman
+      // blank tanpa batas. Batas 10 detik, lalu tampilkan layar masuk
+      // dengan pesan + tombol muat ulang di splash.
+      const session = await withTimeout(api.getSession(), 10000);
+      await handleSession(session, 'INITIAL_SESSION');
+    } catch (e) {
+      console.error('init session', e);
       showAuth();
       const errBox = $('#auth-error');
       if (errBox) {
         errBox.textContent = t('errSessionTimeout');
         errBox.hidden = false;
       }
+    } finally {
+      window.__oleBooted = true;
     }
-  } finally {
-    window.__oleBooted = true;
   }
 }
