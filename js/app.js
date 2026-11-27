@@ -4421,18 +4421,23 @@ function openKycFlow() {
   const f = S.kycFlow;
   const step = f.step;
   const steps = [t('kycStepDoc'), t('kycStepKtp'), t('kycStepSelfie'), t('kycStepVerify')];
-  let body = `<div class="kyc-steps">${steps.map((s2, i) => `<span class="kyc-step${i + 1 === step ? ' cur' : ''}">${i + 1}. ${esc(s2)}</span>`).join(' ')}</div>`;
+  // R57 arah C (pilihan user 2026-11-27): daftar 4 nama langkah dihapus, yang
+  // tampil hanya nama langkah SAAT INI (besar, = penjelasan langkah itu) +
+  // 4 titik progres. Nama besar tanpa awalan nomor: pill di header sudah
+  // membawa "Langkah n dari 4".
+  let body = `<div class="kyc-current"><div class="kyc-cur-name">${esc(steps[step - 1])}</div><div class="kyc-dots" aria-hidden="true">${steps.map((_, i) => `<span class="kyc-dot${i + 1 < step ? ' done' : i + 1 === step ? ' cur' : ''}"></span>`).join('')}</div></div>`;
   if (step === 1) {
     body += `<div class="field"><label for="kyc-name">${esc(t('kycNameLbl'))}</label><input id="kyc-name" maxlength="80" value="${esc(f.name || S.profile?.display_name || '')}" placeholder="${esc(t('kycNamePh'))}"></div>`;
     body += `<div class="detail-actions"><button class="btn primary" id="kyc-next" type="button">${esc(t('kycNext'))}</button></div>`;
   } else if (step === 2) {
-    body += `<p class="lead-sm">${esc(t('kycStepKtp'))}</p>`
-      + `<div class="detail-actions"><button class="btn" id="kyc-demo-ktp" type="button">${esc(t('kycDemoKtp'))}</button></div>`
+    // R57: lead-sm dihapus, teksnya identik dengan nama besar di atas
+    // (t('kycStepKtp')); nama besar kini menjadi penjelasannya. Isi lain tetap.
+    body += `<div class="detail-actions"><button class="btn" id="kyc-demo-ktp" type="button">${esc(t('kycDemoKtp'))}</button></div>`
       + (f.ktpAttached ? `<p class="note ok">${esc(t('kycKtpAttached'))}</p>` : '')
       + `<div class="detail-actions"><button class="btn" id="kyc-back" type="button">${esc(t('back'))}</button><button class="btn primary" id="kyc-next" type="button" ${f.ktpAttached ? '' : 'disabled'}>${esc(t('kycNext'))}</button></div>`;
   } else if (step === 3) {
-    body += `<p class="lead-sm">${esc(t('kycStepSelfie'))}</p>`
-      + `<div class="detail-actions"><button class="btn" id="kyc-back" type="button">${esc(t('back'))}</button><button class="btn primary" id="kyc-next" type="button">${esc(t('kycNext'))}</button></div>`;
+    // R57: lead-sm dihapus, identik dengan nama besar (t('kycStepSelfie')).
+    body += `<div class="detail-actions"><button class="btn" id="kyc-back" type="button">${esc(t('back'))}</button><button class="btn primary" id="kyc-next" type="button">${esc(t('kycNext'))}</button></div>`;
   } else {
     body += `<p class="lead-sm">${esc(t('kycSoon'))}</p>`
       + `<p class="note">${esc(t('kycDocsNote'))}</p>`
