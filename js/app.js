@@ -3393,6 +3393,11 @@ function balanceCardHtml() {
   const pctTr = Math.min(100, (trades / 5) * 100);
   const pctDownBal = ref > downRef ? Math.min(100, Math.max(0, ((ref - balance) / (ref - downRef)) * 100)) : 0;
   const pctDownR = r < 0 ? Math.min(100, (-r / 5) * 100) : 0;
+  // R48: bar turun BEKU 0% selama Level 1 (baris statis, revisi R46).
+  // Turun level tidak bisa jalan di lantai (engine: while v_level > 1),
+  // jadi bar tidak bergerak; mulai L2 bar memakai nilai terhitung.
+  const pctDownBalShown = level > 1 ? pctDownBal : 0;
+  const pctDownRShown = level > 1 ? pctDownR : 0;
   const upCount = (balance >= nextRef ? 1 : 0) + (r >= 5 ? 1 : 0) + (trades >= 5 ? 1 : 0);
   const downCount = (balance <= downRef ? 1 : 0) + (r <= -5 ? 1 : 0);
   const rShort = (thr) => Math.abs(thr - r).toFixed(2).replace(/\.?0+$/, '');
@@ -3441,13 +3446,13 @@ function balanceCardHtml() {
         ${condBox(trades >= 5, t('condTradesUp'), t('condTradesDetail', { n: trades }), pctTr)}
       </div>
     </div>
-    ${/* R46: baris turun disembunyikan di Level 1. Turun level tidak bisa jalan di lantai (engine: while v_level > 1), jadi barisnya membingungkan. Di L2+ tampil seperti semula. */ level > 1 ? `<div>
+    <div>
       <div style="font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);">${esc(t('balDownTitle'))}</div>
       <div class="conds">
-        ${condBox(balDownMet, t('condBalDown'), balDownDetail, pctDownBal)}
-        ${condBox(rDownMet, t('condRDown'), rDownDetail, pctDownR)}
+        ${condBox(balDownMet, t('condBalDown'), balDownDetail, pctDownBalShown)}
+        ${condBox(rDownMet, t('condRDown'), rDownDetail, pctDownRShown)}
       </div>
-    </div>` : ''}
+    </div>
     <button class="guidelink" id="bal-guide-link" type="button" style="padding-top:0;">${esc(t('balGuide'))}<span aria-hidden="true"> ${ICONS.arrow}</span></button>
   </div>`;
 }
