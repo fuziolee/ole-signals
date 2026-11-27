@@ -4040,7 +4040,7 @@ function traderIdentityCardHtml() {
     </div>
     ${draftDel || uploadDraft ? `<div class="avatar-edit">
       ${draftDel ? `<span class="note">${esc(t('photoRemoveDraft'))}</span>` : ''}
-      <button class="btn primary" id="trader-photo-done" type="button">${esc(t('doneBtn'))}</button><button class="btn" id="trader-photo-cancel" type="button">${esc(t('cancel'))}</button>
+      <button class="btn primary compact" id="trader-photo-done" type="button">${esc(t('doneBtn'))}</button><button class="btn compact" id="trader-photo-cancel" type="button">${esc(t('cancel'))}</button>
     </div>` : ''}
   </div>`;
 }
@@ -4525,7 +4525,7 @@ async function renderProfile() {
       <input type="file" id="profile-photo-input" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
       ${p.avatar_url && !S.photoDraft.profile && !S.photoUploadDraft.profile ? `<button class="iconbtn trashbtn" id="profile-photo-del" type="button" aria-label="${esc(t('photoRemove'))}" title="${esc(t('photoRemove'))}">${ICONS.trash}</button>` : ''}
     </div>
-    ${S.photoUploadDraft.profile || S.photoDraft.profile ? `<div class="avatar-edit" style="margin-top:10px;">${S.photoDraft.profile ? `<span class="note">${esc(t('photoRemoveDraft'))}</span>` : ''}<button class="btn primary" id="profile-photo-done" type="button">${esc(t('doneBtn'))}</button><button class="btn" id="profile-photo-cancel" type="button">${esc(t('cancel'))}</button></div>` : ''}
+    ${S.photoUploadDraft.profile || S.photoDraft.profile ? `<div class="avatar-edit" style="margin-top:10px;">${S.photoDraft.profile ? `<span class="note">${esc(t('photoRemoveDraft'))}</span>` : ''}<button class="btn primary compact" id="profile-photo-done" type="button">${esc(t('doneBtn'))}</button><button class="btn compact" id="profile-photo-cancel" type="button">${esc(t('cancel'))}</button></div>` : ''}
     <button type="button" class="prow" id="prow-kyc"><span class="ic">${ICONS.lock}</span><span class="lbl">${esc(t('kycTitle'))}<span class="sub">${esc(kycSub)}</span></span><span class="ch">${ICONS.chevR}</span></button>
     <button type="button" class="prow" id="prow-detail"><span class="ic">${ICONS.user}</span><span class="lbl">${esc(t('accountDetail'))}</span><span class="ch">${ICONS.chevR}</span></button>
     <button type="button" class="prow" id="prow-appearance"><span class="ic">${ICONS.sun}</span><span class="lbl">${esc(t('theme'))}</span><span class="ch">${ICONS.chevR}</span></button>
