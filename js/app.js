@@ -768,6 +768,7 @@ function rpcErrorMessage(res) {
     pairlimit: 'errPairlimit', notpending: 'errNotpending', conflict: 'errConflict',
     needusername: 'errNeedusername', rr: 'errRr', risk: 'errRisk', invalid: 'errInvalid',
     pair: 'errPair', taken: 'errTaken', shared: 'errShared', notclosed: 'errNotclosed',
+    distance: 'errDistance',
   };
   if (res.code && map[res.code]) return t(map[res.code]);
   // Ronde 35: kode jeda reset — tampilkan pesan server (tanggal akhir jeda).
@@ -3636,6 +3637,7 @@ function signalFormHtml(editing) {
         <div class="field">
           <label for="sf-entry">${esc(t('formEntryLbl'))}</label>
           <input id="sf-entry" type="number" step="any" min="0" required value="${sig ? esc(sig.entry) : ''}" />
+          <span class="hint">${esc(t('formEntryDistHint'))}</span>
         </div>
         <div class="field">
           <label for="sf-tp">${esc(t('takeProfit'))}</label>
@@ -3730,6 +3732,7 @@ function refreshRiskBox() {
   if (err === 'invalid-order') html += `<div style="color:var(--sell);">${esc(t('errOrder'))}</div>`;
   if (err === 'rr') html += `<div style="color:var(--sell);">${esc(t('errRr'))}</div>`;
   if (err === 'risk') html += `<div style="color:var(--sell);">${esc(t('errRisk'))}</div>`;
+  if (err === 'distance') html += `<div style="color:var(--sell);">${esc(t('errDistance'))}</div>`;
   box.innerHTML = html;
 }
 
@@ -3776,9 +3779,14 @@ function bindSignalForm(editing) {
     const prog = progressOf(S.trader);
     const refBalance = prog && Number(prog.level_ref_balance) > 0 ? Number(prog.level_ref_balance) : START_BALANCE_USD;
     const code = validateSignal({ ...v, refBalanceUsd: refBalance, prices: S.prices });
-    if (code === 'invalid-order') { errBox.textContent = t('errOrder'); return; }
-    if (code === 'rr') { errBox.textContent = t('errRr'); return; }
-    if (code === 'risk') { errBox.textContent = t('errRisk'); return; }
+    // Ronde 59: kode yang sudah ditampilkan di kotak risiko (#sf-risk)
+    // JANGAN diulang di #sf-err — kalimat yang sama dua kali berurutan
+    // adalah cacat (prinsip tanpa-teks-berulang, R57). refreshRiskBox()
+    // dipanggil ulang supaya pesannya sinkron dengan harga terbaru.
+    if (code === 'invalid-order' || code === 'rr' || code === 'risk' || code === 'distance') {
+      refreshRiskBox();
+      return;
+    }
     if (code === 'pair') { errBox.textContent = t('errPair'); return; }
     if (code === 'invalid') { errBox.textContent = t('errInvalid'); return; }
     const btn = $('#sf-submit');

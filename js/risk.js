@@ -36,6 +36,24 @@ export function quoteToUsd(pair, prices) {
   return null;
 }
 
+// Ronde 59: jarak entry PENDING maks $2 dari harga live (keputusan user
+// 27 Nov 2026). Lot acuan TETAP 0,01 — BUKAN lot sinyal — supaya batasnya
+// tidak tergantung ukuran lot trader. Rumus cermin calcRisk dengan lot
+// diganti lot acuan; server (pending_entry_distance_usd) yang memutuskan.
+export const ENTRY_DISTANCE_REF_LOT = 0.01;
+export const ENTRY_DISTANCE_MAX_USD = 2;
+
+// Jarak entry dari harga live, dalam USD (lot acuan 0,01).
+// { distanceUsd } atau { error: 'no-price' } bila harga/konversi belum ada.
+export function calcEntryDistance({ pair, entry, prices }) {
+  const price = prices ? prices.get(pair) : undefined;
+  if (typeof price !== 'number' || !(price > 0)) return { error: 'no-price' };
+  const conv = quoteToUsd(pair, prices);
+  if (conv === null || conv === undefined) return { error: 'no-price' };
+  const distanceUsd = Math.abs(entry - price) * ENTRY_DISTANCE_REF_LOT * contractSize(pair) * conv;
+  return { distanceUsd };
+}
+
 export function calcRr(entry, sl, tp) {
   const risk = Math.abs(entry - sl);
   const reward = Math.abs(tp - entry);
@@ -89,6 +107,12 @@ export function validateSignal({ pair, direction, entry, sl, tp, lot, refBalance
   // JS = 0,0050000000000000044 sehingga risiko tepat $100 jadi
   // $100,00000000000232 dan ditolak keliru. Server menghitung dalam numeric.
   if (refBalanceUsd > 0 && (Math.round(risk.riskUsd * 100) / 100) / refBalanceUsd > 0.01) return 'risk';
+  // Ronde 59: jarak entry maks $2 dari harga live (lot acuan 0,01).
+  // Tanpa harga live, tidak bisa dihitung di client — server yang menilai
+  // (fail-closed di sana). Dibulatkan ke sen sebelum membandingkan,
+  // alasan yang sama seperti risiko di atas.
+  const dist = calcEntryDistance({ pair, entry, prices });
+  if (!dist.error && Math.round(dist.distanceUsd * 100) / 100 > ENTRY_DISTANCE_MAX_USD) return 'distance';
   return null;
 }
 
