@@ -3421,10 +3421,21 @@ function balanceCardHtml() {
     + (balUpMet ? t('condReached') : t('condShort', { amt: fmtUsd(nextRef - balance) }));
   const rUpDetail = t('condRDetail', { r: fmtRShort(r), thr: '+5R' })
     + (rUpMet ? t('condRReached') : t('condRShort', { amt: rShort(5) }));
-  const balDownDetail = t('condBalDetailDown', { bal: fmtUsd(balance), ref: fmtUsd(ref), thr: fmtUsd(downRef) })
+  const balDownBase = t('condBalDetailDown', { bal: fmtUsd(balance), ref: fmtUsd(ref), thr: fmtUsd(downRef) });
+  const balDownDetail = balDownBase
     + (balDownMet ? t('condReached') : t('condAbove', { amt: fmtUsd(balance - downRef) }));
-  const rDownDetail = t('condRDetail', { r: fmtRShort(r), thr: '−5R' })
+  const rDownBase = t('condRDetail', { r: fmtRShort(r), thr: '−5R' });
+  const rDownDetail = rDownBase
     + (rDownMet ? t('condRReached') : t('condRShort', { amt: rShort(-5) }));
+  // R50: teks detail turun BEKU di Level 1 — suffix penilaian ("— tercapai" /
+  // "— kurang ... lagi" / "— masih di atas ambang ...") dihilangkan, hanya
+  // angka (saldo, R, ambang) yang tampil; mulai L2 detail terhitung normal.
+  // Suffix "belum terpenuhi" tidak dipakai apa adanya: condRShort untuk
+  // R −7 akan menulis "kurang 2R lagi" (arah salah, ambang sudah dilewati)
+  // dan condAbove untuk saldo di bawah ambang menulis jumlah negatif —
+  // menghilangkan suffix adalah fallback yang jujur.
+  const balDownDetailShown = level > 1 ? balDownDetail : balDownBase;
+  const rDownDetailShown = level > 1 ? rDownDetail : rDownBase;
   return `<div class="balance-card">
     <div class="balance-top">
       <div>
@@ -3453,8 +3464,8 @@ function balanceCardHtml() {
     <div>
       <div style="font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);">${esc(t('balDownTitle'))}</div>
       <div class="conds">
-        ${condBox(balDownMetShown, t('condBalDown'), balDownDetail, pctDownBalShown)}
-        ${condBox(rDownMetShown, t('condRDown'), rDownDetail, pctDownRShown)}
+        ${condBox(balDownMetShown, t('condBalDown'), balDownDetailShown, pctDownBalShown)}
+        ${condBox(rDownMetShown, t('condRDown'), rDownDetailShown, pctDownRShown)}
       </div>
     </div>
     <button class="guidelink" id="bal-guide-link" type="button" style="padding-top:0;">${esc(t('balGuide'))}<span aria-hidden="true"> ${ICONS.arrow}</span></button>
