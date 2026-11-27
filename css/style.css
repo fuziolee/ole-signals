@@ -474,7 +474,7 @@ h1 { font-size: 30px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 4p
 }
 .overlay.open { display: block; }
 .sheet {
-  background: var(--panel); color: var(--ink); border: 0;
+  background: var(--panel); color: var(--ink); border: 1.5px solid var(--teal);
   border-radius: var(--radius-lg); box-shadow: var(--shadow);
   max-width: 540px; margin: 0 auto; padding: 24px;
   max-height: calc(100vh - 96px); overflow-y: auto;
