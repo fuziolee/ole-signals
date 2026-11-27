@@ -81,6 +81,11 @@ export async function setupTraderIdentity(username, displayName) {
 }
 
 // ---------------------------------------------------------------- sinyal ---
+// R61 (T-2): SEMUA daftar sinyal dibaca dari VIEW signals_public, BUKAN
+// tabel signals — view me-NULL-kan entry/SL/TP/lot/entry_type untuk sinyal
+// terkunci L5+ (baca tabel mentah dicabut untuk anon/authenticated).
+// Kolom view memirror tabel persis, jadi select + embed traders(...) ini
+// tidak berubah.
 function signalSelect() {
   // Embed username TRADER (traders.username, ronde 6b) supaya kartu sinyal
   // publik bisa tampil @username tanpa menunggu S.traders dimuat (ronde 5).
@@ -91,7 +96,7 @@ function signalSelect() {
 
 export async function listPublicSignals(limit = 50) {
   const { data, error } = await supabase
-    .from('signals')
+    .from('signals_public')
     .select(signalSelect())
     .neq('status', 'CANCELLED')
     .order('created_at', { ascending: false })
@@ -102,7 +107,7 @@ export async function listPublicSignals(limit = 50) {
 
 export async function listMySignals(userId) {
   const { data, error } = await supabase
-    .from('signals')
+    .from('signals_public')
     .select(signalSelect())
     .eq('trader_id', userId)
     .order('created_at', { ascending: false });
@@ -112,7 +117,7 @@ export async function listMySignals(userId) {
 
 export async function listTraderSignals(traderId, limit = 50) {
   const { data, error } = await supabase
-    .from('signals')
+    .from('signals_public')
     .select(signalSelect())
     .eq('trader_id', traderId)
     .neq('status', 'CANCELLED')
@@ -215,7 +220,7 @@ export async function countFollowers(traderId) {
 // Cari, profil trader, statistik Ruang Kerja, dan peringkat komposit.
 export async function listAllSignals(limit = 500) {
   const { data, error } = await supabase
-    .from('signals')
+    .from('signals_public')
     // B4-01: join traders agar halaman verifikasi /v/ bisa menampilkan
     // @username + level trader (sebelumnya S.traders kosong di jalur /v/).
     .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, entry_type, status, version, shared_at, created_at, expires_at, activated_at, closed_at, close_price, profit_usd, profit_pips, r_value, holding_minutes, traders(username, trader_display_name, trader_avatar_url, trader_progress(level, balance_usd))')
@@ -259,13 +264,30 @@ export async function unfollowTrader(userId, traderId) {
 }
 
 export async function listMyCopies(userId) {
+  // R61 (T-2): embed signals!... TIDAK BISA lagi dipakai — embed itu
+  // membaca tabel signals mentah (SELECT-nya dicabut untuk klien).
+  // Dua kueri: (1) baris copies milik sendiri, (2) baris sinyalnya dari
+  // VIEW signals_public (ter-redaksi bila terkunci), digabung di sini.
+  // Bentuk hasil SAMA seperti sebelumnya (c.signals = objek sinyal atau
+  // null) supaya semua pemanggil tidak berubah.
   const { data, error } = await supabase
     .from('copies')
-    .select('id, signal_id, lot_size, status, created_at, signal_snapshot, signals!copies_signal_id_fkey(id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, entry_type, status, created_at, closed_at, close_price, profit_usd, profit_pips, r_value, traders(username, trader_display_name))')
+    .select('id, signal_id, lot_size, status, created_at, signal_snapshot')
     .eq('follower_id', userId)
     .order('created_at', { ascending: false });
   if (error) throw error;
-  return data || [];
+  const rows = data || [];
+  const ids = [...new Set(rows.map((c) => c.signal_id).filter(Boolean))];
+  let byId = {};
+  if (ids.length) {
+    const { data: sigs, error: sigErr } = await supabase
+      .from('signals_public')
+      .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, entry_type, status, created_at, closed_at, close_price, profit_usd, profit_pips, r_value, traders(username, trader_display_name)')
+      .in('id', ids);
+    if (sigErr) throw sigErr;
+    byId = Object.fromEntries((sigs || []).map((s) => [s.id, s]));
+  }
+  return rows.map((c) => ({ ...c, signals: byId[c.signal_id] || null }));
 }
 
 export async function listMySubscriptions(userId) {

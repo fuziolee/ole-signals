@@ -395,6 +395,16 @@ function isLockedForMe(sig) {
   if (!(price > 0)) return false;
   return !isSubscribedTo(sig.trader_id);
 }
+// R61: jaring pengaman server — view signals_public mengembalikan entry
+// NULL untuk sinyal terkunci. Entry NULL pada sinyal terbuka = terkunci
+// menurut server, jadi perlakukan sebagai terkunci walau isLockedForMe
+// belum bisa memutuskan (mis. S.traders belum termuat saat feed pertama
+// dirender — tanpa ini kartu sempat menampilkan "0.00" karena fmtNum(null)).
+function isLockedOrHidden(sig) {
+  if (isLockedForMe(sig)) return true;
+  return !!sig && sig.entry == null
+    && (sig.status === 'PENDING' || sig.status === 'AKTIF');
+}
 function lockedDescFor(traderId) {
   const price = subPriceOfTrader(traderId);
   return t('lockedSignalDesc', { price: price ? fmtIdr(price) + t('perMonth') : t('profFree') });
@@ -1267,7 +1277,7 @@ function signalCardHtml(sig) {
   const verified = level >= PAY_GATE_LEVEL
     ? ` <span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : '';
   const mine = S.user && sig.trader_id === S.user.id;
-  const locked = isLockedForMe(sig);
+  const locked = isLockedOrHidden(sig);
   const d = decimalsForPair(sig.pair);
   const dirCls = sig.direction === 'BUY' ? 'buy' : 'sell';
   // D10: flag duplikat — dihitung sebelum cabang terkunci supaya tampil
@@ -1451,7 +1461,7 @@ async function copySignalText(id) {
   if (!sig) return false;
   if (sig.status !== 'PENDING') return false;
   // Paywall tetap berlaku (prototipe): sinyal terkunci tidak bisa disalin.
-  if (isLockedForMe(sig)) { toast(lockedDescFor(sig.trader_id), true); return false; }
+  if (isLockedOrHidden(sig)) { toast(lockedDescFor(sig.trader_id), true); return false; }
   const tr = traderOf(sig);
   const level = levelOfSignal(sig);
   const rt = riskTargetUsd(sig);
@@ -2275,7 +2285,7 @@ function openSignalDetail(id) {
   const verified = level >= PAY_GATE_LEVEL
     ? ` <span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : '';
   const mine = S.user && sig.trader_id === S.user.id;
-  const locked = isLockedForMe(sig);
+  const locked = isLockedOrHidden(sig);
   const d = decimalsForPair(sig.pair);
   const dirCls = sig.direction === 'BUY' ? 'buy' : 'sell';
   const editedBadge = (sig.version && Number(sig.version) > 1)
@@ -2706,7 +2716,9 @@ function journalRowHtml(sig, opts = {}) {
   if (opts.isCopy && sig.status === 'PENDING') {
     res = '—';
   } else if (opts.isCopy && sig.status === 'AKTIF') {
-    const fl = floatingUsd(sig);
+    // R61: salinan sinyal terkunci (entry NULL dari view) — floating tidak
+    // bisa dihitung (entry 0 akan menghasilkan angka palsu); tampil '—'.
+    const fl = sig.entry == null ? null : floatingUsd(sig);
     res = esc(t('jrnlFloating', { amt: fl !== null ? fmtUsd0(fl) : '—' }));
   } else {
     res = `${sig.profit_usd !== null && sig.profit_usd !== undefined ? fmtUsd0(sig.profit_usd) : '—'}`
@@ -2721,9 +2733,11 @@ function journalRowHtml(sig, opts = {}) {
   // Ronde 8b (c): waktu "disalin" memakai created_at baris copies (waktu
   // salin), bukan created_at sinyal — seperti prototipe journalRow
   // (myCopies[s.id].ago).
+  // R61: lot NULL (salinan sinyal terkunci) tampil '—', bukan "0.00".
+  const lotTxt = sig.lot_size == null ? '—' : fmtNum(sig.lot_size, 2);
   const postedTxt = opts.isCopy
-    ? t('jrnlCopiedAgo', { ago: fmtRel(opts.copyCreatedAt || sig.created_at), lot: fmtNum(sig.lot_size, 2) })
-    : t('myJrnlPosted', { ago: fmtRel(sig.created_at), lot: fmtNum(sig.lot_size, 2) });
+    ? t('jrnlCopiedAgo', { ago: fmtRel(opts.copyCreatedAt || sig.created_at), lot: lotTxt })
+    : t('myJrnlPosted', { ago: fmtRel(sig.created_at), lot: lotTxt });
   // D13: tombol Bagikan untuk sinyal sendiri. D14: tombol hapus salinan
   // (non-AKTIF saja; AKTIF menampilkan ikon nonaktif + catatan).
   // R19: tombol Bagikan hanya untuk sinyal selesai (WIN/LOSS). Riwayat
@@ -2768,7 +2782,7 @@ function bindJournalRows(root) {
         // tanpa dialog pernah jadi laporan user (09:05 WIB).
         const copy = S.myCopies.find((c) => c.id === copyId);
         const sig = copy ? findSignal(copy.signal_id) : null;
-        const yes = await confirmDialog(t('confirmUncopyTitle'), t('confirmUncopyBody', { sig: sig ? `${sig.pair} ${sig.direction} ${sig.entry}` : '—' }), t('yesDelete'));
+        const yes = await confirmDialog(t('confirmUncopyTitle'), t('confirmUncopyBody', { sig: sig ? `${sig.pair} ${sig.direction} ${sig.entry ?? '—'}` : '—' }), t('yesDelete'));
         if (!yes) return;
         // Ronde 8b (a): hapus salinan dari state lokal SEBELUM render
         // ulang — kalau tidak, kartu sinyal tetap menampilkan
