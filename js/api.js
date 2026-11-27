@@ -47,6 +47,18 @@ export async function updatePassword(password) {
   return data;
 }
 
+// Ronde 63: minta link atur ulang kata sandi lewat email. Redirect ke
+// produksi (bukan origin) supaya tautan selalu kembali ke web live;
+// Supabase tidak membocorkan apakah email terdaftar (anti-enumerasi
+// ditegakkan juga di UI: pesan yang sama untuk sukses/gagal).
+export async function requestPasswordReset(email) {
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: 'https://olesignals.onrender.com/',
+  });
+  if (error) throw error;
+  return data;
+}
+
 // ---------------------------------------------------------------- profil ---
 export async function getMyProfile(userId) {
   const { data, error } = await supabase

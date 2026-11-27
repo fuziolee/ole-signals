@@ -117,6 +117,8 @@ const S = {
   // Tampilan/Notifikasi/Bahasa pindah). Menentukan tujuan tombol kembali.
   settingsOrigin: 'settings',
   authMode: 'login',
+  authScreen: 'login', // Ronde 63: layar auth ('login' | 'forgot' | 'sent' | 'reset' | 'resetDone')
+  resetEmail: '', // Ronde 63 (amandemen): email yang dikirimi link reset (layar sent + backoff)
   followerCounts: {},
   copiedIds: new Set(),
   usernameUI: { trader: { draft: '', res: null, pending: null, timer: null }, follower: { draft: '', res: null, pending: null, timer: null } },
@@ -888,11 +890,15 @@ function applyI18n() {
   // Auth: petunjuk sandi + konfirmasi hanya saat daftar, bukan saat masuk.
   const signup = S.authMode === 'signup';
   $('#password-hint').hidden = !signup;
+  $('#auth-forgot-row').hidden = signup; // Ronde 63: lupa kata sandi hanya di layar masuk.
   $('#auth-confirm-field').hidden = !signup;
   const pw = $('#auth-password');
   pw.setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
   if (signup) pw.setAttribute('minlength', '8'); else pw.removeAttribute('minlength');
   if (!signup) { $('#auth-password-confirm').value = ''; setMatchHint(''); }
+  // Ronde 63 (amandemen): ganti bahasa jangan menghapus hitungan mundur.
+  if (S.authScreen === 'sent') refreshResendLock();
+  if (S.authScreen === 'login') refreshLoginLock();
 }
 
 // Aturan kata sandi saat daftar: minimal 8 karakter, ada angka + huruf kapital.
@@ -915,6 +921,8 @@ function refreshMatchHint() {
 }
 $('#auth-password').addEventListener('input', refreshMatchHint);
 $('#auth-password-confirm').addEventListener('input', refreshMatchHint);
+// Ronde 63 (amandemen): kunci login mengikuti email yang diketik.
+$('#auth-email').addEventListener('input', () => { if (S.authScreen === 'login') refreshLoginLock(); });
 
 // ------------------------------------------------------------------ nav ---
 const VIEWS = ['home', 'search', 'trader', 'office-trader', 'office-follower', 'wallet', 'profile', 'helpguide', 'settings'];
@@ -1022,6 +1030,7 @@ function showAuth() {
   $('#app').hidden = true;
   $('#auth-view').hidden = false;
   applyI18n();
+  showAuthScreen('login'); // Ronde 63: keluar / gagal boot selalu kembali ke layar masuk.
 }
 function showApp() {
   hideSplash();
@@ -1067,6 +1076,12 @@ $('#auth-form').addEventListener('submit', async (e) => {
   const noteBox = $('#auth-notice');
   errBox.hidden = true;
   noteBox.hidden = true;
+  // Ronde 63 (amandemen): kunci login yang masih berjalan tidak bisa
+  // dilewati lewat Enter (tombol nonaktif saja tidak cukup).
+  if (S.authMode === 'login') {
+    const st = readBackoff('login', email);
+    if (Date.now() < st.nextAllowedAt) { refreshLoginLock(); return; }
+  }
   const btn = $('#auth-submit');
   const btnLabel = btn.textContent;
   btn.disabled = true;
@@ -1095,6 +1110,337 @@ $('#auth-form').addEventListener('submit', async (e) => {
   } catch (err) {
     errBox.textContent = authErrorMessage(err);
     errBox.hidden = false;
+    // Ronde 63 (amandemen): hanya gagal KREDENSIAL yang dihitung; galat
+    // jaringan tidak dihitung. Login berhasil me-reset (di handleSession).
+    if (S.authMode === 'login' && /invalid login credentials/i.test(String(err?.message || ''))) {
+      const st = readBackoff('login', email);
+      const attempts = st.attempts + 1;
+      writeBackoff('login', email, { attempts, nextAllowedAt: Date.now() + lockSeconds(LOGIN_LADDER, attempts) * 1000, lastAt: Date.now() });
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = btnLabel;
+  }
+  // Ronde 63 (amandemen): kunci (bila ada) diterapkan SETELAH finally
+  // mengembalikan tombol.
+  if (S.authMode === 'login') refreshLoginLock();
+});
+
+// --------------------------- backoff bertingkat (Ronde 63 amandemen) -----
+// Penahan spam/brute-force sisi klien untuk tombol kirim ulang dan login
+// gagal. BUKAN pengganti rate limit server: Supabase tetap penegak
+// akhirnya. Kunci di localStorage per email, bertahan saat reload;
+// hitungan direset setelah 1 jam tanpa percobaan.
+const RESEND_LADDER = [60, 120, 300, 600]; // detik; kirim ulang, cap 600
+const LOGIN_LADDER = [5, 15, 30, 60, 120, 300]; // detik; login gagal, cap 300
+const BACKOFF_IDLE_MS = 3600000; // 1 jam
+function backoffKey(prefix, email) {
+  return 'ole-' + prefix + '-backoff:' + String(email || '').trim().toLowerCase();
+}
+function readBackoff(prefix, email) {
+  try {
+    const raw = localStorage.getItem(backoffKey(prefix, email));
+    if (!raw) return { attempts: 0, nextAllowedAt: 0, lastAt: 0 };
+    const st = JSON.parse(raw);
+    if (!st || typeof st.attempts !== 'number' || typeof st.nextAllowedAt !== 'number') return { attempts: 0, nextAllowedAt: 0, lastAt: 0 };
+    if (Date.now() - (st.lastAt || 0) > BACKOFF_IDLE_MS) return { attempts: 0, nextAllowedAt: 0, lastAt: 0 };
+    return st;
+  } catch (e) { return { attempts: 0, nextAllowedAt: 0, lastAt: 0 }; }
+}
+function writeBackoff(prefix, email, st) {
+  try { localStorage.setItem(backoffKey(prefix, email), JSON.stringify(st)); } catch (e) { /* abaikan */ }
+}
+function clearBackoff(prefix, email) {
+  try { localStorage.removeItem(backoffKey(prefix, email)); } catch (e) { /* abaikan */ }
+}
+function lockSeconds(ladder, attempts) {
+  return ladder[Math.min(Math.max(attempts - 1, 0), ladder.length - 1)];
+}
+function fmtBackoff(sec) {
+  sec = Math.max(0, Math.ceil(sec));
+  return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+}
+function recordResend(email) {
+  const st = readBackoff('reset', email);
+  const attempts = st.attempts + 1;
+  writeBackoff('reset', email, { attempts, nextAllowedAt: Date.now() + lockSeconds(RESEND_LADDER, attempts) * 1000, lastAt: Date.now() });
+}
+let resendTimer = null;
+let loginTimer = null;
+function stopTimer(which) {
+  if (which === 'resend' && resendTimer) { clearInterval(resendTimer); resendTimer = null; }
+  if (which === 'login' && loginTimer) { clearInterval(loginTimer); loginTimer = null; }
+}
+function refreshResendLock() {
+  const btn = $('#sent-resend'); if (!btn) return;
+  stopTimer('resend');
+  const st = readBackoff('reset', S.resetEmail);
+  const remain = Math.ceil((st.nextAllowedAt - Date.now()) / 1000);
+  if (remain > 0) {
+    btn.disabled = true;
+    btn.textContent = t('resendIn', { time: fmtBackoff(remain) });
+    resendTimer = setInterval(() => {
+      const left = Math.ceil((readBackoff('reset', S.resetEmail).nextAllowedAt - Date.now()) / 1000);
+      if (left <= 0) { stopTimer('resend'); btn.disabled = false; btn.textContent = t('resend'); }
+      else btn.textContent = t('resendIn', { time: fmtBackoff(left) });
+    }, 1000);
+  } else {
+    btn.disabled = false;
+    btn.textContent = t('resend');
+  }
+}
+function refreshLoginLock() {
+  const btn = $('#auth-submit'); if (!btn) return;
+  stopTimer('login');
+  const email = $('#auth-email').value.trim();
+  const st = readBackoff('login', email);
+  const remain = Math.ceil((st.nextAllowedAt - Date.now()) / 1000);
+  if (remain > 0) {
+    btn.disabled = true;
+    btn.textContent = t('loginRetryIn', { time: fmtBackoff(remain) });
+    loginTimer = setInterval(() => {
+      const left = Math.ceil((readBackoff('login', $('#auth-email').value.trim()).nextAllowedAt - Date.now()) / 1000);
+      if (left <= 0) { stopTimer('login'); btn.disabled = false; btn.textContent = t('login'); }
+      else btn.textContent = t('loginRetryIn', { time: fmtBackoff(left) });
+    }, 1000);
+  } else {
+    btn.disabled = false;
+    btn.textContent = t('login');
+  }
+}
+
+// Urutan langkah stepper: masuk(0) -> lupa(1) -> email terkirim(2) ->
+// kata sandi baru(3) -> selesai(4). Indikator statis, bukan navigasi:
+// langkah tidak bisa diklik (lompat langkah tanpa state = tombol mati).
+const AUTH_STEPS = ['login', 'forgot', 'sent', 'reset', 'resetDone'];
+function paintStepper() {
+  const ol = $('#auth-steps'); if (!ol) return;
+  const idx = AUTH_STEPS.indexOf(S.authScreen);
+  ol.querySelectorAll('li').forEach((li, i) => {
+    li.classList.toggle('done', i < idx);
+    li.classList.toggle('current', i === idx);
+  });
+}
+
+// Meter kekuatan kata sandi (amandemen pratinjau): aturan SAMA dengan
+// passwordValid (min 8 + angka + huruf kapital); panjang >= 12 hanya
+// bonus skor, tidak pernah menggagalkan submit.
+function refreshPwMeter() {
+  const pw = $('#reset-password').value || '';
+  const lenOk = pw.length >= 8;
+  const numOk = /[0-9]/.test(pw);
+  const upOk = /[A-Z]/.test(pw);
+  const score = (lenOk ? 1 : 0) + (numOk ? 1 : 0) + (upOk ? 1 : 0) + (pw.length >= 12 ? 1 : 0);
+  const fill = $('#reset-meter-fill');
+  if (fill) {
+    fill.style.width = (score * 25) + '%';
+    fill.className = 'pw-meter-fill' + (score <= 1 ? ' weak' : score === 2 ? ' mid' : ' strong');
+  }
+  document.querySelectorAll('#reset-rules li').forEach((li) => {
+    const rule = li.dataset.rule;
+    li.classList.toggle('ok', rule === 'len' ? lenOk : rule === 'num' ? numOk : upOk);
+  });
+}
+
+// ------------------------------------------------------- lupa kata sandi ---
+// Ronde 63: layar-layar auth (login / lupa kata sandi / atur ulang /
+// berhasil). Satu tempat kebenaran, hanya satu layar yang tampil.
+function showAuthScreen(name) {
+  S.authScreen = name;
+  const errBox = $('#auth-error');
+  const noteBox = $('#auth-notice');
+  errBox.hidden = true;
+  noteBox.hidden = true;
+  $('#auth-form').hidden = name !== 'login';
+  $('#forgot-form').hidden = name !== 'forgot';
+  $('#sent-screen').hidden = name !== 'sent';
+  $('#reset-form').hidden = name !== 'reset';
+  $('#reset-done').hidden = name !== 'resetDone';
+  $('#auth-toggle-row').hidden = name !== 'login';
+  if (name !== 'sent') stopTimer('resend');
+  if (name !== 'login') stopTimer('login');
+  // Layar masuk tetap memberi tahu pendaftaran belum dibuka, seperti
+  // sebelum ronde ini (applyI18n menampilkannya, lalu dibersihkan di atas).
+  if (name === 'login' && !REGISTRATION_OPEN) {
+    noteBox.textContent = t('authSignupClosed');
+    noteBox.hidden = false;
+    refreshLoginLock();
+  }
+  if (name === 'sent') {
+    $('#sent-email').textContent = S.resetEmail || '';
+    refreshResendLock();
+  }
+  if (name === 'reset') {
+    // Tanpa sesi recovery, form tidak bisa menyimpan apa-apa: nonaktifkan
+    // + jelaskan linknya tidak valid (bukan form yang rusak).
+    const ok = !!S.session;
+    $('#reset-password').disabled = !ok;
+    $('#reset-confirm').disabled = !ok;
+    $('#reset-submit').disabled = !ok;
+    if (!ok) { errBox.textContent = t('resetLinkInvalid'); errBox.hidden = false; }
+    refreshResetHint();
+    refreshPwMeter();
+  }
+  paintStepper();
+}
+
+// Link reset email memakai hash #access_token=...&type=recovery (implicit
+// flow). Periksa hash langsung, karena event PASSWORD_RECOVERY bisa
+// terpancar sebelum listener terdaftar, jadi hash adalah pemicu utama.
+function isRecoveryHash(hash) {
+  const h = String(hash === undefined ? window.location.hash : hash || '');
+  return /(?:^|[&#?])type=recovery(?:&|$)/.test(h);
+}
+
+function resetErrorMessage(err) {
+  const m = String(err?.message || '');
+  if (/session missing|no session|invalid.*(token|jwt)|expired|jwt expired/i.test(m)) return t('resetLinkInvalid');
+  if (/password.*(6|short|weak)|weak/i.test(m)) return t('authErrWeak');
+  if (/failed to fetch|network/i.test(m)) return t('errNetwork');
+  return t('authErrGeneric');
+}
+
+function setResetHint(state) {
+  const el = $('#reset-match-hint');
+  el.classList.remove('ok', 'bad');
+  if (state === 'match') { el.textContent = t('passwordMatch'); el.classList.add('ok'); }
+  else if (state === 'mismatch') { el.textContent = t('passwordMismatch'); el.classList.add('bad'); }
+  else { el.textContent = ''; }
+}
+function refreshResetHint() {
+  const pw = $('#reset-password').value;
+  const cf = $('#reset-confirm').value;
+  if (!cf) { setResetHint(''); return; }
+  setResetHint(pw === cf ? 'match' : 'mismatch');
+}
+$('#reset-password').addEventListener('input', refreshResetHint);
+$('#reset-confirm').addEventListener('input', refreshResetHint);
+// Ronde 63 (amandemen): meter kekuatan mengikuti aturan passwordValid.
+$('#reset-password').addEventListener('input', refreshPwMeter);
+
+// Masuk ke layar atur ulang dari link email. Sesi recovery sudah disimpan
+// klien (detectSessionInUrl); hash dibersihkan supaya reload tidak memicu
+// recovery lagi dan token tidak tertinggal di address bar/riwayat.
+function enterRecovery(session) {
+  try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch (e) { /* abaikan */ }
+  S.session = session || null;
+  S.user = session?.user || null;
+  showAuth();
+  showAuthScreen('reset');
+}
+
+// Kembali ke layar masuk dari layar reset/berhasil: hapus dulu sesi
+// recovery yang tersimpan, supaya sesi itu tidak langsung memasukkan
+// pengguna saat boot berikutnya.
+async function exitRecoveryToLogin() {
+  try { await api.signOut(); } catch (e) { /* tetap lanjut ke login */ }
+  S.session = null;
+  S.user = null;
+  showAuthScreen('login');
+}
+
+$('#auth-forgot').addEventListener('click', () => { showAuthScreen('forgot'); });
+$('#forgot-back').addEventListener('click', () => { showAuthScreen('login'); });
+$('#sent-back').addEventListener('click', () => { showAuthScreen('login'); });
+$('#sent-resend').addEventListener('click', async () => {
+  // Ronde 63 (amandemen): kirim ulang bertingkat. Sukses maupun galat
+  // generik (anti-enumerasi) menaikkan kunci berikutnya; galat jaringan
+  // tidak dihitung.
+  const email = S.resetEmail;
+  if (!email) { showAuthScreen('login'); return; }
+  const st = readBackoff('reset', email);
+  if (Date.now() < st.nextAllowedAt) { refreshResendLock(); return; } // pengaman ganda
+  const btn = $('#sent-resend');
+  btn.disabled = true;
+  try {
+    await api.requestPasswordReset(email);
+    recordResend(email);
+    toast(t('resendToast'));
+    refreshResendLock();
+  } catch (err) {
+    const m = String(err?.message || '');
+    if (/failed to fetch|network/i.test(m)) {
+      const errBox = $('#auth-error');
+      errBox.textContent = t('errNetwork');
+      errBox.hidden = false;
+      refreshResendLock();
+    } else {
+      recordResend(email);
+      toast(t('resendToast'));
+      refreshResendLock();
+    }
+  }
+});
+$('#reset-back').addEventListener('click', () => { exitRecoveryToLogin(); });
+$('#reset-done-back').addEventListener('click', () => { exitRecoveryToLogin(); });
+
+$('#forgot-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = $('#forgot-email').value.trim();
+  const errBox = $('#auth-error');
+  const noteBox = $('#auth-notice');
+  errBox.hidden = true;
+  noteBox.hidden = true;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errBox.textContent = t('authErrEmail');
+    errBox.hidden = false;
+    return;
+  }
+  // Ronde 63 (amandemen): bila link untuk email ini baru saja dikirim dan
+  // kuncinya masih berjalan, tampilkan layar sent dengan hitungan mundur
+  // tanpa mengirim ulang (menutup celah reload-lalu-kirim-ulang).
+  if (Date.now() < readBackoff('reset', email).nextAllowedAt) {
+    S.resetEmail = email;
+    showAuthScreen('sent');
+    return;
+  }
+  const btn = $('#forgot-submit');
+  const btnLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t('loading') + '…';
+  try {
+    await api.requestPasswordReset(email);
+    recordResend(email); // percobaan #1, kunci 60 detik
+    S.resetEmail = email;
+    showAuthScreen('sent');
+  } catch (err) {
+    // Anti-enumerasi: galat apa pun (termasuk email tidak terdaftar)
+    // menampilkan pesan yang sama, kecuali jaringan mati, yang harus jujur.
+    const m = String(err?.message || '');
+    if (/failed to fetch|network/i.test(m)) {
+      errBox.textContent = t('errNetwork');
+      errBox.hidden = false;
+    } else {
+      recordResend(email);
+      S.resetEmail = email;
+      showAuthScreen('sent');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = btnLabel;
+  }
+});
+
+$('#reset-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errBox = $('#auth-error');
+  const noteBox = $('#auth-notice');
+  errBox.hidden = true;
+  noteBox.hidden = true;
+  const pw = $('#reset-password').value;
+  if (!passwordValid(pw)) { errBox.textContent = t('authErrWeak'); errBox.hidden = false; return; }
+  if (pw !== $('#reset-confirm').value) { errBox.textContent = t('passwordMismatch'); errBox.hidden = false; return; }
+  if (!S.session) { errBox.textContent = t('resetLinkInvalid'); errBox.hidden = false; return; }
+  const btn = $('#reset-submit');
+  const btnLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t('loading') + '…';
+  try {
+    await api.updatePassword(pw);
+    showAuthScreen('resetDone');
+  } catch (err) {
+    errBox.textContent = resetErrorMessage(err);
+    errBox.hidden = false;
   } finally {
     btn.disabled = false;
     btn.textContent = btnLabel;
@@ -1102,6 +1448,27 @@ $('#auth-form').addEventListener('submit', async (e) => {
 });
 
 async function handleSession(session, event = 'INITIAL_SESSION') {
+  // Ronde 63: hash recovery di URL berarti pengguna sedang mereset, bukan
+  // masuk biasa. Jangan jalankan jalur normal (showApp) walau sesi ada;
+  // serahkan ke layar atur ulang. Ini menutup balapan antara event
+  // INITIAL_SESSION klien dan getSession manual di init.
+  if (isRecoveryHash()) { enterRecovery(session); return; }
+  // Ronde 63: sedang di layar atur ulang / berhasil, event sesi (mis.
+  // TOKEN_REFRESHED pada sesi recovery) tidak boleh memindahkan pengguna
+  // ke aplikasi sebelum reset selesai. Sesi null dari klien (mis. event
+  // INITIAL_SESSION yang datang terlambat) DIABAIKAN, jangan timpa sesi
+  // recovery yang sudah ada; bila sesi justru datang terlambat saat form
+  // masih nonaktif, aktifkan form. Submit tetap fail-closed bila sesi
+  // memang tidak ada (resetLinkInvalid).
+  if (S.authScreen === 'reset' || S.authScreen === 'resetDone') {
+    if (session) {
+      const wasDisabled = S.authScreen === 'reset' && !S.session;
+      S.session = session;
+      S.user = session.user || null;
+      if (wasDisabled) showAuthScreen('reset');
+    }
+    return;
+  }
   // R9-1: putuskan navigasi DI AWAL (sebelum await) + hanya untuk login yang
   // benar-benar baru. Supabase (GoTrue) memancarkan SIGNED_IN ulang setiap
   // kali tab kembali aktif (listener visibilitychange internal →
@@ -1115,6 +1482,8 @@ async function handleSession(session, event = 'INITIAL_SESSION') {
   const isFreshLogin = Boolean(newUserId) && (newUserId !== prevUserId || __oleHomeNavDoneFor !== newUserId);
   S.session = session;
   S.user = session?.user || null;
+  // Ronde 63 (amandemen): masuk berhasil me-reset hitungan gagal login.
+  if (S.user?.email) clearBackoff('login', S.user.email);
   if (!S.user) {
     __oleHomeNavDoneFor = null;
     stopPricePolling(); // R37: jangan ambil harga lagi setelah keluar.
@@ -5448,20 +5817,33 @@ applyI18n();
 if (isVerifyPath()) {
   renderVerifyView();
 } else {
-  api.onAuthChange((event, session) => { handleSession(session, event); });
+  api.onAuthChange((event, session) => {
+    // Ronde 63: jalur kedua deteksi recovery (jalur utama: hash di bawah).
+    if (event === 'PASSWORD_RECOVERY') { enterRecovery(session); return; }
+    handleSession(session, event);
+  });
   try {
     // D07: getSession() yang menggantung tidak boleh membiarkan halaman
     // blank tanpa batas — batas 10 detik, lalu tampilkan layar masuk
     // dengan pesan + tombol muat ulang di splash.
     const session = await withTimeout(api.getSession(), 10000);
-    await handleSession(session, 'INITIAL_SESSION');
+    // Ronde 63: hash recovery didahulukan, jangan jalankan jalur masuk
+    // normal untuk sesi recovery (pengguna sedang mereset, bukan masuk).
+    if (isRecoveryHash()) enterRecovery(session);
+    else await handleSession(session, 'INITIAL_SESSION');
   } catch (e) {
     console.error('init session', e);
-    showAuth();
-    const errBox = $('#auth-error');
-    if (errBox) {
-      errBox.textContent = t('errSessionTimeout');
-      errBox.hidden = false;
+    // Ronde 63: getSession gagal saat hash recovery ada, tampilkan layar
+    // reset dalam keadaan tidak valid, bukan layar masuk biasa.
+    if (isRecoveryHash()) {
+      enterRecovery(null);
+    } else {
+      showAuth();
+      const errBox = $('#auth-error');
+      if (errBox) {
+        errBox.textContent = t('errSessionTimeout');
+        errBox.hidden = false;
+      }
     }
   } finally {
     window.__oleBooted = true;
