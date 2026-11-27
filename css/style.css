@@ -355,7 +355,7 @@ h1 { font-size: 30px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 4p
 .pill.green { background: var(--buy-bg); color: var(--buy); }
 .pill.red { background: var(--sell-bg); color: var(--sell-text); }
 .sig-trader { font-size: 13px; color: var(--muted); margin-top: 6px; }
-.sig-levels { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.sig-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .sig-levels .lv { background: var(--panel-2); border-radius: var(--radius-sm); padding: 8px 10px; min-width: 0; }
 .sig-levels .lv small { display: block; font-size: 11.5px; color: var(--muted); }
 .sig-levels .lv b { font-size: 14.5px; }
@@ -867,11 +867,12 @@ table.board td.num, table.board th.num { text-align: right; }
      berlaku untuk semua kartu supaya angka XAUUSD muat. Ini menutup
      sisa R38 (kartu HP ~90px lebih tinggi karena level ditumpuk). */
   .sig { padding: 12px; }
-  /* R53: aturan rapat R52 PINDAH ke blok ≤410px di bawah. Di 411–560px
-     render kembali persis pra-R52: panel 12px 15px (aturan dasar yang
-     menang — deklarasi padding 8px 10px di sini sengaja mati, JANGAN
-     naikkan spesifisitasnya lagi), sel 5px 8px, gap 6px. */
-  .sig-levels { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 10px; gap: 6px; }
+  /* R54: sel ke-4 (Harga sekarang / Harga keluar) dihapus dari kartu —
+     panel tinggal 3 sel (Entry, SL, TP), jadi angka 8 digit muat di
+     semua lebar termasuk 360px (menutup F-R52-1). Aturan rapat R52/R53
+     (blok ≤410px) DIHAPUS: padding kembali seragam — panel 12px 15px
+     (aturan dasar), sel 5px 8px, gap 6px. */
+  .sig-levels { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .sig-levels .lv { padding: 5px 8px; min-width: 0; }
   .sig-levels .lv b { font-size: 13px; }
   /* R38: nama + pill Demo boleh turun baris di kartu sempit (sebelumnya
@@ -881,23 +882,6 @@ table.board td.num, table.board th.num { text-align: right; }
   .overlay { padding: 24px 10px; }
   .search-grid { grid-template-columns: 1fr 1fr; }
   .board-stats { grid-template-columns: repeat(2, 1fr); }
-}
-
-@media (max-width: 410px) {
-  /* R53 (D-R40-1, lanjutan dari R52): aturan rapat R52 PINDAH ke sini.
-     Diukur (r53-probe): angka 8 digit "4,100.00" dengan padding longgar
-     (pra-R52) baru muat di ~413px (spill +0.2 di 412px, −1.8 di 420px).
-     Breakpoint 410px dipilih supaya HP 412px/430px (termasuk HP user)
-     kembali ke render longgar pra-R52, sementara 390px tetap muat
-     (spill −2.3). Di 411–412px spill aturan longgar ≤ +0.45px (dalam
-     toleransi R52 ≤0.5px, tak kasat mata). Blok ini harus sesudah blok
-     ≤560px supaya aturan sel menang lewat urutan file; panel menang
-     lewat spesifisitas .sig (0,2,0) atas aturan dasar (0,1,0). */
-  .sig .sig-levels { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 10px; gap: 4px; }
-  /* R52: padding sel (8px→4px) + gap (6px→4px) saja yang membuat 390px
-     muat — diukur: kartu 341px, sel 68.8px, angka 8 digit butuh 66.4px
-     → sisa 2.4px. Font tetap 13px. */
-  .sig-levels .lv { padding: 5px 4px; min-width: 0; }
 }
 
 /* Chip filter profil / Ruang Kerja (Semua / Pending / Aktif + Riwayat di kanan) */
@@ -1228,11 +1212,12 @@ details.more .more-body p { margin: 8px 0 0; color: var(--muted); font-size: 13.
    "3,571.99" muat tanpa overflow di 900/1024/1100/1366px; font 14.5px
    gagal di 900px dan 1100px, maks meluber 10px). Perlakuan ini sama
    dengan HP ≤560px. Beranda jadi 2 kolom (R40) supaya kartu cukup
-   lebar untuk 4 sebaris. */
+   lebar untuk 4 sebaris. R54: panel jadi 3 sel (Harga sekarang / Harga
+   keluar dihapus dari kartu) — 4 sebaris di atas menjadi 3 sebaris. */
 .sig-levels { background: var(--panel-2); border-radius: 14px; padding: 12px 15px; }
 .sig-levels .lv { background: transparent; }
 @media (min-width: 900px) {
-  .sig-levels { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 10px; gap: 6px; }
+  .sig-levels { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 8px 10px; gap: 6px; }
   .sig-levels .lv b { font-size: 13px; }
 }
 /* Baris atas kartu boleh membungkus: grup kanan (level, lencana, status)
