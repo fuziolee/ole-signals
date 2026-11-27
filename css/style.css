@@ -784,7 +784,11 @@ table.board td.num, table.board th.num { text-align: right; }
 }
 .seg button[aria-pressed="true"] { background: var(--teal); color: var(--teal-ink); border-color: var(--teal); }
 .settings-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--teal); cursor: pointer; }
-.avatar-edit { margin-top: 8px; }
+/* R58: tombol Selesai/Batal hapus & stage foto dibuat ringkas (.btn.compact, 38px)
+   dan berdampingan, dulu .btn.primary 48px selebar penuh (keluhan user 27 Nov).
+   Note menempati baris sendiri supaya teks panjang tidak menghimpit tombol. */
+.avatar-edit { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.avatar-edit .note { flex: 1 1 100%; }
 .faq-item { margin-bottom: 12px; }
 .faq-item b { display: block; font-size: 14.5px; margin-bottom: 2px; }
 .faq-item span { color: var(--muted); font-size: 13.5px; }
