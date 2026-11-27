@@ -867,8 +867,17 @@ table.board td.num, table.board th.num { text-align: right; }
      berlaku untuk semua kartu supaya angka XAUUSD muat. Ini menutup
      sisa R38 (kartu HP ~90px lebih tinggi karena level ditumpuk). */
   .sig { padding: 12px; }
-  .sig-levels { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 10px; gap: 6px; }
-  .sig-levels .lv { padding: 5px 8px; min-width: 0; }
+  /* R52 (D-R40-1): naikkan spesifisitas panel level supaya padding
+     ringkas ini menang atas aturan dasar style.css:1211 (12px 15px,
+     selektor sama tapi lebih akhir di file). */
+  .sig .sig-levels { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 10px; gap: 4px; }
+  /* R52 (D-R40-1, lanjutan): padding ringkas SAJA belum cukup di 390px —
+     diukur: kartu 341px, sel 67.3px, angka 8 digit butuh 70.4px
+     (8px padding + 62.4px teks) → masih meluber 3.2px. Kecilkan padding
+     sel (8px→4px) + gap (6px→4px) di blok ≤560px ini saja: sel 68.8px,
+     butuh 66.4px → muat, sisa 2.4px. Web ≥900px tidak tersentuh
+     (gap 6px + padding sel 8px 10px dari aturan dasar). */
+  .sig-levels .lv { padding: 5px 4px; min-width: 0; }
   .sig-levels .lv b { font-size: 13px; }
   /* R38: nama + pill Demo boleh turun baris di kartu sempit (sebelumnya
      pill Demo terpotong oleh ellipsis tombol nama). */
