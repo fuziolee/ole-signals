@@ -54,6 +54,16 @@ const ICONS = {
 // membedakan login baru (arah ke Beranda) dari SIGNED_IN/INITIAL_SESSION
 // ulang untuk user yang sama (jangan sentuh tampilan). Direset saat keluar.
 let __oleHomeNavDoneFor = null;
+// R83: penjaga pemuat latar boot. Satu run per pengguna; run baru untuk
+// pengguna lain membatalkan run lama (cek seq + uid sebelum tulis state).
+let __bootLoadRunning = false;
+let __bootLoadSeq = 0;
+let __bootLoadUid = null;
+function getBootLoadState() { return { running: __bootLoadRunning, seq: __bootLoadSeq, uid: __bootLoadUid }; }
+function invalidateBootLoad() { __bootLoadSeq += 1; __bootLoadRunning = false; __bootLoadUid = null; }
+function bootLoadStillCurrent(seq, uid) {
+  return seq === __bootLoadSeq && !!S.user && S.user.id === uid;
+}
 const S = {
   session: null,
   user: null,
@@ -123,6 +133,8 @@ const S = {
   resetEmail: '', // Ronde 63 (amandemen): email yang dikirimi link reset (layar sent + backoff)
   followerCounts: {},
   copiedIds: new Set(),
+  copiesLoaded: false, // R83 Q1(c): data salinan selesai dimuat (tombol Salin disembunyikan sampai true)
+  followsLoaded: false, // R83 Q1(c): data ikutan selesai dimuat (tombol Ikuti disembunyikan sampai true)
   usernameUI: { trader: { draft: '', res: null, pending: null, timer: null }, follower: { draft: '', res: null, pending: null, timer: null } },
   photoDraft: { profile: false, trader: false },
   photoUploadDraft: { profile: null, trader: null }, // File foto yang di-stage (belum diunggah)
@@ -430,6 +442,8 @@ function isFollowing(traderId) {
 }
 function followBtnHtml(traderId) {
   if (S.user && traderId === S.user.id) return '';
+  // R83 Q1(c): tombol Ikuti disembunyikan sampai data ikutan selesai dimuat.
+  if (!S.followsLoaded) return '';
   const followed = isFollowing(traderId);
   return `<button class="btn${followed ? ' active' : ''}" type="button" data-follow="${esc(traderId)}" aria-pressed="${followed}">${esc(followed ? t('followed') : t('follow'))}</button>`;
 }
@@ -705,10 +719,15 @@ function saveNotifPrefs(prefs) {
 }
 async function loadNotifications() {
   if (!S.user) { S.notifs = []; return; }
+  const uid = S.user.id;
   try {
-    S.notifs = await api.listMyNotifications(S.user.id);
+    const rows = await api.listMyNotifications(uid);
+    // R83: jangan tulis notifikasi pengguna lama bila sesi berganti di tengah fetch.
+    if (!S.user || S.user.id !== uid) return;
+    S.notifs = rows;
   } catch (e) {
-    S.notifs = [];
+    if (!S.user || S.user.id !== uid) return; // R83: nilai lama dipertahankan bila sesi sudah berganti (G18).
+    // R83: gagal ambil = notifikasi lama dipertahankan, bukan dikosongkan (§7).
   }
   paintNotifBadge();
 }
@@ -1114,11 +1133,14 @@ function showApp() {
 
 async function refreshIdentity() {
   if (!S.user) { S.profile = null; S.trader = null; return; }
+  const uid = S.user.id;
   try {
     const [profile, trader] = await Promise.all([
-      api.getMyProfile(S.user.id),
-      api.getMyTrader(S.user.id),
+      api.getMyProfile(uid),
+      api.getMyTrader(uid),
     ]);
+    // R83: jangan tulis identitas pengguna lama bila sesi berganti di tengah fetch.
+    if (!S.user || S.user.id !== uid) return;
     S.profile = profile;
     S.trader = trader;
   } catch (e) {
@@ -1689,6 +1711,146 @@ $('#reset-form').addEventListener('submit', async (e) => {
   }
 });
 
+// R83: kepala profil trader tidak ikut di-render ulang oleh
+// renderTraderProfileBody; tanpa ini, tombol Ikuti yang disembunyikan
+// Q1(c) tidak pernah muncul bila profil dibuka sebelum data ikutan
+// selesai dimuat. Hanya membangun ulang followbox bila keberadaan tombol
+// Ikuti tidak cocok dengan flag (bila cocok, cukup sinkronkan label).
+// Teks jumlah pengikut dipertahankan apa adanya saat membangun ulang.
+function paintTraderFollowbox() {
+  const box = document.querySelector('#trader-profile .followbox');
+  if (!box || !S.traderProfileId) return;
+  const expected = followBtnHtml(S.traderProfileId);
+  const hasBtn = !!box.querySelector('[data-follow]');
+  if ((expected !== '') === hasBtn) { paintFollowButtons(S.traderProfileId); return; }
+  const tr = S.traders.find((x) => x.profile_id === S.traderProfileId);
+  if (!tr) return;
+  const folEl = box.querySelector('#tp-followers');
+  // Nilai awal sama seperti placeholder lama di kepala profil (escape
+  // unicode supaya diff ronde ini tetap 0 em dash literal).
+  const folTxt = folEl ? folEl.textContent : '\u2014';
+  box.innerHTML = `${followBtnHtml(S.traderProfileId)}${subscribeBtnHtml(S.traderProfileId)}<button class="iconbtn" id="tp-share" type="button" aria-label="${esc(t('shareTrader'))}">${ICONS.share}</button><div class="followers" id="tp-followers">${esc(folTxt)}</div>`;
+  const root = document.querySelector('#trader-profile');
+  if (root) bindFollowSubscribe(root);
+  const tpShare = document.querySelector('#tp-share');
+  if (tpShare) tpShare.addEventListener('click', async () => { await downloadPortfolioCard(tr); });
+}
+
+// R83: repaint sesudah pemuat latar selesai, hanya konten di dalam #app,
+// TIDAK pernah showApp/showView (R64: jangan timpa layar reset).
+function repaintBootData() {
+  if (!S.user) return;
+  if (S.authScreen === 'reset' || S.authScreen === 'resetDone') return;
+  if (S.view === 'home') { renderHomeList(); return; }
+  if (S.view === 'trader' && S.traderProfileId) {
+    // Bila kepala profil belum ter-render (mis. tautan #trader dibuka
+    // sebelum daftar trader termuat, renderTraderProfile menampilkan
+    // galat), render ulang penuh supaya profil pulih sendiri sesudah
+    // daftar tiba; bila kepala sudah ada, cukup isi + followbox.
+    if (!document.querySelector('#trader-profile-body')) { renderTraderProfile(); return; }
+    renderTraderProfileBody(S.traderProfileId);
+    paintTraderFollowbox();
+    return;
+  }
+  if (S.view === 'search') { renderSearchList(); }
+}
+
+// R83: pemuat latar boot, aplikasi tampil dulu (showApp di handleSession),
+// data menyusul per kelompok. Tiap kelompok: timeout 10 dtk (Q3, pola D07),
+// fallback "nilai lama dipertahankan" (G18), cek seq + uid sebelum tulis
+// state (batal bila pengguna keluar atau berganti di tengah boot).
+async function loadBootData() {
+  const uid = S.user && S.user.id;
+  if (!uid) return;
+  if (__bootLoadRunning && __bootLoadUid === uid) return; // run pengguna yang sama sudah jalan
+  __bootLoadSeq += 1;
+  const seq = __bootLoadSeq;
+  __bootLoadUid = uid;
+  __bootLoadRunning = true;
+  try {
+    await Promise.all([
+      withTimeout(bootLoadGroup1(seq, uid), 10000).catch(() => {}),
+      withTimeout(bootLoadGroup2(seq, uid), 10000).catch(() => {}),
+      withTimeout(bootLoadGroup3(seq, uid), 10000).catch(() => {}),
+    ]);
+  } catch (e) { /* tiap kelompok sudah menangani galatnya sendiri */ }
+  finally {
+    if (__bootLoadSeq === seq) { __bootLoadRunning = false; __bootLoadUid = null; }
+  }
+}
+
+// R83 kelompok 1 (Q2: badge lonceng di sini): identitas + harga + notifikasi.
+async function bootLoadGroup1(seq, uid) {
+  startPricePolling();
+  const identity = (async () => {
+    try { await refreshIdentity(); } catch (e) { /* refreshIdentity sudah toast sendiri */ }
+    if (bootLoadStillCurrent(seq, uid)) repaintBootData();
+  })();
+  const prices = (async () => {
+    try { await refreshPrices(); } catch (e) { /* refreshPrices tidak pernah throw */ }
+  })();
+  const notifs = (async () => {
+    try { await loadNotifications(); } catch (e) { /* loadNotifications tidak pernah throw */ }
+  })();
+  await Promise.all([identity, prices, notifs]);
+}
+
+// R83 kelompok 2: trader + langganan, lalu hitungan pengikut.
+async function bootLoadGroup2(seq, uid) {
+  const [tr, sb] = await Promise.allSettled([api.listTraders(), api.listMySubscriptions(uid)]);
+  if (!bootLoadStillCurrent(seq, uid)) return;
+  // R83 §7: gagal ambil = nilai lama dipertahankan, bukan dikosongkan.
+  if (tr.status === 'fulfilled') S.traders = tr.value;
+  if (sb.status === 'fulfilled') S.mySubs = sb.value;
+  try {
+    // R26: kegagalan hitungan BUKAN 0, gagal = null, nilai lama dipertahankan.
+    const counts = await Promise.all(S.traders.map((t) => api.countFollowers(t.profile_id).catch(() => null)));
+    if (!bootLoadStillCurrent(seq, uid)) return;
+    S.traders.forEach((t, i) => { if (counts[i] !== null && counts[i] !== undefined) S.followerCounts[t.profile_id] = counts[i]; });
+    paintAllFollowerCounts();
+  } catch (e) { /* abaikan, nilai lama dipertahankan */ }
+  if (bootLoadStillCurrent(seq, uid)) repaintBootData();
+}
+
+// R83 kelompok 3: demo + salinan + ikutan (tombol Salin/Ikuti Q1(c)).
+async function bootLoadGroup3(seq, uid) {
+  const demo = (async () => {
+    try {
+      const ids = await api.listDemoTraderIds();
+      if (!bootLoadStillCurrent(seq, uid)) return;
+      S.demoIds = new Set(ids);
+    } catch (e) {
+      // R83 §7: gagal ambil = demo lama dipertahankan, bukan dikosongkan.
+    }
+  })();
+  const copies = (async () => {
+    try {
+      const rows = await api.listMyCopies(uid);
+      if (!bootLoadStillCurrent(seq, uid)) return;
+      S.myCopies = rows;
+      S.copiedIds = new Set(rows.map((c) => c.signal_id));
+    } catch (e) { /* salinan dimuat ulang saat membuka menu Follower */ }
+    finally {
+      // Flag = percobaan selesai (sukses atau gagal), supaya tombol tidak
+      // hilang permanen bila fetch gagal; label memakai data terbaik yang ada.
+      if (bootLoadStillCurrent(seq, uid)) S.copiesLoaded = true;
+    }
+    if (bootLoadStillCurrent(seq, uid)) repaintBootData();
+  })();
+  const follows = (async () => {
+    try {
+      const rows = await api.listMyFollows(uid);
+      if (!bootLoadStillCurrent(seq, uid)) return;
+      S.myFollows = rows;
+    } catch (e) { /* ikutan dimuat ulang saat membuka Cari / Trader */ }
+    finally {
+      if (bootLoadStillCurrent(seq, uid)) S.followsLoaded = true;
+    }
+    if (bootLoadStillCurrent(seq, uid)) repaintBootData();
+  })();
+  await Promise.all([demo, copies, follows]);
+}
+
 async function handleSession(session, event = 'INITIAL_SESSION') {
   // Ronde 63: hash recovery di URL berarti pengguna sedang mereset, bukan
   // masuk biasa. Jangan jalankan jalur normal (showApp) walau sesi ada;
@@ -1751,6 +1913,21 @@ async function handleSession(session, event = 'INITIAL_SESSION') {
   const isFreshLogin = Boolean(newUserId) && (newUserId !== prevUserId || __oleHomeNavDoneFor !== newUserId);
   S.session = session;
   S.user = session?.user || null;
+  // R83: pengguna berganti (termasuk keluar) = state khusus-pengguna kembali
+  // netral SEBELUM aplikasi tampil, supaya showApp dini tidak pernah
+  // menampilkan data pengguna lama. Trader + harga bersifat global, dibiarkan.
+  if (newUserId !== prevUserId) {
+    invalidateBootLoad();
+    S.profile = null; S.trader = null;
+    S.mySubs = []; S.myFollows = []; S.myCopies = []; S.copiedIds = new Set();
+    S.mySignals = []; S.traderSignals = [];
+    S.notifs = []; S.followerCounts = {}; S.demoIds = new Set();
+    S.copiesLoaded = false; S.followsLoaded = false;
+    // R83: lonceng ikut direset supaya hitungan belum dibaca pengguna lama
+    // tidak tertinggal (dan tidak sempat tampil ke pengguna berikutnya
+    // sebelum notifikasi barunya dimuat).
+    paintNotifBadge();
+  }
   // Ronde 63 (amandemen): masuk berhasil me-reset hitungan gagal login.
   if (S.user?.email) clearBackoff('login', S.user.email);
   if (!S.user) {
@@ -1760,42 +1937,10 @@ async function handleSession(session, event = 'INITIAL_SESSION') {
     return;
   }
   if (isFreshLogin) __oleHomeNavDoneFor = newUserId;
-  await refreshIdentity();
-  try { S.traders = await api.listTraders(); } catch (e) { S.traders = []; }
-  try { S.mySubs = await api.listMySubscriptions(S.user.id); } catch (e) { S.mySubs = []; }
-  try {
-    // R26: kegagalan hitungan BUKAN 0. `.catch(() => 0)` lama menelan error
-    // lalu meng-cache "0 Pengikut" palsu (terbukti probe r26: sekali gagal,
-    // kartu menampilkan "0 Pengikut" sampai siklus follow). Nilai lama yang
-    // baik dipertahankan; kunci yang gagal tetap tidak ada sehingga kartu
-    // menampilkan "—" (jujur: belum diketahui, bukan 0).
-    const counts = await Promise.all(S.traders.map((tr) => api.countFollowers(tr.profile_id).catch(() => null)));
-    S.traders.forEach((tr, i) => { if (counts[i] !== null && counts[i] !== undefined) S.followerCounts[tr.profile_id] = counts[i]; });
-    paintAllFollowerCounts();
-  } catch (e) { /* abaikan — nilai lama dipertahankan */ }
-  // R37: harga dimuat di sini (boot / SIGNED_IN ulang) lalu di-poll tiap
-  // 1 menit (startPricePolling), sebelumnya hanya sekali saat boot. Gagal
-  // ambil = nilai lama dipertahankan (bukan Map kosong); applyPrices
-  // menyimpan fetch sebelumnya sebagai pembanding panah ticker.
-  try { applyPrices(await api.getPrices()); } catch (e) { /* nilai lama dipertahankan */ }
-  startPricePolling();
-  try { S.demoIds = new Set(await api.listDemoTraderIds()); } catch (e) { S.demoIds = new Set(); }
-  await loadNotifications();
-  // B2-01 + B2-05: muat salinan + ikutan dari DB agar "Sudah disalin" dan
-  // "Diikuti" di kartu sinyal bertahan setelah reload.
-  try {
-    S.myCopies = await api.listMyCopies(S.user.id);
-    S.copiedIds = new Set(S.myCopies.map((c) => c.signal_id));
-  } catch (e) { /* salinan dimuat ulang saat membuka menu Follower */ }
-  try {
-    S.myFollows = await api.listMyFollows(S.user.id);
-  } catch (e) { /* ikutan dimuat ulang saat membuka Cari / Trader */ }
-  // Ronde 64: periksa ulang SETELAH semua await. Pengguna bisa masuk ke
-  // layar reset di tengah boot (event PASSWORD_RECOVERY saat refreshIdentity
-  // / listTraders menunggu jaringan). Tanpa pemeriksaan ini, showApp() di
-  // akhir akan menimpa layar reset (inilah yang terjadi pada link asli:
-  // event sempat memanggil enterRecovery, lalu ekor handleSession tetap
-  // memanggil showApp()).
+  // R83: tampilkan aplikasi SEGERA sesudah sesi diputuskan, data menyusul
+  // lewat pemuat latar (loadBootData, fire-and-forget). Cek R64 di sini:
+  // event PASSWORD_RECOVERY yang datang saat getSession menunggu tidak
+  // boleh tertimpa showApp().
   if (S.authScreen === 'reset' || S.authScreen === 'resetDone') return;
   showApp();
   // C-01 + R9-1: hanya pindah ke Beranda saat pertama kali masuk / sesi awal
@@ -1807,6 +1952,7 @@ async function handleSession(session, event = 'INITIAL_SESSION') {
     // B-01/B4-02: tautan bagikan profil (#trader/<id>) dibuka setelah masuk.
     openTraderFromHash();
   }
+  loadBootData();
 }
 
 // ---------------------------------------------------------- kartu sinyal ---
@@ -1884,6 +2030,8 @@ function repaintVisibleSignalLists() {
   // 1 menit + reset daftar) dan JANGAN renderOffice (refetch sinyal +
   // form edit tab Trader bisa terhapus); kartu office diperbarui saat
   // navigasi (showView) seperti sebelumnya.
+  // R83: jangan repaint saat layar reset (R64), konten #app sedang hidden.
+  if (S.authScreen === 'reset' || S.authScreen === 'resetDone') return;
   if (S.view === 'home') { renderHomeList(); return; }
   if (S.view === 'trader' && S.traderProfileId) { renderTraderProfileBody(S.traderProfileId); }
 }
@@ -2020,8 +2168,9 @@ function signalCardHtml(sig) {
   }
   actions.push(`<button class="btn" type="button" data-act="detail" data-sig="${esc(sig.id)}">${esc(t('sigDetail'))}</button>`);
   // D29: Salin hanya bila PENDING; label berubah "Sudah disalin" bila sudah.
+  // R83 Q1(c): tombol Salin disembunyikan sampai data salinan selesai dimuat.
   const copied = S.copiedIds.has(sig.id);
-  if (sig.status === 'PENDING') {
+  if (sig.status === 'PENDING' && S.copiesLoaded) {
     actions.push(`<button class="btn" type="button" data-act="copy" data-sig="${esc(sig.id)}">${copied ? ICONS.check + ' ' : ICONS.copy + ' '}${esc(copied ? t('copied') : t('copySignal'))}</button>`);
   }
   if (!mine) actions.push(followBtnHtml(sig.trader_id));
