@@ -4,6 +4,7 @@
 // Tulis sinyal HANYA lewat RPC (lihat js/api.js).
 
 import { supabase } from './supabase.js';
+import { SUPABASE_URL } from './config.js';
 import { t, setLang, getLang } from './i18n.js';
 import { levelName, levelRef, nextLevelRef, downLevelRef, PAY_GATE_LEVEL, START_BALANCE_USD } from './levels.js';
 import { PAIRS, calcRr, calcRisk, inferEntryType, quoteToUsd, contractSize, validateSignal, decimalsForPair } from './risk.js';
@@ -1299,6 +1300,131 @@ function readRecoveryParams() {
   return null;
 }
 
+// Ronde 66: daftar id sesi recovery yang tidak boleh masuk aplikasi.
+// Sesi recovery dibuat tab reset (setSession) lalu tersimpan di
+// localStorage yang dibagi semua tab origin yang sama; tanpa daftar ini,
+// tab lain tanpa hash menemukannya lewat getSession / storage event lalu
+// masuk aplikasi (bug yang dilaporkan user: tab yang tidak login jadi
+// login sendiri). Id diambil dari klaim session_id di payload JWT
+// access_token (stabil saat refresh; token mentah berputar). Tanpa TTL:
+// sesi recovery tidak boleh masuk aplikasi selamanya; entri yatim (tab
+// ditutup di tengah reset) tidak berbahaya.
+const RECOVERY_SESSIONS_KEY = 'ole_recovery_sessions';
+const RECOVERY_SESSIONS_MAX = 10;
+function decodeJwtPayload(token) {
+  try {
+    if (!token) return null;
+    const parts = token.split('.');
+    if (parts.length < 2 || !parts[1]) return null;
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+  } catch (e) {
+    console.error('jwt payload', e);
+    return null;
+  }
+}
+function recoverySessionId(session) {
+  const json = decodeJwtPayload(session?.access_token);
+  if (!json) return null;
+  return typeof json?.session_id === 'string' && json.session_id ? json.session_id : null;
+}
+// Ronde 66 (item 9): pertahanan lapis kedua, menangkap sesi recovery
+// yang tidak tertandai di daftar blokir (mis. sesi yang sudah bocor
+// sebelum ronde ini). Login normal di aplikasi ini HANYA email+password
+// (tidak ada OTP/magic-link/OAuth), jadi sesi yang amr-nya ada dan
+// ter-parse tetapi tanpa method password pasti berasal dari link
+// recovery (token recovery diverifikasi GoTrue sebagai OTP). Nilai
+// amr=otp untuk sesi recovery asli adalah HIPOTESIS, belum terbukti
+// live; verifikasi saat user klik link asli lagi setelah deploy.
+// Fail-open: amr tidak ada / tidak ter-parse / decode gagal -> jangan
+// blokir lewat amr (daftar blokir tetap jalan sebagai mekanisme utama).
+// Kembali true bila amr berisi password, false bila amr ada tetapi tanpa
+// password (blokir), null bila tidak dapat diputuskan (jangan blokir).
+function recoveryAmrHasPassword(session) {
+  const json = decodeJwtPayload(session?.access_token);
+  if (!json) return null;
+  const amr = json?.amr;
+  if (!Array.isArray(amr)) return null;
+  return amr.some((e) => e && e.method === 'password');
+}
+function readRecoverySessions() {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECOVERY_SESSIONS_KEY) || '[]');
+    return Array.isArray(v) ? v.filter((e) => e && typeof e.id === 'string') : [];
+  } catch (e) { return []; }
+}
+function markRecoverySession(session) {
+  const id = recoverySessionId(session);
+  if (!id) return;
+  const list = readRecoverySessions().filter((e) => e.id !== id);
+  list.unshift({ id, at: Date.now() });
+  try { localStorage.setItem(RECOVERY_SESSIONS_KEY, JSON.stringify(list.slice(0, RECOVERY_SESSIONS_MAX))); } catch (e) { /* abaikan */ }
+}
+function unmarkRecoverySession(session) {
+  const id = recoverySessionId(session);
+  if (!id) return;
+  const list = readRecoverySessions().filter((e) => e.id !== id);
+  try { localStorage.setItem(RECOVERY_SESSIONS_KEY, JSON.stringify(list)); } catch (e) { /* abaikan */ }
+}
+function isRecoverySession(session) {
+  const id = recoverySessionId(session);
+  if (!id) return false;
+  return readRecoverySessions().some((e) => e.id === id);
+}
+
+// Ronde 66 (item 7): bersihkan sesi recovery saat alur reset
+// ditinggalkan (tab ditutup / reload / navigasi pergi). Daftar blokir
+// saja tidak cukup: sesi yang ditinggalkan tetap hidup di localStorage
+// dan bisa dipakai tab lain. Pembersihan di sini sinkron (localStorage
+// saja, tanpa network), karena pagehide belum tentu memberi waktu
+// signOut async selesai.
+function goTrueStorageKey() {
+  try {
+    const host = new URL(SUPABASE_URL).hostname;
+    const ref = host.split('.')[0];
+    return ref ? 'sb-' + ref + '-auth-token' : null;
+  } catch (e) { return null; }
+}
+function storedRecoverySessionId() {
+  try {
+    const key = goTrueStorageKey();
+    if (!key) return null;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return recoverySessionId(JSON.parse(raw));
+  } catch (e) { return null; }
+}
+function onRecoveryPagehide(e) {
+  // bfcache: halaman mungkin dipulihkan dengan sesi in-memory yang
+  // masih dipakai; jangan bersihkan, daftar blokir tetap mencegahnya
+  // masuk aplikasi.
+  if (e && e.persisted) return;
+  if (S.authScreen !== 'reset' && S.authScreen !== 'resetDone') return;
+  const session = S.session;
+  if (!session) return;
+  const id = recoverySessionId(session);
+  if (!id || !isRecoverySession(session)) return;
+  // Hanya hapus kunci storage bila isinya memang sesi recovery ini.
+  // Tab lain mungkin sudah login normal dan menimpa kunci itu dengan
+  // sesi baru (id beda); sesi itu tidak boleh ikut terhapus.
+  let removed = false;
+  try {
+    if (storedRecoverySessionId() === id) {
+      localStorage.removeItem(goTrueStorageKey());
+      removed = true;
+    }
+  } catch (err) { /* abaikan */ }
+  if (removed) unmarkRecoverySession(session);
+}
+function armRecoveryPagehide() {
+  window.removeEventListener('pagehide', onRecoveryPagehide);
+  window.addEventListener('pagehide', onRecoveryPagehide);
+}
+function disarmRecoveryPagehide() {
+  window.removeEventListener('pagehide', onRecoveryPagehide);
+}
+
 function resetErrorMessage(err) {
   const m = String(err?.message || '');
   if (/session missing|no session|invalid.*(token|jwt)|expired|jwt expired/i.test(m)) return t('resetLinkInvalid');
@@ -1342,13 +1468,30 @@ function enterRecovery(session, opts = {}) {
   S.user = session?.user || null;
   showAuth();
   showAuthScreen('reset');
+  // Ronde 66: persenjatai pembersihan bila tab reset ditinggalkan
+  // (ditutup / reload / navigasi pergi) sebelum reset selesai.
+  armRecoveryPagehide();
 }
 
 // Kembali ke layar masuk dari layar reset/berhasil: hapus dulu sesi
 // recovery yang tersimpan, supaya sesi itu tidak langsung memasukkan
 // pengguna saat boot berikutnya.
 async function exitRecoveryToLogin() {
-  try { await api.signOut(); } catch (e) { /* tetap lanjut ke login */ }
+  // Ronde 66: simpan dulu sesi recovery saat ini. signOut memancarkan
+  // SIGNED_OUT dan handleSession men-null-kan S.session sebelum baris
+  // unmark tercapai; bila unmark memakai S.session sesudah signOut, id
+  // sesi tidak pernah terhapus dari daftar blokir (terbukti harness).
+  const session = S.session;
+  let signedOut = false;
+  try { await api.signOut(); signedOut = true; } catch (e) { /* tetap lanjut ke login */ }
+  // Ronde 66: hapus id sesi recovery dari daftar blokir, tapi hanya bila
+  // signOut berhasil. Bila signOut gagal, sesi mungkin masih hidup di
+  // localStorage; daftar tetap memblokirnya supaya tab lain tidak ikut
+  // masuk aplikasi.
+  if (signedOut) unmarkRecoverySession(session);
+  // Ronde 66: keluar dari alur reset dengan benar (signOut sudah jalan),
+  // jadi handler pagehide tidak perlu lagi.
+  disarmRecoveryPagehide();
   S.session = null;
   S.user = null;
   showAuthScreen('login');
@@ -1482,6 +1625,24 @@ async function handleSession(session, event = 'INITIAL_SESSION') {
       S.user = session.user || null;
       if (wasDisabled) showAuthScreen('reset');
     }
+    return;
+  }
+  // Ronde 66: sesi recovery tidak boleh masuk aplikasi di tab lain.
+  // Sesi itu dibuat tab reset dan tersimpan di localStorage yang dibagi
+  // semua tab; tab tanpa hash yang menemukannya lewat getSession /
+  // storage event harus tetap di layar masuk. Syarat !S.session
+  // melindungi login normal (id sesi beda, tidak ada di daftar) dan tab
+  // yang sudah di aplikasi (sesi normal, tidak ditendang keluar).
+  // Cabang ini SENGAJA tidak assign S.session, supaya event berikutnya
+  // tetap terblokir. Gagal decode JWT -> fail-open (isRecoverySession
+  // false, jalur normal tetap jalan).
+  // Lapis kedua (item 9): cek amr. Sesi yang amr-nya ada tetapi tanpa
+  // method password (recoveryAmrHasPassword false) juga diblokir, untuk
+  // menangkap sesi recovery yang tidak tertandai di daftar blokir
+  // (mis. yang sudah bocor sebelum ronde ini). amr=otp untuk sesi
+  // recovery asli adalah hipotesis, belum terbukti live.
+  if (session && !S.session && (isRecoverySession(session) || recoveryAmrHasPassword(session) === false)) {
+    showAuth();
     return;
   }
   // R9-1: putuskan navigasi DI AWAL (sebelum await) + hanya untuk login yang
@@ -5860,6 +6021,14 @@ if (isVerifyPath()) {
     try {
       let session = null;
       if (recovery.kind === 'hash') {
+        // Ronde 66: tandai id sesi DARI TOKEN DI URL, SEBELUM setSession
+        // menulis sesi ke localStorage. Bila ditandai sesudah setSession,
+        // tab lain bisa memproses storage event lebih dulu: harness
+        // membuktikan tab lain layarnya tetap login tetapi S.session
+        // mereka terlanjur terisi sesi recovery (balapan mark vs event).
+        // Menandai dulu menutup balapan itu: saat tab lain melihat sesi
+        // ini, id-nya sudah ada di daftar blokir.
+        markRecoverySession({ access_token: recovery.access_token });
         const { session: s } = await withTimeout(api.setSession({ access_token: recovery.access_token, refresh_token: recovery.refresh_token }), 10000);
         session = s;
       } else if (recovery.kind === 'pkce') {
@@ -5867,6 +6036,9 @@ if (isVerifyPath()) {
         session = s;
       }
       // kind 'invalid' -> session tetap null (link tidak valid).
+      // Ronde 66: tandai sesi recovery supaya tab lain tidak ikut masuk
+      // aplikasi lewat sesi yang dibagi localStorage ini.
+      if (session) markRecoverySession(session);
       enterRecovery(session, recovery.kind === 'pkce' ? { dropQuery: true } : undefined);
     } catch (e) {
       console.error('init recovery', e);
