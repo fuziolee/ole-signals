@@ -23,7 +23,7 @@ File acuan per fungsi (per Ronde 61): `create_signal` + `update_signal` →
 **28**; `cancel_signal` → **03**; `mark_signal_shared` → **15**;
 `setup_trader_identity` → **13**; `settle_signals` + `recalc_trader_progress`
 → **18**; `reset_trader_stats` → **23**; `signal_locked_for` +
-`signal_owned_by` + `guard_copy_locked` + view `signals_public` → **30**.
+`signal_owned_by` + `guard_copy_locked` + view `signals_public` → **30**; `guard_follow_requires_username` → **32**.
 
 | File | Isi |
 |---|---|
@@ -61,6 +61,7 @@ File acuan per fungsi (per Ronde 61): `create_signal` + `update_signal` →
 | `30_r61_paywall.sql` | **Ronde 61 (D1 — T-2): paywall sinyal L5+ ditutup DI SERVER.** View `signals_public` (`security_invoker = false`, satu-satunya jalur baca sinyal klien) me-NULL-kan entry/SL/TP/lot/entry_type bila sinyal terkunci bagi pembaca; CANCELLED disembunyikan kecuali milik sendiri (sama seperti policy lama). Helper `signal_locked_for(trader_id, status)` (SECURITY DEFINER, tanpa parameter pembaca — baca `auth.uid()` sendiri, bukan oracle) adalah SATU definisi predikat terkunci (cermin `isLockedForMe` di app.js); `signal_owned_by` (SECURITY DEFINER) untuk policy copies; trigger `guard_copy_locked` menolak INSERT copies atas sinyal terkunci (42501). `revoke select on signals from anon, authenticated` + `grant select on signals_public`. **TIDAK berisi salinan `create_signal`/`update_signal`** — perbaikan T-2 hanya view/policy/grant. **TERAPKAN SETELAH 28, SEBELUM deploy frontend Ronde 61** (frontend Ronde 61 membaca `signals_public`, bukan `signals`). |
 | `tests/31_r61_tests.sql` | **Ronde 61 (tes saja, bukan migrasi):** matriks redaksi view (anon/orang asing/pelanggan/pemilik × terkunci/tidak terkunci/WIN/CANCELLED), helper bukan oracle, trigger salinan terkunci, policy copies (pemilik trader bisa baca salinan sinyalnya), regresi gerbang harga L5 (termasuk uji anti-reset harga→NULL→harga dengan trader L5 buatan), cek grant/revoke, uji konkurensi T-08 (skrip terpisah `tests/r61_concurrency.sh`). Pola 04/19/24 (tabel temp `test_results`). Jalankan di scratch SETELAH rantai + 30. **JANGAN jalankan di live** — SETUP memakai UUID uji + harga tetap. |
 | `31_fetch_gold_1min.sql` | **Ronde 65 (jadwal):** pg_cron `fetch-gold-1min` (`* * * * *`) → `net.http_post` ke Edge Function `fetch-gold` dengan anon key. HANYA emas (XAUS); forex tetap job `fetch-prices-15min` (sql/20, TIDAK disentuh). **TERAPKAN SETELAH deploy Edge Function fetch-gold.** Ganti placeholder `<ANON_KEY>` dengan anon key dari `js/config.js` sebelum menjalankan. Catatan: tiap putaran settle menulis 1 baris ke `settlement_runs` (tanpa retensi, sql/18). Jalur ini menambah ~43.200 baris/bulan. |
+| `32_r69_follow_requires_username.sql` | **Ronde 69:** trigger `guard_follow_requires_username` — BEFORE INSERT pada `follows`, menolak (42501) bila follower tidak punya username di `profiles` (SECURITY DEFINER, pola `guard_copy_locked` sql/30). Grandfathered: baris follows yang sudah ada tidak disentuh; unfollow (DELETE) tidak digerbankan; subscribe tidak digerbankan ronde ini. **TERAPKAN SETELAH 30, SEBELUM deploy frontend Ronde 69.** |
 
 ## Cara pakai (Supabase SQL Editor)
 
