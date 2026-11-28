@@ -1,0 +1,21 @@
+-- Ronde 70: nama tampilan trader = username trader (keputusan user
+-- 2026-11-28 13:48 WIB, membalikkan keputusan koordinator Ronde 68).
+--
+-- Ronde 68 mengirim nama profil sebagai trader_display_name saat
+-- identitas trader dibuat; itu salah. Frontend Ronde 70 mengirim
+-- username sebagai display_name di jalur buat maupun jalur ubah
+-- username trader (js/app.js bindUsernameForm kind='trader' +
+-- openAcctEdit kind='trader'). Migrasi ini menyamakan 4 baris trader
+-- lama yang display name-nya masih nama profil: akun tes @trader_tes
+-- ("Trader Tester") + 3 demo (@demo_alpha/@demo_beta/@demo_gamma).
+--
+-- Aturan berlaku untuk semua trader (tanpa WHERE): display name
+-- mengikuti username, bukan nama profil. Idempotent (rerun tidak
+-- mengubah apa pun). Tidak menyentuh data lain (sinyal, salinan,
+-- follow, langganan, progres, saldo).
+--
+-- TERAPKAN SEBELUM deploy frontend Ronde 70 (frontend baru yang jalan
+-- sebelum migrasi ini tetap berfungsi; yang belum disamakan hanya
+-- 4 baris lama).
+
+update public.traders set trader_display_name = username;
