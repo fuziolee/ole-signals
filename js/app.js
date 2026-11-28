@@ -2102,22 +2102,27 @@ async function copySignalText(id) {
     + `R:R 1:${rr !== null ? ds(rr.toFixed(2)) : '—'}\n`
     + t('copyRLine', { r: t('copyNotDone') });
   try { await navigator.clipboard.writeText(text); } catch (e) { /* clipboard tidak tersedia — salinan tetap dicatat */ }
-  // Catat salinan (lot sinyal sumber); abaikan bila sudah tercatat.
+  // Catat salinan lewat RPC copy_signal (Ronde 73); duplikat idempoten
+  // (duplicate: true) dicatat server, bukan pelanggaran unique 23505.
   let already = S.copiedIds.has(id);
   if (!already) {
     try {
-      const row = await api.copySignal(S.user.id, id, Number(sig.lot_size));
-      S.myCopies.unshift({ id: row.id, signal_id: id, lot_size: Number(sig.lot_size), status: 'copied', created_at: new Date().toISOString(), signals: sig });
-      S.copiedIds.add(id);
-    } catch (e) {
-      // 23505 = unique violation → sudah disalin sebelumnya.
-      if (String(e?.message || '').includes('23505') || String(e?.code || '') === '23505') {
+      const res = await api.copySignal(S.user.id, id, Number(sig.lot_size));
+      if (!res.ok) {
+        if (res.code === 'locked') { toast(lockedDescFor(sig.trader_id), true); return false; }
+        toast(rpcErrorMessage(res), true);
+        return false;
+      }
+      if (res.duplicate) {
         already = true;
         S.copiedIds.add(id);
       } else {
-        toast(t('errNetwork'), true);
-        return false;
+        S.myCopies.unshift({ id: res.id, signal_id: id, lot_size: Number(sig.lot_size), status: 'copied', created_at: new Date().toISOString(), signals: sig });
+        S.copiedIds.add(id);
       }
+    } catch (e) {
+      toast(t('errNetwork'), true);
+      return false;
     }
   }
   toast(t('toastCopied', { pair: sig.pair }) + (already ? t('toastCopiedAlready') : t('toastCopiedNew')));

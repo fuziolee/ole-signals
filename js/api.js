@@ -474,16 +474,17 @@ export async function uncopy(copyId) {
   if (error) throw error;
 }
 
-// Catat salinan sinyal follower (B2-01). Lot = lot sinyal sumber (prototipe).
-// unique (follower_id, signal_id) mencegah salinan ganda di DB.
+// Catat salinan sinyal follower (B2-01, Ronde 73: RPC copy_signal sql/35).
+// Insert langsung ke copies dicabut server (revoke), satu-satunya jalan
+// tulis adalah RPC SECURITY DEFINER yang memakai auth.uid(), jadi userId
+// di sini hanya dipertahankan supaya tanda tangan pemanggil tidak berubah.
+// Jawaban RPC: {ok, code, duplicate, copy, message}. Kembalikan objek copy
+// bentuk {id, ...} seperti sebelumnya + teruskan ok/code/duplicate/message.
 export async function copySignal(userId, signalId, lotSize) {
-  const { data, error } = await supabase
-    .from('copies')
-    .insert({ follower_id: userId, signal_id: signalId, lot_size: lotSize })
-    .select('id')
-    .single();
+  const { data, error } = await supabase.rpc('copy_signal', { p_signal_id: signalId, p_lot: lotSize });
   if (error) throw error;
-  return data;
+  const res = data || {};
+  return { ...(res.copy || {}), ok: res.ok, code: res.code, duplicate: !!res.duplicate, message: res.message };
 }
 
 // ----------------------------------------------------------------- harga ---
