@@ -719,6 +719,8 @@ table.board td.num, table.board th.num { text-align: right; }
 
 /* Subcard + baris menu (Profil / Pengaturan) */
 .subcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px 20px; margin-bottom: 12px; }
+/* Ronde 68 (Arah C): kartu identitas Trader sempit di tengah. */
+.narrow-card { max-width: 520px; margin-left: auto; margin-right: auto; }
 .subcard h3 { font-size: 16px; margin: 10px 0 6px; }
 .subcard p { color: var(--muted); font-size: 13.5px; margin: 0 0 10px; }
 .menurow {
