@@ -336,11 +336,17 @@ export async function listMySubscriptions(userId) {
 }
 
 // ---------------------------------------------------------- notifikasi ---
+// R81: lonceng hanya menampilkan notifikasi 30 hari terakhir (TAMPILAN saja;
+// baris lama tetap tersimpan di database, tidak dihapus). Badge dihitung dari
+// daftar yang sama (S.notifs), jadi ikut jendela ini. Batas 20 terbaru tetap.
+const NOTIF_WINDOW_DAYS = 30;
 export async function listMyNotifications(userId, limit = 20) {
+  const cutoff = new Date(Date.now() - NOTIF_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from('notifications')
     .select('id, type, title, message, signal_id, is_read, created_at')
     .eq('user_id', userId)
+    .gte('created_at', cutoff)
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
