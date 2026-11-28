@@ -4444,7 +4444,19 @@ function usernameCanSubmit(kind) {
   const cur = kind === 'trader' ? (S.trader?.username || '') : (S.profile?.username || '');
   return (ui.draft || '') !== cur;
 }
-function usernameFormHtml(kind) {
+// Ronde 68 (Arah C): cek format username client-side untuk centang
+// aturan (cermin regex server sql/13:
+// ^[A-Za-z0-9_][A-Za-z0-9_.]{2,29}$). len = panjang 3-30; chars =
+// karakter diizinkan + tanpa titik di awal. Kedua centang hijau berarti
+// lolos cek format server. Draft kosong = kedua centang netral.
+function usernameFormatChecks(v) {
+  const s = String(v || '');
+  return {
+    len: s.length >= 3 && s.length <= 30,
+    chars: /^[A-Za-z0-9_][A-Za-z0-9_.]*$/.test(s),
+  };
+}
+function usernameFormHtml(kind, opts = {}) {
   const ui = S.usernameUI[kind];
   const isTrader = kind === 'trader';
   const set = isTrader ? !!S.trader : !!(S.profile && S.profile.username);
@@ -4453,13 +4465,22 @@ function usernameFormHtml(kind) {
   const warn = isTrader ? t('usernameWarnTrader') : t('usernameWarnFollower');
   // R28: peringatan "wajib dibuat" hanya bila username BELUM ada. Bila
   // sudah ada (form ubah), peringatan itu sudah tidak berlaku.
-  const note = set ? '' : `<div class="risk-note"><span>${esc(warn)}</span></div>`;
+  // Ronde 68: cabang kosong Trader (Arah C) menyembunyikan peringatan ini
+  // (opts.hideWarn), karena warnbar di atas sudah menyatakan syarat sekali;
+  // tanpa pengulangan.
+  const note = (set || opts.hideWarn) ? '' : `<div class="risk-note"><span>${esc(warn)}</span></div>`;
   if (ui.pending) {
     return note + `<p class="lead-sm"><b>@${esc(ui.pending)}</b> — ${esc(set ? t('usernameChangeTo') : t('usernameSetTo'))}</p>`
       + `<div class="detail-actions"><button type="button" class="btn primary" data-uconfirm="${kind}">${esc(set ? t('usernameYesChange') : t('usernameYesSet'))}</button><button type="button" class="btn" data-uback="${kind}">${esc(t('back'))}</button></div>`;
   }
   const st = usernameStatusMsg(ui.res);
-  return note + `<form class="wal-panel" data-username-form="${kind}" novalidate><div class="field"><label for="uname-${kind}">${esc(isTrader ? t('usernameTraderLbl') : t('usernameFollowerLbl'))}</label><input id="uname-${kind}" data-username-input="${kind}" maxlength="30" autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(ui.draft || '')}"><div class="hint">${esc(t('usernameHint'))}</div><div class="hint${st.cls ? ' ' + st.cls : ''}" data-username-status="${kind}">${esc(st.txt)}</div></div>`
+  // Ronde 68 (Arah C): baris hint diganti dua centang aturan format
+  // (pola .pw-rules form reset R63); baris status server tetap ada.
+  const fc = usernameFormatChecks(ui.draft || '');
+  const rules = opts.checks
+    ? `<ul class="pw-rules"><li data-uname-rule="len"${fc.len ? ' class="ok"' : ''}><span class="rule-dot"></span><span>${esc(t('usernameRuleLen'))}</span></li><li data-uname-rule="chars"${fc.chars ? ' class="ok"' : ''}><span class="rule-dot"></span><span>${esc(t('usernameRuleChars'))}</span></li></ul>`
+    : `<div class="hint">${esc(t('usernameHint'))}</div>`;
+  return note + `<form class="wal-panel" data-username-form="${kind}" novalidate><div class="field"><label for="uname-${kind}">${esc(isTrader ? t('usernameTraderLbl') : t('usernameFollowerLbl'))}</label><input id="uname-${kind}" data-username-input="${kind}" maxlength="30" autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(ui.draft || '')}">${rules}<div class="hint${st.cls ? ' ' + st.cls : ''}" data-username-status="${kind}">${esc(st.txt)}</div></div>`
     + `<div class="form-err" data-username-err="${kind}" role="alert"></div><div class="detail-actions"><button type="submit" class="btn primary" data-username-submit="${kind}"${usernameCanSubmit(kind) ? '' : ' disabled'}>${esc(set ? t('usernameChangeBtn') : t('usernameCreateBtn'))}</button></div></form>`;
 }
 function paintUsernameStatus(kind, root = document) {
@@ -4473,6 +4494,14 @@ function paintUsernameStatus(kind, root = document) {
   }
   const b = root.querySelector(`[data-username-submit="${kind}"]`);
   if (b) b.disabled = !usernameCanSubmit(kind);
+  // Ronde 68 (Arah C): perbarui centang aturan format dari draft
+  // (client-side, tanpa menunggu cek server). No-op bila form ini tidak
+  // punya baris centang (alur lain: Akun, follower).
+  const fc = usernameFormatChecks(ui.draft || '');
+  const lenEl = root.querySelector('[data-uname-rule="len"]');
+  if (lenEl) lenEl.classList.toggle('ok', fc.len);
+  const chEl = root.querySelector('[data-uname-rule="chars"]');
+  if (chEl) chEl.classList.toggle('ok', fc.chars);
 }
 function bindUsernameForm(root, kind, onDone) {
   const ui = S.usernameUI[kind];
@@ -4539,8 +4568,14 @@ function bindUsernameForm(root, kind, onDone) {
       try {
         let res;
         if (kind === 'trader') {
+          // Ronde 68 (Arah C): field nama tampilan dihapus dari halaman
+          // Trader (user 2026-11-28: ubah nama sudah ada di menu Akun).
+          // Display name yang dikirim = nama profil saat ini, fallback
+          // username bila kosong. TANPA perubahan server.
+          // BUTIR TERBUKA: apakah ubah nama profil di Akun harus ikut
+          // mengubah display name trader? Belum diputuskan user.
           const displayName = S.trader?.trader_display_name
-            || document.querySelector('#id-display')?.value?.trim()
+            || S.profile?.display_name?.trim()
             || value;
           res = await api.setupTraderIdentity(value, displayName);
         } else {
@@ -4579,14 +4614,16 @@ async function renderTraderWork() {
   if (!body) return;
   if (!S.trader) {
     // D04: belum ada identitas trader — tampilkan banner + form penyiapan
-    // (nama tampilan + username, komponen D05).
+    // username (komponen D05). Ronde 68 (Arah C): kartu sempit di tengah,
+    // hanya field username. Field nama tampilan dihapus (ubah nama sudah
+    // ada di menu Akun) dan banner merah muda dihapus (warnbar di atas
+    // sudah menyatakan syarat sekali).
     body.innerHTML = `<div class="warnbar" role="alert">${esc(t('officeNeedUsernameBanner'))}</div>`
-      + `<div class="subcard" style="margin-top:14px;"><h3>${esc(t('officeIdentityTitle'))}</h3>`
+      + `<div class="subcard narrow-card" style="margin-top:14px;"><h3>${esc(t('officeIdentityTitle'))}</h3>`
       // R11/D3: pembungkus LUAR sengaja <div>, bukan <form> — usernameFormHtml
       // me-render <form> sendiri; form bersarang dibuang parser HTML sehingga
       // tombol "Buat username" dulu mati (submit native ke /?).
-      + `<div><div class="field"><label for="id-display">${esc(t('traderNameLbl'))}</label><input id="id-display" maxlength="60" autocomplete="off" value=""></div>`
-      + `<div id="id-username-wrap">${usernameFormHtml('trader')}</div></div></div>`;
+      + `<div id="id-username-wrap">${usernameFormHtml('trader', { hideWarn: true, checks: true })}</div></div>`;
     bindUsernameForm(body, 'trader', () => renderTraderWork());
     return;
   }
