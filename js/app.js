@@ -399,7 +399,7 @@ function isSubscribedTo(traderId) {
 function isLockedForMe(sig) {
   if (!sig) return false;
   if (S.user && sig.trader_id === S.user.id) return false; // sinyal sendiri
-  if (sig.status === 'WIN' || sig.status === 'LOSS') return false;
+  if (sig.status !== 'PENDING' && sig.status !== 'AKTIF') return false; // Ronde 77: hanya PENDING/AKTIF yang bisa terkunci (cermin signal_locked_for sql/30)
   if (levelOfSignal(sig) < PAY_GATE_LEVEL) return false;
   const price = subPriceOfTrader(sig.trader_id);
   if (price === null) return false; // harga belum diketahui — jangan kunci

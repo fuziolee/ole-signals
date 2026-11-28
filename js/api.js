@@ -127,6 +127,7 @@ export async function listPublicSignals(limit = 50) {
     .from('signals_public')
     .select(signalSelect())
     .neq('status', 'CANCELLED')
+    .neq('status', 'EXPIRED')
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -149,6 +150,7 @@ export async function listTraderSignals(traderId, limit = 50) {
     .select(signalSelect())
     .eq('trader_id', traderId)
     .neq('status', 'CANCELLED')
+    .neq('status', 'EXPIRED')
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -257,6 +259,7 @@ export async function listAllSignals(limit = 500) {
     // ada paparan baru.
     .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, entry_type, status, version, shared_at, created_at, expires_at, activated_at, closed_at, close_price, profit_usd, profit_pips, r_value, holding_minutes, traders(username, trader_display_name, trader_avatar_url, subscription_price_usd, trader_progress(level, balance_usd))')
     .neq('status', 'CANCELLED')
+    .neq('status', 'EXPIRED')
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
