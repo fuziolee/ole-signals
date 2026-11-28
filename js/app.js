@@ -1159,6 +1159,11 @@ $('#auth-form').addEventListener('submit', async (e) => {
   const btnLabel = btn.textContent;
   btn.disabled = true;
   btn.textContent = t('loading') + '…';
+  // R82: masuk BERHASIL = sesi sudah di tangan (data.session); tombol
+  // JANGAN diaktifkan lagi di finally, rantai handleSession masih
+  // berjalan dan form akan diganti showApp. Mengaktifkan lagi mengundang
+  // submit kedua yang terasa seperti "klik pertama tidak jalan".
+  let authed = false;
   try {
     if (S.authMode === 'signup') {
       if (!passwordValid(password)) {
@@ -1172,13 +1177,15 @@ $('#auth-form').addEventListener('submit', async (e) => {
         return;
       }
       const data = await api.signUp(email, password);
-      if (!data.session) {
+      if (data.session) authed = true;
+      else {
         noteBox.textContent = t('authCheckEmail');
         noteBox.hidden = false;
       }
       // Bila ada sesi langsung, onAuthStateChange yang mengurus sisanya.
     } else {
-      await api.signIn(email, password);
+      const data = await api.signIn(email, password);
+      if (data && data.session) authed = true;
     }
   } catch (err) {
     errBox.textContent = authErrorMessage(err);
@@ -1191,12 +1198,17 @@ $('#auth-form').addEventListener('submit', async (e) => {
       writeBackoff('login', email, { attempts, nextAllowedAt: Date.now() + lockSeconds(LOGIN_LADDER, attempts) * 1000, lastAt: Date.now() });
     }
   } finally {
-    btn.disabled = false;
-    btn.textContent = btnLabel;
+    // R82: hanya aktifkan lagi bila TIDAK ada sesi (gagal / daftar
+    // tanpa sesi). Masuk berhasil = tetap nonaktif "Memuat…" sampai
+    // showApp mengganti form.
+    if (!authed) {
+      btn.disabled = false;
+      btn.textContent = btnLabel;
+    }
   }
   // Ronde 63 (amandemen): kunci (bila ada) diterapkan SETELAH finally
-  // mengembalikan tombol.
-  if (S.authMode === 'login') refreshLoginLock();
+  // mengembalikan tombol. R82: lewati bila sudah masuk (authed).
+  if (S.authMode === 'login' && !authed) refreshLoginLock();
 });
 
 // --------------------------- backoff bertingkat (Ronde 63 amandemen) -----
