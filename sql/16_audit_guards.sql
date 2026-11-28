@@ -102,20 +102,19 @@
 -- 7. Trigger ini TIDAK menyentuh updated_at — itu urusan trigger
 --    set_updated_at (01) yang juga berjalan di UPDATE.
 --
--- PERINGATAN — AMBIGUITAS USD vs IDR (SUDAH ADA, diputuskan di FASE
--- PEMBAYARAN, bukan ronde ini):
+-- PERINGATAN: AMBIGUITAS USD vs IDR (DIPUTUSKAN RONDE 75, 2026-11-28):
 -- Kolom bernama `subscription_price_usd` (USD), sedangkan aturan produk
--- menyebut rentang harga langganan dalam IDR (Rp100.000–Rp10.000.000,
+-- menyebut rentang harga langganan dalam IDR (Rp100.000-Rp10.000.000,
 -- kurs tetap Rp16.000/$). Trigger di file ini memakai batas USD
--- 6.25–625 (= Rp100.000–Rp10.000.000 / 16.000). NAMUN display frontend
--- (`fmtIdr` di js/app.js) menampilkan nilai mentah kolom ini sebagai
--- "Rp" TANPA konversi (Rp + angka mentah) — bila kolom berisi USD,
--- tampilannya salah 16000x (mis. $6.25 tampil "Rp6", $625 tampil
--- "Rp625"). Ini inkonsistensi display/penyimpanan yang SUDAH ADA dan
--- belum berdampak karena harga belum pernah diisi (semua NULL hari
--- ini). JANGAN ubah display dan JANGAN ubah nama kolom di ronde ini —
--- diputuskan di fase pembayaran (apakah kolom diisi IDR, atau display
--- dikonversi USD->IDR, atau keduanya).
+-- 6.25-625 (= Rp100.000-Rp10.000.000 / 16.000). Display frontend
+-- mengonversi USD ke IDR (helper fmtIdrUsd di js/app.js, Ronde 75),
+-- jadi $15,63 tampil "Rp250.080/bln" dan $6,25 tampil "Rp100.000/bln".
+-- Kolom TETAP USD dan trigger TIDAK berubah. Catatan lama bahwa display
+-- salah 16000x sudah tidak berlaku sejak Ronde 75; cacat itu terlihat
+-- live di Ronde 74 (Gamma L5 berharga pertama, tampil "Rp16/bln")
+-- dan diperbaiki Ronde 75. JANGAN ubah nama kolom di ronde ini.
+-- Komentar ini diubah Ronde 75; tidak ada pernyataan SQL yang berubah
+-- di file ini, jadi file ini TIDAK perlu dijalankan ulang di SQL Editor.
 --
 -- Idempotent (CREATE OR REPLACE + DROP TRIGGER IF EXISTS). TIDAK ADA
 -- kunci, password, atau rahasia apa pun di file ini.
