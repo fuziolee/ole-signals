@@ -5,6 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
   <meta name="description" content="OLE Signals — marketplace sinyal forex. Trader memposting sinyal, follower menyalin manual di broker masing-masing." />
+  <!-- R86: Open Graph (preview kartu saat link ditempel di sosmed/chat).
+       Hanya metadata pasif: tidak memposting, tidak membuka dialog share.
+       Gambar statis situs (assets/og-image.png, 1200x630); per-trader
+       dinamis butuh server-side dan belum dibangun. Unduh kartu tetap ada. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="OLE Signals" />
+  <meta property="og:title" content="OLE Signals - Marketplace Sinyal Forex" />
+  <meta property="og:description" content="OLE Signals - marketplace sinyal forex. Trader memposting sinyal, follower menyalin manual di broker masing-masing." />
+  <meta property="og:url" content="https://olesignals.onrender.com/" />
+  <meta property="og:image" content="https://olesignals.onrender.com/assets/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="OLE Signals - Marketplace Sinyal Forex" />
+  <meta name="twitter:description" content="OLE Signals - marketplace sinyal forex. Trader memposting sinyal, follower menyalin manual di broker masing-masing." />
+  <meta name="twitter:image" content="https://olesignals.onrender.com/assets/og-image.png" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2338BDF8'/%3E%3Cpath d='M7 21l6-7 4 4 8-10' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
   <title>OLE Signals</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -13,7 +29,7 @@
   <!-- R52/R61/R63/R64/R65: ?v=NN di-bump tiap ronde supaya CDN/browser tidak menyajikan
        bundle lama ≤5 menit setelah deploy (header live s-maxage=300).
        Bila lupa bump, kegagalan jinak: kembali ke jendela 5 menit. -->
-  <link rel="stylesheet" href="/css/style.css?v=78" />
+  <link rel="stylesheet" href="/css/style.css?v=79" />
 </head>
 <body>
   <div id="boot-splash" role="status" aria-live="polite">
@@ -252,6 +268,6 @@
   <div id="toasts" aria-live="polite"></div>
 
   <script src="/js/qrcode.js"></script>
-  <script type="module" src="/js/app.js?v=78"></script>
+  <script type="module" src="/js/app.js?v=79"></script>
 </body>
 </html>
