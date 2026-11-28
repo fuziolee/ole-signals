@@ -4630,13 +4630,9 @@ function bindUsernameForm(root, kind, onDone) {
         if (kind === 'trader') {
           // Ronde 68 (Arah C): field nama tampilan dihapus dari halaman
           // Trader (user 2026-11-28: ubah nama sudah ada di menu Akun).
-          // Display name yang dikirim = nama profil saat ini, fallback
-          // username bila kosong. TANPA perubahan server.
-          // BUTIR TERBUKA: apakah ubah nama profil di Akun harus ikut
-          // mengubah display name trader? Belum diputuskan user.
-          const displayName = S.trader?.trader_display_name
-            || S.profile?.display_name?.trim()
-            || value;
+          // Ronde 70 (user 2026-11-28): nama tampilan trader = username
+          // trader, BUKAN nama profil. TANPA perubahan server.
+          const displayName = value;
           res = await api.setupTraderIdentity(value, displayName);
         } else {
           res = await api.setFollowerUsername(value);
@@ -5513,7 +5509,9 @@ function bindAcctUsernameEdit(root, kind, inCooldown) {
         }
         const value = r.value || ui.draft;
         let res;
-        if (kind === 'trader') res = await api.setupTraderIdentity(value, S.trader.trader_display_name || value);
+        // Ronde 70: ubah username trader ikut mengubah display name
+        // (nama tampilan trader = username trader, bukan nama profil).
+        if (kind === 'trader') res = await api.setupTraderIdentity(value, value);
         else res = await api.setFollowerUsername(value);
         if (!res.ok) {
           if (errBox) errBox.textContent = (res && res.message) || rpcErrorMessage(res) || t('errNetwork');
