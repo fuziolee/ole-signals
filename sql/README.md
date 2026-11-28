@@ -19,8 +19,9 @@ TIDAK BOLEH diterapkan ulang setelah 28). File tes scratch (bukan
 migrasi) tinggal di `sql/tests/` — jangan jalankan di live apa adanya.
 File bertanda **SUPERSEDED** arsip saja, jangan diterapkan.
 
-File acuan per fungsi (per Ronde 61): `create_signal` + `update_signal` →
-**28**; `cancel_signal` → **03**; `mark_signal_shared` → **15**;
+File acuan per fungsi (per Ronde 61, diperbarui Ronde 72): `create_signal` →
+**28**; `update_signal` → **34** (Ronde 72; 34 menggantikan update_signal
+dari 28, create_signal tetap dari 28); `cancel_signal` → **03**; `mark_signal_shared` → **15**;
 `setup_trader_identity` → **13**; `settle_signals` + `recalc_trader_progress`
 → **18**; `reset_trader_stats` → **23**; `signal_locked_for` +
 `signal_owned_by` + `guard_copy_locked` + view `signals_public` → **30**; `guard_follow_requires_username` → **32**.
@@ -63,6 +64,7 @@ File acuan per fungsi (per Ronde 61): `create_signal` + `update_signal` →
 | `31_fetch_gold_1min.sql` | **Ronde 65 (jadwal):** pg_cron `fetch-gold-1min` (`* * * * *`) → `net.http_post` ke Edge Function `fetch-gold` dengan anon key. HANYA emas (XAUS); forex tetap job `fetch-prices-15min` (sql/20, TIDAK disentuh). **TERAPKAN SETELAH deploy Edge Function fetch-gold.** Ganti placeholder `<ANON_KEY>` dengan anon key dari `js/config.js` sebelum menjalankan. Catatan: tiap putaran settle menulis 1 baris ke `settlement_runs` (tanpa retensi, sql/18). Jalur ini menambah ~43.200 baris/bulan. |
 | `32_r69_follow_requires_username.sql` | **Ronde 69:** trigger `guard_follow_requires_username` — BEFORE INSERT pada `follows`, menolak (42501) bila follower tidak punya username di `profiles` (SECURITY DEFINER, pola `guard_copy_locked` sql/30). Grandfathered: baris follows yang sudah ada tidak disentuh; unfollow (DELETE) tidak digerbankan; subscribe tidak digerbankan ronde ini. **TERAPKAN SETELAH 30, SEBELUM deploy frontend Ronde 69.** |
 | `33_r70_trader_display_name_username.sql` | **Ronde 70 (keputusan user 2026-11-28 13:48 WIB):** `update public.traders set trader_display_name = username`, nama tampilan trader = username trader, BUKAN nama profil (membalikkan keputusan koordinator R68 yang mengirim nama profil saat submit). Idempotent, tanpa WHERE (berlaku semua trader); menyamakan 4 baris lama (akun tes @trader_tes + 3 demo). Frontend Ronde 70 mengirim username sebagai display_name di jalur buat + ubah username trader. **TERAPKAN SEBELUM deploy frontend Ronde 70.** |
+| `34_r72_update_signal_needusername.sql` | **Ronde 72 (temuan S12-MAP-E-19, diperintahkan user 2026-11-28 15:00 WIB):** `update_signal` SAJA: body disalin dari **28** + cek identitas trader SEBELUM `lock_trader_progress`, cermin `create_signal` langkah 1; bila baris `traders` tidak ada, kembalikan kode `'needusername'` (sebelumnya: `lock_trader_progress` INSERT ke `trader_progress` gagal FK → eksepsi Postgres mentah tanpa kode, klien terima galat 500). `create_signal` TIDAK disentuh (tetap versi 28). **34 menggantikan update_signal dari 28.** **TERAPKAN SEBELUM deploy frontend Ronde 72 (tidak ada perubahan frontend ronde ini).** |
 
 ## Cara pakai (Supabase SQL Editor)
 
