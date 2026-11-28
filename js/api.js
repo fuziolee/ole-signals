@@ -251,7 +251,11 @@ export async function listAllSignals(limit = 500) {
     .from('signals_public')
     // B4-01: join traders agar halaman verifikasi /v/ bisa menampilkan
     // @username + level trader (sebelumnya S.traders kosong di jalur /v/).
-    .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, entry_type, status, version, shared_at, created_at, expires_at, activated_at, closed_at, close_price, profit_usd, profit_pips, r_value, holding_minutes, traders(username, trader_display_name, trader_avatar_url, trader_progress(level, balance_usd))')
+    // Ronde 76: subscription_price_usd ditambahkan ke embed agar /v/
+    // bisa menampilkan deskripsi terkunci dengan harga yang benar.
+    // Kolom ini sudah bisa dibaca anon lewat listTraders, jadi tidak
+    // ada paparan baru.
+    .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, entry_type, status, version, shared_at, created_at, expires_at, activated_at, closed_at, close_price, profit_usd, profit_pips, r_value, holding_minutes, traders(username, trader_display_name, trader_avatar_url, subscription_price_usd, trader_progress(level, balance_usd))')
     .neq('status', 'CANCELLED')
     .order('created_at', { ascending: false })
     .limit(limit);

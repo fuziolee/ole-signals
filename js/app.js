@@ -416,8 +416,10 @@ function isLockedOrHidden(sig) {
   return !!sig && sig.entry == null
     && (sig.status === 'PENDING' || sig.status === 'AKTIF');
 }
-function lockedDescFor(traderId) {
-  const price = subPriceOfTrader(traderId);
+function lockedDescFor(traderId, priceOverride) {
+  // Ronde 76: priceOverride dipakai jalur /v/, karena S.traders tidak
+  // dimuat di sana; harga diambil dari embed traders sinyal itu.
+  const price = (priceOverride !== undefined && priceOverride !== null) ? priceOverride : subPriceOfTrader(traderId);
   return t('lockedSignalDesc', { price: price ? fmtIdrUsd(price) + t('perMonth') : t('profFree') });
 }
 // D08: tombol Ikuti / Langganan (struktur prototipe). Ikuti = Fase 5 dan
@@ -657,7 +659,9 @@ function statsForTrader(traderId) {
 }
 function topPairOf(traderId) {
   const counts = {};
-  for (const s of signalsOfTrader(traderId)) counts[s.pair] = (counts[s.pair] || 0) + 1;
+  // Ronde 76: sinyal terkunci tidak dihitung, supaya filter topPair
+  // tidak mengungkapkan pair yang diperdagangkan trader L5 berbayar.
+  for (const s of signalsOfTrader(traderId)) { if (isLockedOrHidden(s)) continue; counts[s.pair] = (counts[s.pair] || 0) + 1; }
   let best = null;
   let bestN = 0;
   for (const [pair, n] of Object.entries(counts)) {
@@ -3342,6 +3346,33 @@ export function fmtDateShort(iso) {
 // {lot}", baris 2 timeline tanggal absolut (Diposting / Entry tersentuh /
 // TP-SL tersentuh).
 function journalRowHtml(sig, opts = {}) {
+  // Ronde 76: salinan sinyal TERKUNCI dirender sebagai baris terkunci
+  // (perlakuan D02), bukan baris jurnal biasa. Baris biasa menampilkan
+  // pair + arah + status dari view (signals_public tidak meredaksi
+  // pair/direction). Baris salinan tetap ada (copies tidak dihapus);
+  // tombol Detail membuka overlay D02 yang juga terkunci; tombol hapus
+  // tetap seperti sekarang (PENDING bisa dihapus, AKTIF nonaktif).
+  // Untuk sinyal sendiri dan WIN/LOSS, isLockedOrHidden selalu false.
+  if (isLockedOrHidden(sig)) {
+    const traderName = opts.showTrader ? esc(traderHandle(traderOf(sig))) + ' · ' : '';
+    // Baris terkunci tidak memakai kunci jrnlCopiedAgo/myJrnlPosted (keduanya
+    // menyertakan lot yang teredaksi); cukup status salinan + waktu relatif.
+    const postedTxt = opts.isCopy
+      ? t('copied') + ' · ' + fmtRel(opts.copyCreatedAt || sig.created_at)
+      : fmtRel(sig.created_at);
+    let extraBtns = '';
+    if (opts.isCopy && opts.copyId) {
+      if (sig.status === 'AKTIF') {
+        extraBtns += `<button class="iconbtn" type="button" disabled title="${esc(t('jrnlNoDeleteActive'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.trash}</button>`;
+      } else {
+        extraBtns += `<button class="iconbtn trashbtn" type="button" data-uncopy="${esc(opts.copyId)}" aria-label="${esc(t('uncopyBtn'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.trash}</button>`;
+      }
+    }
+    return `<div class="hist-row"><span style="color:var(--muted)">${traderName}${esc(postedTxt)}</span>`
+      + `<span style="margin-left:auto;display:flex;gap:8px;align-items:center;"><button class="btn" type="button" data-jdetail="${esc(sig.id)}" style="min-height:34px;padding:6px 12px;font-size:12.5px;">${esc(t('sigDetail'))}</button>${subscribeBtnHtml(sig.trader_id)}${extraBtns}</span>`
+      + `<div class="locked-body" style="flex-basis:100%;margin-top:8px;"><span aria-hidden="true">${ICONS.lock}</span><div><div class="lt">${esc(t('lockedTitle'))}</div><div class="ld">${esc(lockedDescFor(sig.trader_id))}</div></div></div>`
+      + `</div>`;
+  }
   const d = decimalsForPair(sig.pair);
   const dirCls = sig.direction === 'BUY' ? 'buy' : 'sell';
   const resCls = sig.status === 'WIN' ? 'pips-pos' : 'pips-neg';
@@ -3417,7 +3448,16 @@ function bindJournalRows(root) {
         // tanpa dialog pernah jadi laporan user (09:05 WIB).
         const copy = S.myCopies.find((c) => c.id === copyId);
         const sig = copy ? findSignal(copy.signal_id) : null;
-        const yes = await confirmDialog(t('confirmUncopyTitle'), t('confirmUncopyBody', { sig: sig ? `${sig.pair} ${sig.direction} ${sig.entry ?? '—'}` : '—' }), t('yesDelete'));
+        // Ronde 76: dialog hapus salinan sinyal terkunci memakai judul
+        // terkunci (t('lockedTitle')), bukan pair + arah + entry. Sinyal
+        // yang sudah dihapus (mis. reset) tidak ada di daftar S; label
+        // memakai snapshot salinan milik follower bila ada. Entry tidak
+        // pernah null pada sinyal tidak terkunci (kolom NOT NULL; null
+        // hanya dari redaksi view), jadi tanpa fallback strip.
+        const snap = copy && !sig ? one(copy.signal_snapshot) : null;
+        const eff = sig || snap;
+        const sigLabel = !eff ? '' : (isLockedOrHidden(eff) ? t('lockedTitle') : `${eff.pair} ${eff.direction} ${eff.entry}`);
+        const yes = await confirmDialog(t('confirmUncopyTitle'), t('confirmUncopyBody', { sig: sigLabel }), t('yesDelete'));
         if (!yes) return;
         // Ronde 8b (a): hapus salinan dari state lokal SEBELUM render
         // ulang — kalau tidak, kartu sinyal tetap menampilkan
@@ -3663,7 +3703,10 @@ function renderSearchList() {
       if (!(username.includes(q) || ('@' + username).includes(q))) return false;
     }
     if (S.searchTab !== 'traders') return true;
-    if (f.pair !== 'ALL' && !signalsOfTrader(tr.profile_id).some((s) => s.pair === f.pair)) return false;
+    // Ronde 76: sinyal terkunci tidak dihitung (sama seperti filter pair
+    // Beranda), supaya trader L5 berbayar tidak muncul di filter pair
+    // dari sinyalnya yang terkunci.
+    if (f.pair !== 'ALL' && !signalsOfTrader(tr.profile_id).some((s) => s.pair === f.pair && !isLockedOrHidden(s))) return false;
     if (f.topPair !== 'ALL' && topPairOf(tr.profile_id) !== f.topPair) return false;
     if (Number(f.wrMin) > 0 && !(st.wr !== null && st.wr >= Number(f.wrMin))) return false;
     // B1-11a: prototipe — trader tanpa R (null) LOLOS filter R:R minimal
@@ -5045,6 +5088,11 @@ function renderOfficeFollowerTab() {
         : `<div class="empty"><strong>${S.myCopies.length === 0 ? t('jrnlEmpty') : t('jrnlNoActive')}</strong></div>`);
     box.innerHTML = html;
     bindJournalRows(box);
+    // Ronde 76: baris jurnal terkunci berisi tombol Langganan
+    // (subscribeBtnHtml); tab ini tidak memanggil bindSignalCards, jadi
+    // ikat tombol langganan di sini supaya tidak mati. DOM baru tiap
+    // render, jadi tidak ada ikatan ganda.
+    bindFollowSubscribe(box);
     return;
   }
   // R39: tab Sinyal (default) — sinyal terbuka dari trader yang diikuti
@@ -6084,7 +6132,22 @@ async function renderVerifyView() {
     const d = decimalsForPair(sig.pair);
     const level = levelOfSignal(sig);
     const done = (sig.status === 'WIN' || sig.status === 'LOSS') && sig.profit_usd !== null && sig.profit_usd !== undefined;
-    body = `<p class="verify-ok">${ICONS.check} ${esc(t('verifyValid'))}</p>`
+    if (isLockedOrHidden(sig)) {
+      // Ronde 76: halaman /v/ tidak menampilkan pair/arah/status/entry
+      // sinyal terkunci. Tautan /v/ bisa disusun siapa saja dari ID sinyal
+      // (deterministik), jadi halaman ini memperlakukan sinyal terkunci
+      // seperti kartu D02. Harga dari embed traders, karena S.traders
+      // tidak dimuat di jalur /v/.
+      const embPrice = Number(one(sig.traders)?.subscription_price_usd) || 0;
+      body = `<p class="verify-ok">${ICONS.check} ${esc(t('verifyValid'))}</p>`
+        + `<div class="locked-body"><span aria-hidden="true">${ICONS.lock}</span><div><div class="lt">${esc(t('lockedTitle'))}</div><div class="ld">${esc(lockedDescFor(sig.trader_id, embPrice))}</div></div></div>`
+        + `<dl class="kv"><dt>${esc(t('sigShareId'))}</dt><dd class="share-id">${esc(cardId)}</dd>`
+        + `<dt>${esc(t('sigShareCode'))}</dt><dd class="share-id">${esc(verifyCode(sig))}</dd>`
+        + `<dt>${esc(t('username'))}</dt><dd>${esc(traderHandle(tr))}</dd>`
+        + `<dt>${esc(t('level'))}</dt><dd>Level ${level} · ${esc(levelName(level, getLang()))}</dd></dl>`
+        + `<p class="note">${t('riskNote')}</p>`;
+    } else {
+      body = `<p class="verify-ok">${ICONS.check} ${esc(t('verifyValid'))}</p>`
       + `<dl class="kv"><dt>${esc(t('sigShareId'))}</dt><dd class="share-id">${esc(cardId)}</dd>`
       + `<dt>${esc(t('sigShareCode'))}</dt><dd class="share-id">${esc(verifyCode(sig))}</dd>`
       + `<dt>${esc(t('pair'))}</dt><dd><b>${esc(sig.pair)}</b> ${esc(sig.direction)} — ${esc(statusPillLabel(sig.status))}</dd>`
@@ -6097,6 +6160,7 @@ async function renderVerifyView() {
       + (done ? `<dt>${esc(t('verifyResult'))}</dt><dd>${esc(fmtUsd0(sig.profit_usd))} <span>(${sig.profit_pips !== null && sig.profit_pips !== undefined ? `${fmtPipsSigned(sig.profit_pips)} · ` : ''}${sig.r_value !== null && sig.r_value !== undefined ? esc(fmtRShort(sig.r_value)) : ''})</span></dd>` : '')
       + `<dt>${esc(t('detPosted'))}</dt><dd>${esc(fmtDate(sig.created_at))}</dd></dl>`
       + `<p class="note">${t('riskNote')}</p>`;
+    }
   } else {
     body = `<p class="verify-bad">${esc(t('verifyInvalid'))}</p>`
       + `<dl class="kv"><dt>${esc(t('sigShareId'))}</dt><dd class="share-id">${esc(cardId)}</dd>`
