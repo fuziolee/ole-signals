@@ -205,6 +205,13 @@ function fmtUsdTable(n) {
 function fmtIdr(n) {
   return 'Rp' + Math.round(Number(n) || 0).toLocaleString(getLang() === 'en' ? 'en-US' : 'id-ID');
 }
+// Ronde 75: harga langganan tersimpan USD (subscription_price_usd), tampil
+// IDR kurs tetap Rp16.000/$ (blueprint pasal 5, sql/16). fmtIdr kontraknya
+// IDR masuk, jadi konversi dilakukan di helper ini, bukan di fmtIdr.
+const IDR_PER_USD = 16000;
+function fmtIdrUsd(usd) {
+  return fmtIdr(Number(usd) * IDR_PER_USD);
+}
 // Pips bertanda seperti prototipe: +428 pips, -31 pips.
 function fmtPipsSigned(n) {
   const v = Math.round(Number(n) || 0);
@@ -411,7 +418,7 @@ function isLockedOrHidden(sig) {
 }
 function lockedDescFor(traderId) {
   const price = subPriceOfTrader(traderId);
-  return t('lockedSignalDesc', { price: price ? fmtIdr(price) + t('perMonth') : t('profFree') });
+  return t('lockedSignalDesc', { price: price ? fmtIdrUsd(price) + t('perMonth') : t('profFree') });
 }
 // D08: tombol Ikuti / Langganan (struktur prototipe). Ikuti = Fase 5 dan
 // Langganan = fase pembayaran — keduanya menampilkan aksi jujur "menyusul",
@@ -428,14 +435,14 @@ function subscribeBtnHtml(traderId) {
   if (S.user && traderId === S.user.id) return '';
   const price = subPriceOfTrader(traderId);
   const label = price > 0
-    ? `${esc(t('subscribe'))} · ${esc(fmtIdr(price))}${esc(t('perMonth'))}`
+    ? `${esc(t('subscribe'))} · ${esc(fmtIdrUsd(price))}${esc(t('perMonth'))}`
     : `${esc(t('subscribe'))} · ${esc(t('profFree'))}`;
   return `<button class="btn" type="button" data-subscribe="${esc(traderId)}">${label}</button>`;
 }
 function subBadgeHtml(traderId) {
   const price = subPriceOfTrader(traderId);
   return price > 0
-    ? `<span class="subbadge">${esc(t('subscribe'))} ${esc(fmtIdr(price))}${esc(t('perMonth'))}</span>`
+    ? `<span class="subbadge">${esc(t('subscribe'))} ${esc(fmtIdrUsd(price))}${esc(t('perMonth'))}</span>`
     : `<span class="subbadge free">${esc(t('profFree'))}</span>`;
 }
 // Ronde 8b (a): perbarui SEMUA tombol Ikuti untuk trader yang sama di
@@ -3577,7 +3584,7 @@ function traderCardHtml(tr, rank, badge) {
   const price = tr.subscription_price_usd;
   // D34: lencana langganan dalam IDR (fmtIDR prototipe).
   const subBadge = price !== null && price !== undefined && Number(price) > 0
-    ? `${esc(t('subscribe'))} ${esc(fmtIdr(price))}${esc(t('perMonth'))}`
+    ? `${esc(t('subscribe'))} ${esc(fmtIdrUsd(price))}${esc(t('perMonth'))}`
     : esc(t('profFree'));
   // R17: lencana tab — HANYA di tab Diikuti/Langganan (kartu Traders
   // tidak berubah, sesuai Ronde 16).
@@ -4705,7 +4712,7 @@ function traderIdentityCardHtml() {
   const username = tr.username ? '@' + tr.username : '—';
   const price = tr.subscription_price_usd;
   const subLabel = price !== null && price !== undefined && Number(price) > 0
-    ? `${esc(t('subscribe'))} ${esc(fmtIdr(price))}${esc(t('perMonth'))}` : esc(t('profFree'));
+    ? `${esc(t('subscribe'))} ${esc(fmtIdrUsd(price))}${esc(t('perMonth'))}` : esc(t('profFree'));
   const draftDel = !!S.photoDraft.trader;
   const uploadDraft = !!S.photoUploadDraft.trader;
   const avUrl = draftDel ? null : (S.photoUploadPreview.trader || tr.trader_avatar_url);
