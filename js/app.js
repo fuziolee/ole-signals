@@ -119,6 +119,7 @@ const S = {
   settingsOrigin: 'settings',
   authMode: 'login',
   authScreen: 'login', // Ronde 63: layar auth ('login' | 'forgot' | 'sent' | 'reset' | 'resetDone')
+  recoveryExchangePending: false, // Ronde 67: boot sedang menukar token recovery jadi sesi (setSession/exchangeCodeForSession); handleSession menunda enterRecovery(null) selama flag ini true supaya layar reset tidak sempat dirender tidak valid.
   resetEmail: '', // Ronde 63 (amandemen): email yang dikirimi link reset (layar sent + backoff)
   followerCounts: {},
   copiedIds: new Set(),
@@ -1610,7 +1611,16 @@ async function handleSession(session, event = 'INITIAL_SESSION') {
   // masuk biasa. Jangan jalankan jalur normal (showApp) walau sesi ada;
   // serahkan ke layar atur ulang. Ini menutup balapan antara event
   // INITIAL_SESSION klien dan getSession manual di init.
-  if (isRecoveryHash()) { enterRecovery(session); return; }
+  // Ronde 67: boot masih menukar token recovery jadi sesi (flag true)
+  // dan event ini membawa session null (INITIAL_SESSION dari profil
+  // bersih). JANGAN panggil enterRecovery(null): itu merender layar
+  // reset tidak valid sesaat sebelum setSession selesai. Tunggu saja:
+  // boot memanggil enterRecovery(session) begitu penukaran selesai.
+  if (isRecoveryHash()) {
+    if (!session && S.recoveryExchangePending) return;
+    enterRecovery(session);
+    return;
+  }
   // Ronde 63: sedang di layar atur ulang / berhasil, event sesi (mis.
   // TOKEN_REFRESHED pada sesi recovery) tidak boleh memindahkan pengguna
   // ke aplikasi sebelum reset selesai. Sesi null dari klien (mis. event
@@ -6029,9 +6039,15 @@ if (isVerifyPath()) {
         // Menandai dulu menutup balapan itu: saat tab lain melihat sesi
         // ini, id-nya sudah ada di daftar blokir.
         markRecoverySession({ access_token: recovery.access_token });
+        // Ronde 67: kunci kilasan invalid. Event INITIAL_SESSION bisa
+        // datang sebelum penukaran ini selesai; selama flag true,
+        // handleSession menunda enterRecovery(null).
+        S.recoveryExchangePending = true;
         const { session: s } = await withTimeout(api.setSession({ access_token: recovery.access_token, refresh_token: recovery.refresh_token }), 10000);
         session = s;
       } else if (recovery.kind === 'pkce') {
+        // Ronde 67: sama seperti hash (lihat di atas).
+        S.recoveryExchangePending = true;
         const { session: s } = await withTimeout(api.exchangeCodeForSession(recovery.code), 10000);
         session = s;
       }
@@ -6044,6 +6060,10 @@ if (isVerifyPath()) {
       console.error('init recovery', e);
       enterRecovery(null, recovery.kind === 'pkce' ? { dropQuery: true } : undefined);
     } finally {
+      // Ronde 67: bersihkan flag SESUDAH enterRecovery dipanggil di
+      // try/catch di atas, supaya event yang datang terlambat tetap
+      // melihat state yang benar.
+      S.recoveryExchangePending = false;
       window.__oleBooted = true;
     }
   } else {
