@@ -19,12 +19,14 @@ TIDAK BOLEH diterapkan ulang setelah 28). File tes scratch (bukan
 migrasi) tinggal di `sql/tests/` — jangan jalankan di live apa adanya.
 File bertanda **SUPERSEDED** arsip saja, jangan diterapkan.
 
-File acuan per fungsi (per Ronde 61, diperbarui Ronde 72): `create_signal` →
-**28**; `update_signal` → **34** (Ronde 72; 34 menggantikan update_signal
-dari 28, create_signal tetap dari 28); `cancel_signal` → **03**; `mark_signal_shared` → **15**;
+File acuan per fungsi (per Ronde 61, diperbarui Ronde 77 dan 78): `create_signal` →
+**36** (Ronde 78; 36 menggantikan create_signal dari 28, update_signal
+tetap dari 34); `update_signal` → **34** (Ronde 72; 34 menggantikan update_signal
+dari 28); `cancel_signal` → **03**; `mark_signal_shared` → **15**;
 `setup_trader_identity` → **13**; `settle_signals` + `recalc_trader_progress`
 → **18**; `reset_trader_stats` → **23**; `signal_locked_for` +
-`signal_owned_by` + `guard_copy_locked` + view `signals_public` → **30**; `guard_follow_requires_username` → **32**.
+`signal_owned_by` + `guard_copy_locked` → **30**; view `signals_public` →
+**37** (Ronde 77; 37 menggantikan definisi view dari 30); `guard_follow_requires_username` → **32**; `copy_signal` → **35** (Ronde 73).
 
 | File | Isi |
 |---|---|
@@ -65,6 +67,12 @@ dari 28, create_signal tetap dari 28); `cancel_signal` → **03**; `mark_signal_
 | `32_r69_follow_requires_username.sql` | **Ronde 69:** trigger `guard_follow_requires_username` — BEFORE INSERT pada `follows`, menolak (42501) bila follower tidak punya username di `profiles` (SECURITY DEFINER, pola `guard_copy_locked` sql/30). Grandfathered: baris follows yang sudah ada tidak disentuh; unfollow (DELETE) tidak digerbankan; subscribe tidak digerbankan ronde ini. **TERAPKAN SETELAH 30, SEBELUM deploy frontend Ronde 69.** |
 | `33_r70_trader_display_name_username.sql` | **Ronde 70 (keputusan user 2026-11-28 13:48 WIB):** `update public.traders set trader_display_name = username`, nama tampilan trader = username trader, BUKAN nama profil (membalikkan keputusan koordinator R68 yang mengirim nama profil saat submit). Idempotent, tanpa WHERE (berlaku semua trader); menyamakan 4 baris lama (akun tes @trader_tes + 3 demo). Frontend Ronde 70 mengirim username sebagai display_name di jalur buat + ubah username trader. **TERAPKAN SEBELUM deploy frontend Ronde 70.** |
 | `34_r72_update_signal_needusername.sql` | **Ronde 72 (temuan S12-MAP-E-19, diperintahkan user 2026-11-28 15:00 WIB):** `update_signal` SAJA: body disalin dari **28** + cek identitas trader SEBELUM `lock_trader_progress`, cermin `create_signal` langkah 1; bila baris `traders` tidak ada, kembalikan kode `'needusername'` (sebelumnya: `lock_trader_progress` INSERT ke `trader_progress` gagal FK → eksepsi Postgres mentah tanpa kode, klien terima galat 500). `create_signal` TIDAK disentuh (tetap versi 28). **34 menggantikan update_signal dari 28.** **TERAPKAN SEBELUM deploy frontend Ronde 72 (tidak ada perubahan frontend ronde ini).** |
+| `35_fase5_copy_signal.sql` | **Ronde 73 (Fase 5, iris 1): RPC salin server-side.** `copy_signal(p_signal_id, p_lot default null)` (SECURITY DEFINER), SATU-SATUNYA jalur salin untuk klien; urutan cek cermin `create_signal`: login → sinyal ada → PENDING (kode `notpending`) → tidak terkunci via helper `signal_locked_for` sql/30 (fail-closed; kode BARU `locked`, pesan disamakan dengan trigger `guard_copy_locked`) → duplikat sukses idempoten `{ok, code: 'ok', duplicate: true, copy: {...}}` → lot (NULL = lot sumber; NaN/≤0 → `invalid`) → tulis `insert ... on conflict (follower_id, signal_id) do nothing` lalu baca barisnya. Salin sinyal sendiri DIIZINKAN. `revoke insert on public.copies from authenticated` (cermin R61 yang mencabut SELECT `signals`), tanpa ini RPC bukan penegakan sungguhan; select + delete (uncopy) tetap; trigger `guard_copy_locked` tetap sebagai backstop. **JANGAN ubah `create_signal`/`update_signal`; JANGAN terapkan ulang 03/22/23/26.** **TERAPKAN SETELAH 34, SEBELUM deploy frontend Ronde 73** (frontend Ronde 73 memanggil `copy_signal`, bukan insert langsung). |
+| `tests/35_fase5_copy_tests.sql` | **Ronde 73 (tes saja, bukan migrasi):** R73-C-01..C-25 (anon ditolak; tanpa login → `invalid`; sinyal tidak ada → `invalid`; AKTIF/WIN/LOSS/EXPIRED/CANCELLED → `notpending`; terkunci → `locked`; subscriber + pemilik lolos; duplikat idempoten; matriks lot; salin sendiri lolos; insert langsung → ditolak; grant EXECUTE; bentuk JSON copy) + R73-S-01..S-02 (uji perilaku §12 #7: langganan ke diri sendiri ditolak CHECK sebagai pemilik tabel, ditolak grant INSERT sebagai authenticated karena `subscriptions` tanpa grant tulis sama sekali, bukan RLS). Pola 31 (tabel temp `test_results`). Jalankan di scratch SETELAH rantai + 35. **JANGAN jalankan di live**, SETUP memakai UUID uji. |
+| `36_r78_notif_generic.sql` | **Ronde 78 (keputusan user A+B, 28 Nov 2026):** `create_signal` SAJA: notifikasi `new_signal` kini SELALU generik, tanpa pair/arah/entry. Trader berbayar (L5+ dengan harga > 0) memakai pesan terkunci untuk semua follower; trader gratis memakai '@username memposting sinyal baru.' Cek langganan per-follower (subquery subscriptions) DIHAPUS: pesan tidak lagi bergantung pada status langganan pembaca. Notifikasi lama TIDAK diubah (opsi A). `update_signal` dan notifikasi 'signal_edited' TIDAK disentuh. **36 menggantikan create_signal dari 28.** **TERAPKAN SETELAH 35.** Tanpa perubahan frontend (migrasi SQL murni, tidak butuh bump ?v dan tidak butuh upload index.html). |
+| `tests/36_notif_generic.sql` | **Ronde 78 (tes saja, bukan migrasi):** R78-N-01..N-08 + SETUP (gratis L1, berbayar L5 + pelanggan aktif, non-pelanggan, L5 tanpa harga, regresi jarak, metadata/tepat-satu). Pola 35 (tabel temp `test_results`). Jalankan di scratch SETELAH rantai + 36. **JANGAN jalankan di live**, SETUP memakai UUID uji. Kontrol: tanpa 36, N-01/N-02/N-04/N-05/N-08 FAIL (pesan lama berisi detail). Hasil Ronde 78: **9/9 PASS** di Postgres 16.15 scratch; kontrol 4/9 (5 gagal sesuai prediksi). |
+| `37_r77_hide_expired.sql` | **Ronde 77 (keputusan user 19:14 WIB, 28 Nov 2026):** view `signals_public` SAJA, definisi disalin lengkap dari sql/30:106-135, HANYA WHERE berubah menjadi `s.status not in ('CANCELLED', 'EXPIRED') or s.trader_id = auth.uid()` (EXPIRED ikut disembunyikan kecuali milik sendiri, cermin CANCELLED). Tanpa ini EXPIRED tetap bisa dibaca lewat kueri view langsung (temuan R76). Tidak berisi salinan `create_signal`/`update_signal`/`copy_signal`; tidak mengubah grant (CREATE OR REPLACE VIEW mempertahankan grant); tidak menghapus baris data. **37 menggantikan definisi view dari 30. JANGAN terapkan ulang sql/30 sesudah 37** (30 akan mengembalikan hide ini). **TERAPKAN SETELAH 36, SEBELUM deploy frontend Ronde 77** (frontend Ronde 77 menambah filter `.neq('status', 'EXPIRED')` di tiga daftar API). |
+| `tests/37_r77_hide_expired.sql` | **Ronde 77 (tes saja, bukan migrasi):** R77-S-01..S-05 + SETUP (matriks view anon/asing/pelanggan/pemilik x PENDING/WIN/EXPIRED/CANCELLED; grant utuh; MD5 `signal_locked_for`; MD5 definisi view; regresi redaksi + `copy_signal` atas EXPIRED tetap `notpending`). Pola 35 (tabel temp `test_results`). Jalankan di scratch SETELAH rantai + 37. **JANGAN jalankan di live**, SETUP memakai UUID uji. Kontrol: tanpa 37, S-01/S-04 FAIL (EXPIRED terlihat non-pemilik). |
 
 ## Cara pakai (Supabase SQL Editor)
 
@@ -163,11 +171,15 @@ supabase.rpc('create_signal', { p_pair, p_direction, p_entry, p_stop_loss,
 supabase.rpc('update_signal', { p_signal_id, p_pair, p_direction, p_entry,
   p_stop_loss, p_take_profit, p_lot, p_version })
 supabase.rpc('cancel_signal', { p_signal_id })
+supabase.rpc('copy_signal', { p_signal_id, p_lot })
 ```
 
 Jawaban selalu JSON: `{ok, code, message, signal?}`. Kode galat:
-`pairlimit` / `notpending` / `conflict` / `taken` → HTTP 409;
-`rr` / `risk` / `invalid` / `needusername` / `pair` → HTTP 422.
+`locked` → HTTP 403 (Ronde 73: sinyal terkunci Level 5+ berbayar);
+`pairlimit` / `notpending` / `conflict` / `taken` / `resetcooldown` /
+`resettoosoon` → HTTP 409;
+`rr` / `risk` / `invalid` / `needusername` / `pair` / `shared` /
+`distance` / `notclosed` → HTTP 422.
 (`cooldown` dipakai Ronde 7 untuk username/nama 1×/bulan; untuk fase
 pembayaran dicadangkan terpisah.)
 
