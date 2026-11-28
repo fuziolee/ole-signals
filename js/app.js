@@ -499,6 +499,53 @@ function paintCopyButtons(signalId) {
     b.innerHTML = (copied ? ICONS.check + ' ' : ICONS.copy + ' ') + t(copied ? 'copied' : 'copySignal');
   });
 }
+// Ronde 69: gerbang username follower sebelum follow.
+// Membuka form buat username follower (komponen bersama) di overlay.
+// Mengembalikan true bila username (baru) dibuat, follow boleh
+// dilanjutkan pemanggil, atau false bila overlay ditutup tanpa
+// username dibuat (batal, tidak ada follow).
+// Tutup dari jalur mana pun (tombol Tutup / backdrop / Escape) terdeteksi
+// lewat MutationObserver pada class #overlay, menutup lubang Promise
+// menggantung seperti di confirmDialog (di sana tidak berbahaya karena
+// tidak ada tombol yang menunggu; di sini tombol Follow menunggu, jadi
+// lubang itu harus ditutup).
+function ensureFollowerUsername() {
+  return new Promise((resolve) => {
+    if (S.profile?.username) { resolve(true); return; }
+    let done = false;
+    const finish = (v) => {
+      if (done) return;
+      done = true;
+      obs.disconnect();
+      resolve(v);
+    };
+    const obs = new MutationObserver(() => {
+      const ov = $('#overlay');
+      if (ov && !ov.classList.contains('open')) finish(false);
+    });
+    obs.observe($('#overlay'), { attributes: true, attributeFilter: ['class'] });
+    // Reset state form follower (seperti openAcctEdit) supaya draft basi
+    // dari halaman Akun tidak bocor ke overlay.
+    const ui = S.usernameUI.follower;
+    clearTimeout(ui.timer);
+    ui.draft = '';
+    ui.res = null;
+    ui.pending = null;
+    const renderGate = () => {
+      // Username sudah dibuat (sukses konfirmasi + refreshIdentity):
+      // tutup gerbang, follow boleh dilanjutkan pemanggil.
+      if (S.profile?.username) { closeOverlay(); finish(true); return; }
+      openOverlay(`<div class="overlay-head"><h2>${esc(t('usernameFollowerLbl'))}</h2><span class="spacer"></span><button class="btn" id="ov-close2" type="button">${esc(t('close'))}</button></div>${usernameFormHtml('follower')}`);
+      $('#ov-close2').onclick = closeOverlay;
+      bindUsernameForm($('#overlay-sheet'), 'follower', renderGate);
+      // Fokus ke input supaya pengguna bisa langsung mengetik
+      // (openOverlay memfokus tombol Tutup dulu).
+      const input = $('#overlay-sheet [data-username-input="follower"]');
+      if (input) input.focus();
+    };
+    renderGate();
+  });
+}
 function bindFollowSubscribe(root) {
   $$('[data-follow]', root).forEach((b) => {
     b.addEventListener('click', async (e) => {
@@ -510,6 +557,15 @@ function bindFollowSubscribe(root) {
         if (followed) {
           await api.unfollowTrader(S.user.id, traderId);
         } else {
+          // Ronde 69: follow mensyaratkan username follower (seperti
+          // posting mensyaratkan username trader). Tanpa username, buka
+          // gerbang buat username (overlay, komponen bersama); follow
+          // yang diminta diselesaikan sesudah username dibuat. Batal =
+          // tidak ada follow.
+          if (!S.profile?.username) {
+            const ok = await ensureFollowerUsername();
+            if (!ok) return;
+          }
           await api.followTrader(S.user.id, traderId);
         }
         // Muat ulang daftar ikutan agar semua tampilan (tab Diikuti di
@@ -524,7 +580,11 @@ function bindFollowSubscribe(root) {
         // menu Follower sedang dibuka (tanpa reload).
         if (S.view === 'office-follower') renderOfficeFollowerTab();
       } catch (err) {
-        toast(t('errNetwork'), true);
+        // Ronde 69: penolakan server 42501 = gerbang username follower
+        // (trigger guard_follow_requires_username), tampilkan alasan
+        // yang sebenarnya, bukan galat jaringan generik.
+        if (err && err.code === '42501') toast(t('usernameWarnFollower'), true);
+        else toast(t('errNetwork'), true);
       } finally {
         b.disabled = false;
       }
