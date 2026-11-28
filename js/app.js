@@ -428,6 +428,25 @@ function isLockedOrHidden(sig) {
   return !!sig && sig.entry == null
     && (sig.status === 'PENDING' || sig.status === 'AKTIF');
 }
+// Ronde 84: kunci riwayat: CANCELLED/EXPIRED bekas PENDING berbayar
+// tetap terkunci bagi non-subscriber (bukan disembunyikan, keputusan
+// user 2026-11-29). Memakai ulang syarat isLockedForMe (level + harga +
+// langganan) tanpa gerbang status PENDING/AKTIF; hanya dipakai di
+// journalRowHtml + openSignalDetail untuk status CANCELLED/EXPIRED.
+// JANGAN ubah isLockedForMe/isLockedOrHidden global.
+function isHistoryLockedForMe(sig) {
+  if (!sig) return false;
+  if (S.user && sig.trader_id === S.user.id) return false; // sinyal sendiri
+  if (sig.status !== 'CANCELLED' && sig.status !== 'EXPIRED') return false;
+  // Jaring pengaman (cermin isLockedOrHidden): entry NULL hanya dari
+  // redaksi view, sinyal teredaksi = terkunci walau S.traders belum termuat.
+  if (sig.entry == null) return true;
+  if (levelOfSignal(sig) < PAY_GATE_LEVEL) return false;
+  const price = subPriceOfTrader(sig.trader_id);
+  if (price === null) return false; // harga belum diketahui, jangan kunci
+  if (!(price > 0)) return false;
+  return !isSubscribedTo(sig.trader_id);
+}
 function lockedDescFor(traderId, priceOverride) {
   // Ronde 76: priceOverride dipakai jalur /v/, karena S.traders tidak
   // dimuat di sana; harga diambil dari embed traders sinyal itu.
@@ -2309,7 +2328,18 @@ function findSignal(id) {
     || S.mySignals.find((s) => s.id === id)
     || S.traderSignals.find((s) => s.id === id)
     || S.allSignals.find((s) => s.id === id)
+    || findCopiedSignal(id)
     || null;
+}
+// Ronde 84: cari sinyal di salinan follower (S.myCopies): CANCELLED /
+// EXPIRED yang disalin tidak ada di keempat daftar di atas (query-nya
+// membuang kedua status itu), tapi Detail baris jurnal butuh datanya.
+function findCopiedSignal(id) {
+  for (const c of S.myCopies || []) {
+    const s = one(c.signals) || one(c.signal_snapshot);
+    if (s && s.id === id) return s;
+  }
+  return null;
 }
 
 // ------------------------------------------------------- kartu bagikan ---
@@ -3085,7 +3115,7 @@ function openSignalDetail(id) {
   const verified = level >= PAY_GATE_LEVEL
     ? ` <span class="pill gold">${ICONS.check} ${esc(t('verified'))}</span>` : '';
   const mine = S.user && sig.trader_id === S.user.id;
-  const locked = isLockedOrHidden(sig);
+  const locked = isLockedOrHidden(sig) || isHistoryLockedForMe(sig); // Ronde 84: baris riwayat terkunci juga membuka overlay terkunci
   const d = decimalsForPair(sig.pair);
   const dirCls = sig.direction === 'BUY' ? 'buy' : 'sell';
   const editedBadge = (sig.version && Number(sig.version) > 1)
@@ -3134,16 +3164,23 @@ function openSignalDetail(id) {
   const targetPips = Math.abs(Number(sig.take_profit) - Number(sig.entry)) / pipSize(sig.pair);
   const now = priceOf(sig.pair);
   const done = sig.status === 'WIN' || sig.status === 'LOSS';
+  const histClosed = sig.status === 'CANCELLED' || sig.status === 'EXPIRED'; // Ronde 84
   let holdTxt;
   if (done) {
     holdTxt = sig.holding_minutes !== null && sig.holding_minutes !== undefined ? fmtHoldMin(sig.holding_minutes) : '—';
   } else if (sig.status === 'AKTIF' && sig.activated_at) {
     holdTxt = fmtHoldMin((Date.now() - new Date(sig.activated_at).getTime()) / 60000);
+  } else if (histClosed) {
+    holdTxt = null; // Ronde 84: baris lama ditahan disembunyikan untuk CANCELLED/EXPIRED
   } else {
     holdTxt = t('detHoldPending');
   }
   const drow = (k, v) => `<div class="lv"><span class="k">${esc(k)}</span><span class="v mono">${v}</span></div>`;
   let rowsHtml = `<div class="detail-rows">`;
+  // Ronde 84 (Q3, dikoreksi user 02:29 WIB "gabung aja"): baris waktu
+  // batal/kedaluwarsa digabung di bawah bersama baris waktu lain
+  // (Diposting/Entry tersentuh), bukan di bawah baris Entry.
+  const closedLbl = sig.status === 'CANCELLED' ? t('detCancelledAt') : sig.status === 'EXPIRED' ? t('detExpiredAt') : null;
   rowsHtml += drow(t('entry'), esc(fmtNum(sig.entry, d)))
     + drow(t('stopLoss'), esc(fmtNum(sig.stop_loss, d)))
     + drow(t('takeProfit'), esc(fmtNum(sig.take_profit, d)))
@@ -3158,10 +3195,12 @@ function openSignalDetail(id) {
     + drow(t('detFullTP'), rt.targetUsd !== null ? esc(fmtUsd(rt.targetUsd)) : '—')
     + drow(t('riskReward'), '1:' + (rt.rr !== null ? ds(rt.rr.toFixed(2)) : '—'))
     + drow(t('detDist'), `${Math.round(riskPips)} pips / ${Math.round(targetPips)} pips`);
-  rowsHtml += drow(t('detHold'), esc(holdTxt))
-    + drow(t('detPosted'), `${esc(fmtRel(sig.created_at))} · ${esc(fmtDate(sig.created_at))}`);
+  // Ronde 84: baris lama ditahan disembunyikan untuk CANCELLED/EXPIRED.
+  if (holdTxt !== null) rowsHtml += drow(t('detHold'), esc(holdTxt));
+  rowsHtml += drow(t('detPosted'), `${esc(fmtRel(sig.created_at))} · ${esc(fmtDate(sig.created_at))}`);
   if (sig.activated_at) rowsHtml += drow(t('dtEntry'), esc(fmtDate(sig.activated_at)));
-  if (sig.closed_at) rowsHtml += drow(sig.status === 'WIN' ? t('dtTP') : t('dtSL'), esc(fmtDate(sig.closed_at)));
+  if (sig.closed_at && done) rowsHtml += drow(sig.status === 'WIN' ? t('dtTP') : t('dtSL'), esc(fmtDate(sig.closed_at)));
+  if (closedLbl && sig.closed_at) rowsHtml += drow(closedLbl, esc(fmtDate(sig.closed_at))); // Ronde 84 (Q3, koreksi 02:29 WIB): gabung baris waktu di bawah
   if (done) {
     // D49: hasil akhir datar "$X · +Np · +R" (bukan "$X (Np · R)").
     const finalParts = [];
@@ -3173,8 +3212,9 @@ function openSignalDetail(id) {
   // D37 (r12/F1, r30b): PENDING tidak lagi menampilkan catatan apa pun —
   // status PENDING sudah ada di pill. AKTIF/WIN/LOSS tetap menampilkan
   // "Entry tersentuh · dinilai sistem dari harga" (penjelasan cara sistem
-  // menilai hasil, bukan label kunci).
-  const lockNote = sig.status === 'PENDING' ? '' : esc(t('detLockedNote'));
+  // menilai hasil, bukan label kunci). Ronde 84: CANCELLED/EXPIRED tidak
+  // pernah aktif, jadi catatan "Entry tersentuh" salah untuk keduanya.
+  const lockNote = (sig.status === 'PENDING' || histClosed) ? '' : esc(t('detLockedNote'));
   const actions = [];
   // R19: "Unduh kartu (PNG)" hanya untuk sinyal selesai (WIN/LOSS) —
   // `done` sudah didefinisikan di atas (status WIN/LOSS). PENDING/AKTIF
@@ -3514,7 +3554,9 @@ function journalRowHtml(sig, opts = {}) {
   // tombol Detail membuka overlay D02 yang juga terkunci; tombol hapus
   // tetap seperti sekarang (PENDING bisa dihapus, AKTIF nonaktif).
   // Untuk sinyal sendiri dan WIN/LOSS, isLockedOrHidden selalu false.
-  if (isLockedOrHidden(sig)) {
+  // Ronde 84: baris CANCELLED/EXPIRED trader L5+ berbayar juga dirender
+  // terkunci bagi non-subscriber (isHistoryLockedForMe).
+  if (isLockedOrHidden(sig) || isHistoryLockedForMe(sig)) {
     const traderName = opts.showTrader ? esc(traderHandle(traderOf(sig))) + ' · ' : '';
     // Baris terkunci tidak memakai kunci jrnlCopiedAgo/myJrnlPosted (keduanya
     // menyertakan lot yang teredaksi); cukup status salinan + waktu relatif.
@@ -3522,11 +3564,13 @@ function journalRowHtml(sig, opts = {}) {
       ? t('copied') + ' · ' + fmtRel(opts.copyCreatedAt || sig.created_at)
       : fmtRel(sig.created_at);
     let extraBtns = '';
+    // Revisi Q6 Ronde 84 (01:58 WIB): riwayat permanen, tanpa tombol hapus.
+    // Hanya salinan PENDING yang bisa dihapus; AKTIF tetap tombol nonaktif.
     if (opts.isCopy && opts.copyId) {
-      if (sig.status === 'AKTIF') {
-        extraBtns += `<button class="iconbtn" type="button" disabled title="${esc(t('jrnlNoDeleteActive'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.trash}</button>`;
-      } else {
+      if (sig.status === 'PENDING') {
         extraBtns += `<button class="iconbtn trashbtn" type="button" data-uncopy="${esc(opts.copyId)}" aria-label="${esc(t('uncopyBtn'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.trash}</button>`;
+      } else if (sig.status === 'AKTIF') {
+        extraBtns += `<button class="iconbtn" type="button" disabled title="${esc(t('jrnlNoDeleteActive'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.trash}</button>`;
       }
     }
     return `<div class="hist-row"><span style="color:var(--muted)">${traderName}${esc(postedTxt)}</span>`
@@ -3536,7 +3580,9 @@ function journalRowHtml(sig, opts = {}) {
   }
   const d = decimalsForPair(sig.pair);
   const dirCls = sig.direction === 'BUY' ? 'buy' : 'sell';
-  const resCls = sig.status === 'WIN' ? 'pips-pos' : 'pips-neg';
+  // Ronde 84: hanya WIN berhak kelas positif, LOSS kelas negatif; baris
+  // tanpa hasil (PENDING/AKTIF/CANCELLED/EXPIRED) netral.
+  const resCls = sig.status === 'WIN' ? 'pips-pos' : sig.status === 'LOSS' ? 'pips-neg' : '';
   // D14 (r30b): salinan follower — AKTIF menampilkan floating, PENDING
   // "—" (belum ada hasil, pola Ronde 26); hasil tertutup bertanda (D13).
   let res;
@@ -3554,9 +3600,14 @@ function journalRowHtml(sig, opts = {}) {
   }
   const traderName = opts.showTrader ? (() => { const tr = traderOf(sig); return esc(traderHandle(tr)) + ' · '; })() : '';
   // D13: timeline tanggal + jam (bukan tanggal saja).
+  // Ronde 84: closed_at CANCELLED/EXPIRED memakai label baru, bukan dtTP/dtSL.
+  const closedLbl = sig.status === 'WIN' ? t('dtTP')
+    : sig.status === 'LOSS' ? t('dtSL')
+    : sig.status === 'CANCELLED' ? t('detCancelledAt')
+    : sig.status === 'EXPIRED' ? t('detExpiredAt') : null;
   const timeline = `${esc(t('detPosted'))} ${esc(fmtDate(sig.created_at))}`
     + (sig.activated_at ? ` · ${esc(t('dtEntry'))} ${esc(fmtDate(sig.activated_at))}` : '')
-    + (sig.closed_at ? ` · ${esc(sig.status === 'WIN' ? t('dtTP') : t('dtSL'))} ${esc(fmtDate(sig.closed_at))}` : '');
+    + (sig.closed_at && closedLbl ? ` · ${esc(closedLbl)} ${esc(fmtDate(sig.closed_at))}` : '');
   // Ronde 8b (c): waktu "disalin" memakai created_at baris copies (waktu
   // salin), bukan created_at sinyal — seperti prototipe journalRow
   // (myCopies[s.id].ago).
@@ -3565,8 +3616,9 @@ function journalRowHtml(sig, opts = {}) {
   const postedTxt = opts.isCopy
     ? t('jrnlCopiedAgo', { ago: fmtRel(opts.copyCreatedAt || sig.created_at), lot: lotTxt })
     : t('myJrnlPosted', { ago: fmtRel(sig.created_at), lot: lotTxt });
-  // D13: tombol Bagikan untuk sinyal sendiri. D14: tombol hapus salinan
-  // (non-AKTIF saja; AKTIF menampilkan ikon nonaktif + catatan).
+  // D13: tombol Bagikan untuk sinyal sendiri. D14: tombol hapus salinan.
+  // Revisi Q6 Ronde 84 (01:58 WIB): hanya PENDING yang bisa dihapus;
+  // AKTIF menampilkan ikon nonaktif + catatan, riwayat permanen.
   // R19: tombol Bagikan hanya untuk sinyal selesai (WIN/LOSS). Riwayat
   // profil memang sudah hanya berisi WIN/LOSS — gerbang ini pertahanan
   // berlapis bila pemanggil berubah.
@@ -3575,16 +3627,16 @@ function journalRowHtml(sig, opts = {}) {
     extraBtns += `<button class="iconbtn" type="button" data-jshare="${esc(sig.id)}" aria-label="${esc(t('sigShareDownload'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.download}</button>`;
   }
   if (opts.isCopy && opts.copyId) {
-    if (sig.status === 'AKTIF') {
-      extraBtns += `<button class="iconbtn" type="button" disabled title="${esc(t('jrnlNoDeleteActive'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.trash}</button>`;
-    } else {
+    if (sig.status === 'PENDING') {
       extraBtns += `<button class="iconbtn trashbtn" type="button" data-uncopy="${esc(opts.copyId)}" aria-label="${esc(t('uncopyBtn'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.trash}</button>`;
+    } else if (sig.status === 'AKTIF') {
+      extraBtns += `<button class="iconbtn" type="button" disabled title="${esc(t('jrnlNoDeleteActive'))}" style="width:34px;height:34px;font-size:14px;">${ICONS.trash}</button>`;
     }
   }
   return `<div class="hist-row"><span class="p mono">${esc(sig.pair)}</span>`
     + `<span class="dir ${dirCls}" style="font-size:11px;padding:3px 9px">${esc(sig.direction)}</span>`
     + `<span style="color:var(--muted)">${traderName}${esc(postedTxt)}</span>`
-    + `<span class="pill ${sig.status === 'WIN' ? 'green' : sig.status === 'LOSS' ? 'red' : ''}">${esc(sig.status)}</span>`
+    + statusPill(sig.status) // Ronde 84: label terjemahan DIBATALKAN/KEDALUWARSA, bukan teks mentah
     + `<span class="res mono ${resCls}">${res}</span>`
     + `<button class="btn" type="button" data-jdetail="${esc(sig.id)}" style="min-height:34px;padding:6px 12px;font-size:12.5px;">${esc(t('sigDetail'))}</button>`
     + extraBtns
@@ -3617,7 +3669,7 @@ function bindJournalRows(root) {
         // hanya dari redaksi view), jadi tanpa fallback strip.
         const snap = copy && !sig ? one(copy.signal_snapshot) : null;
         const eff = sig || snap;
-        const sigLabel = !eff ? '' : (isLockedOrHidden(eff) ? t('lockedTitle') : `${eff.pair} ${eff.direction} ${eff.entry}`);
+        const sigLabel = !eff ? '' : ((isLockedOrHidden(eff) || isHistoryLockedForMe(eff)) ? t('lockedTitle') : `${eff.pair} ${eff.direction} ${eff.entry}`); // Ronde 84: baris riwayat terkunci memakai judul terkunci
         const yes = await confirmDialog(t('confirmUncopyTitle'), t('confirmUncopyBody', { sig: sigLabel }), t('yesDelete'));
         if (!yes) return;
         // Ronde 8b (a): hapus salinan dari state lokal SEBELUM render
@@ -5116,7 +5168,7 @@ function renderOfficeTraderTab(editing = null) {
   }
   const ed = editing !== null ? editing : (S.editingId ? S.mySignals.find((s) => s.id === S.editingId) || null : null);
   const openCount = S.mySignals.filter((s) => s.status === 'PENDING' || s.status === 'AKTIF').length;
-  const doneCount = S.mySignals.filter((s) => ['WIN', 'LOSS'].includes(s.status)).length; // B2-07: hanya WIN/LOSS (daftar Riwayat tidak menampilkan CANCELLED/EXPIRED)
+  const doneCount = S.mySignals.filter((s) => ['WIN', 'LOSS', 'CANCELLED', 'EXPIRED'].includes(s.status)).length; // B2-07: hanya WIN/LOSS (daftar Riwayat tidak menampilkan CANCELLED/EXPIRED); Ronde 84: Riwayat diperluas ke CANCELLED/EXPIRED
   const lastPost = S.mySignals.length
     ? S.mySignals.reduce((a, b) => (new Date(a.created_at) > new Date(b.created_at) ? a : b))
     : null;
@@ -5155,7 +5207,7 @@ async function renderOfficeList() {
   const filtered = S.mySignals.filter((s) => {
     if (S.officeTab === 'PENDING') return s.status === 'PENDING';
     if (S.officeTab === 'AKTIF') return s.status === 'AKTIF';
-    if (S.officeTab === 'HISTORY') return ['WIN', 'LOSS'].includes(s.status);
+    if (S.officeTab === 'HISTORY') return ['WIN', 'LOSS', 'CANCELLED', 'EXPIRED'].includes(s.status); // Ronde 84
     return s.status === 'PENDING' || s.status === 'AKTIF'; // ALL = sinyal terbuka
   });
   if (S.officeTab === 'HISTORY') {
@@ -5265,10 +5317,11 @@ function renderOfficeFollowerTab() {
   const f = S.followFilter;
   const openSigs = followedSignals.filter((s) => s.status === 'PENDING' || s.status === 'AKTIF');
   // B2-02: Riwayat pengikut hanya salinan yang SUDAH selesai (WIN/LOSS),
-  // bukan semua sinyal dari trader yang diikuti (prototipe).
+  // Ronde 84: + CANCELLED/EXPIRED. Bukan semua sinyal dari trader yang
+  // diikuti (prototipe).
   const doneCopies = S.myCopies
     .map((c) => ({ sig: one(c.signals) || c.signal_snapshot, copy: c }))
-    .filter((x) => x.sig && ['WIN', 'LOSS'].includes(x.sig.status));
+    .filter((x) => x.sig && ['WIN', 'LOSS', 'CANCELLED', 'EXPIRED'].includes(x.sig.status));
   const doneSigs = doneCopies.map((x) => x.sig);
   const fchip = (val, label, n) => `<button class="chip" type="button" data-ffilter="${val}" aria-pressed="${f === val}">${esc(label)}${n !== undefined ? ` (${n})` : ''}</button>`;
   const filtersHtml = `<div class="pfilters">${fchip('ALL', t('pfAll', { n: openSigs.length }))}${fchip('PENDING', t('pfPending'))}${fchip('AKTIF', t('pfActive'))}<button class="chip hist-tab" type="button" data-ffilter="HISTORY" aria-pressed="${f === 'HISTORY'}">${esc(t('tabHistory'))} (${doneSigs.length})</button></div>`;

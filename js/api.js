@@ -317,7 +317,7 @@ export async function listMyCopies(userId) {
   if (ids.length) {
     const { data: sigs, error: sigErr } = await supabase
       .from('signals_public')
-      .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, entry_type, status, created_at, closed_at, close_price, profit_usd, profit_pips, r_value, traders(username, trader_display_name)')
+      .select('id, trader_id, pair, direction, entry, stop_loss, take_profit, lot_size, entry_type, status, created_at, expires_at, closed_at, close_price, profit_usd, profit_pips, r_value, traders(username, trader_display_name)')
       .in('id', ids);
     if (sigErr) throw sigErr;
     byId = Object.fromEntries((sigs || []).map((s) => [s.id, s]));
